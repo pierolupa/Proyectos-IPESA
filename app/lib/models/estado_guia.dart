@@ -42,4 +42,27 @@ extension EstadoGuiaX on EstadoGuia {
 
   bool get esFinal =>
       this == EstadoGuia.entregado || this == EstadoGuia.finalizado;
+
+  /// Valor tal como lo espera/devuelve la API (backend/src/columns.js).
+  String get valorApi {
+    switch (this) {
+      case EstadoGuia.enRuta:
+        return 'en_ruta';
+      case EstadoGuia.enProcesoTrasbordo:
+        return 'en_proceso_trasbordo';
+      case EstadoGuia.recepcionSucursal:
+        return 'recepcion_sucursal';
+      case EstadoGuia.entregado:
+        return 'entregado';
+      case EstadoGuia.finalizado:
+        return 'finalizado';
+    }
+  }
+}
+
+EstadoGuia estadoGuiaDesdeApi(String valor) {
+  return EstadoGuia.values.firstWhere(
+    (e) => e.valorApi == valor,
+    orElse: () => throw FormatException('Estado desconocido: $valor'),
+  );
 }

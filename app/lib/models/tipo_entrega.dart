@@ -11,4 +11,23 @@ extension TipoEntregaX on TipoEntrega {
         return 'Entre sucursales';
     }
   }
+
+  /// Valor tal como lo espera/devuelve la API (backend/src/columns.js).
+  String get valorApi {
+    switch (this) {
+      case TipoEntrega.clienteFinal:
+        return 'cliente_final';
+      case TipoEntrega.agencia:
+        return 'agencia';
+      case TipoEntrega.entreSucursales:
+        return 'entre_sucursales';
+    }
+  }
+}
+
+TipoEntrega tipoEntregaDesdeApi(String valor) {
+  return TipoEntrega.values.firstWhere(
+    (e) => e.valorApi == valor,
+    orElse: () => throw FormatException('Tipo de entrega desconocido: $valor'),
+  );
 }

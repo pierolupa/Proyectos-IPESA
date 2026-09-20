@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/tipo_entrega.dart';
+import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 
 /// Flujo de "Asignación" (ARCHITECTURE.md, sección 4.1): el transportista
@@ -18,6 +20,10 @@ class CaptureFlowScreen extends StatefulWidget {
 class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   bool _gpsActivo = false;
   bool _fotoSimulada = false;
+  bool _enviando = false;
+  double? _lat;
+  double? _lng;
+  TipoEntrega _tipoEntrega = TipoEntrega.clienteFinal;
   final _numeroGuiaController = TextEditingController();
   final _destinatarioController = TextEditingController(text: 'Cliente Demo');
   final _destinoController = TextEditingController(
@@ -32,6 +38,22 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     super.dispose();
   }
 
+  void _toggleGps(bool activo) {
+    setState(() {
+      _gpsActivo = activo;
+      if (activo) {
+        // Simula una posición dentro de Lima: la geolocalización real
+        // todavía no está integrada (ver ARCHITECTURE.md, sección 8).
+        final rnd = Random();
+        _lat = -12.0464 + (rnd.nextDouble() - 0.5) * 0.05;
+        _lng = -77.0428 + (rnd.nextDouble() - 0.5) * 0.05;
+      } else {
+        _lat = null;
+        _lng = null;
+      }
+    });
+  }
+
   void _simularFoto() {
     final aleatorio = Random().nextInt(9000) + 1000;
     setState(() {
@@ -40,12 +62,45 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     });
   }
 
+  Future<void> _confirmar(String numero) async {
+    setState(() => _enviando = true);
+    try {
+      await context.read<AppState>().asignarNuevaGuia(
+        numeroGuia: numero,
+        tipoEntrega: _tipoEntrega,
+        origen: 'Almacén Callao',
+        destino: _destinoController.text.trim(),
+        destinatario: _destinatarioController.text.trim(),
+        lat: _lat!,
+        lng: _lng!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Guía $numero asignada · estado: en ruta')),
+      );
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.mensaje)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final numero = _numeroGuiaController.text.trim();
     final esDuplicado = numero.isNotEmpty && appState.esDuplicado(numero);
     final puedeConfirmar =
+        !_enviando &&
         _gpsActivo &&
         _fotoSimulada &&
         numero.isNotEmpty &&
@@ -61,7 +116,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             color: _gpsActivo ? Colors.green[50] : Colors.red[50],
             child: SwitchListTile(
               value: _gpsActivo,
-              onChanged: (v) => setState(() => _gpsActivo = v),
+              onChanged: _toggleGps,
               title: const Text('GPS activo'),
               subtitle: Text(
                 _gpsActivo
@@ -128,6 +183,21 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            DropdownButtonFormField<TipoEntrega>(
+              initialValue: _tipoEntrega,
+              decoration: const InputDecoration(
+                labelText: 'Tipo de entrega',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final tipo in TipoEntrega.values)
+                  DropdownMenuItem(value: tipo, child: Text(tipo.etiqueta)),
+              ],
+              onChanged: (tipo) {
+                if (tipo != null) setState(() => _tipoEntrega = tipo);
+              },
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: _destinatarioController,
               decoration: const InputDecoration(
@@ -148,23 +218,18 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
           ],
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: puedeConfirmar
-                ? () {
-                    context.read<AppState>().asignarNuevaGuia(
-                      numeroGuia: numero,
-                      destino: _destinoController.text.trim(),
-                      destinatario: _destinatarioController.text.trim(),
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Guía $numero asignada · estado: en ruta'),
-                      ),
-                    );
-                    Navigator.of(context).pop();
-                  }
-                : null,
-            icon: const Icon(Icons.check_circle),
-            label: const Text('Confirmar asignación'),
+            onPressed: puedeConfirmar ? () => _confirmar(numero) : null,
+            icon: _enviando
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.check_circle),
+            label: Text(_enviando ? 'Enviando...' : 'Confirmar asignación'),
           ),
         ],
       ),

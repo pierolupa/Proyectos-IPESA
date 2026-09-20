@@ -1,18 +1,27 @@
 import 'package:flutter/foundation.dart';
 
-import '../data/mock_data.dart';
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
 import '../models/tipo_entrega.dart';
+import '../services/guias_api.dart';
 
-/// Estado en memoria de la app de demostración. Sustituye al backend +
-/// Google Sheets descritos en ARCHITECTURE.md; toda la data es local y se
-/// reinicia al recargar la app.
+/// Nombre del transportista "logueado". No hay autenticación real todavía
+/// (ver ARCHITECTURE.md, sección 8 — decisión pendiente), así que se usa
+/// un valor fijo para esta demo.
+const transportistaActualDemo = 'Juan Pérez';
+
+/// Estado de la app respaldado por la API real (ver ../services/guias_api.dart).
+/// Mantiene una copia en memoria de las guías para que las pantallas no
+/// tengan que repetir la llamada de red en cada rebuild.
 class AppState extends ChangeNotifier {
-  AppState() : _guias = guiasIniciales();
+  AppState({GuiasApi? api}) : _api = api ?? GuiasApi();
 
-  final List<Guia> _guias;
+  final GuiasApi _api;
+
+  List<Guia> _guias = [];
+  bool cargando = false;
+  String? error;
   RolUsuario? _rolActual;
 
   List<Guia> get guias => List.unmodifiable(_guias);
@@ -22,11 +31,28 @@ class AppState extends ChangeNotifier {
   void seleccionarRol(RolUsuario rol) {
     _rolActual = rol;
     notifyListeners();
+    if (rol == RolUsuario.transportista || rol == RolUsuario.administrador) {
+      cargarGuias();
+    }
   }
 
   void cerrarSesion() {
     _rolActual = null;
     notifyListeners();
+  }
+
+  Future<void> cargarGuias() async {
+    cargando = true;
+    error = null;
+    notifyListeners();
+    try {
+      _guias = await _api.listarGuias();
+    } catch (e) {
+      error = e.toString();
+    } finally {
+      cargando = false;
+      notifyListeners();
+    }
   }
 
   List<Guia> guiasDelTransportista(String nombre) {
@@ -41,69 +67,72 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Simula el validador de duplicados: un número de guía ya activo
-  /// (no finalizado ni entregado) no puede volver a asignarse como
-  /// "en ruta".
+  /// Validación local rápida (sin llamada de red) contra la última lista
+  /// cargada. La validación definitiva la hace el backend al confirmar
+  /// (responde 409 si hay conflicto).
   bool esDuplicado(String numeroGuia) {
     return _guias.any(
       (g) => g.numeroGuia == numeroGuia && !g.estado.esFinal,
     );
   }
 
-  /// Asignación: crea una tarea "en ruta" a partir del número de guía
-  /// extraído por OCR (o corregido manualmente antes de confirmar).
-  Guia asignarNuevaGuia({
+  Future<Guia> asignarNuevaGuia({
     required String numeroGuia,
+    required TipoEntrega tipoEntrega,
+    required String origen,
     required String destino,
     required String destinatario,
-  }) {
-    final nueva = Guia(
+    required double lat,
+    required double lng,
+  }) async {
+    final nueva = await _api.asignarNuevaGuia(
       numeroGuia: numeroGuia,
-      estado: EstadoGuia.enRuta,
-      tipoEntrega: TipoEntrega.clienteFinal,
-      origen: 'Almacén Callao',
+      tipoEntrega: tipoEntrega,
+      origen: origen,
       destino: destino,
       transportista: transportistaActual,
       destinatario: destinatario,
-      fechaActualizacion: DateTime.now(),
+      lat: lat,
+      lng: lng,
     );
     _guias.insert(0, nueva);
     notifyListeners();
     return nueva;
   }
 
-  void actualizarEstado(
+  Future<void> actualizarEstado(
     String numeroGuia,
     EstadoGuia nuevoEstado, {
+    double? lat,
+    double? lng,
     bool porAdmin = false,
-  }) {
+  }) async {
+    final actualizada = await _api.actualizarEstado(
+      numeroGuia,
+      nuevoEstado,
+      lat: lat,
+      lng: lng,
+      porAdmin: porAdmin,
+    );
     final index = _guias.indexWhere((g) => g.numeroGuia == numeroGuia);
-    if (index == -1) return;
-    _guias[index] = _guias[index].copyWith(
-      estado: nuevoEstado,
-      fechaActualizacion: DateTime.now(),
-      corregidoPorAdmin: porAdmin ? true : _guias[index].corregidoPorAdmin,
-    );
+    if (index != -1) {
+      _guias[index] = actualizada;
+    }
     notifyListeners();
   }
 
-  /// Corrección manual del número de guía por un administrador, para los
-  /// casos en que el OCR no extrajo correctamente el dato (ver sección 5
-  /// de ARCHITECTURE.md).
-  void corregirNumeroGuia(String numeroAnterior, String numeroNuevo) {
+  Future<void> corregirNumeroGuia(
+    String numeroAnterior,
+    String numeroNuevo,
+  ) async {
+    final actualizada = await _api.corregirNumeroGuia(
+      numeroAnterior,
+      numeroNuevo,
+    );
     final index = _guias.indexWhere((g) => g.numeroGuia == numeroAnterior);
-    if (index == -1) return;
-    _guias[index] = _guias[index].copyWith(
-      numeroGuia: numeroNuevo,
-      corregidoPorAdmin: true,
-      fechaActualizacion: DateTime.now(),
-    );
+    if (index != -1) {
+      _guias[index] = actualizada;
+    }
     notifyListeners();
-  }
-
-  List<Guia> buscarPorUltimosCuatroDigitos(String ultimosCuatro) {
-    return _guias
-        .where((g) => g.ultimosCuatroDigitos == ultimosCuatro)
-        .toList();
   }
 }

@@ -5,12 +5,15 @@ import 'screens/role_selection_screen.dart';
 import 'state/app_state.dart';
 
 class IpesaGuiasApp extends StatelessWidget {
-  const IpesaGuiasApp({super.key});
+  const IpesaGuiasApp({super.key, this.appState});
+
+  /// Inyectable para tests; en la app real se crea uno propio.
+  final AppState? appState;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AppState(),
+      create: (_) => appState ?? AppState(),
       child: MaterialApp(
         title: 'IPESA · Control de Guías',
         debugShowCheckedModeBanner: false,

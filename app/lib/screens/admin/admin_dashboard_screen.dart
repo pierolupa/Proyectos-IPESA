@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
+import '../../models/guia.dart';
 import '../../state/app_state.dart';
 import '../../widgets/guia_card.dart';
 import 'admin_guia_edit_screen.dart';
@@ -28,6 +29,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         title: const Text('Panel de Administrador'),
         actions: [
+          IconButton(
+            tooltip: 'Actualizar',
+            icon: const Icon(Icons.refresh),
+            onPressed: appState.cargando
+                ? null
+                : () => context.read<AppState>().cargarGuias(),
+          ),
           IconButton(
             tooltip: 'Cambiar rol',
             icon: const Icon(Icons.logout),
@@ -62,29 +70,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
           ),
-          Expanded(
-            child: guias.isEmpty
-                ? const Center(child: Text('No hay guías con este filtro.'))
-                : ListView.builder(
-                    itemCount: guias.length,
-                    itemBuilder: (context, index) {
-                      final guia = guias[index];
-                      return GuiaCard(
-                        guia: guia,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AdminGuiaEditScreen(
-                                numeroGuia: guia.numeroGuia,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _buildLista(context, appState, guias)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLista(
+    BuildContext context,
+    AppState appState,
+    List<Guia> guias,
+  ) {
+    if (appState.cargando && guias.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (appState.error != null && appState.guias.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                'No se pudo cargar: ${appState.error}',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => context.read<AppState>().cargarGuias(),
+                child: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (guias.isEmpty) {
+      return const Center(child: Text('No hay guías con este filtro.'));
+    }
+    return RefreshIndicator(
+      onRefresh: () => context.read<AppState>().cargarGuias(),
+      child: ListView.builder(
+        itemCount: guias.length,
+        itemBuilder: (context, index) {
+          final guia = guias[index];
+          return GuiaCard(
+            guia: guia,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      AdminGuiaEditScreen(numeroGuia: guia.numeroGuia),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

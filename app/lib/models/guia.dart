@@ -32,6 +32,21 @@ class Guia {
     return soloDigitos.substring(soloDigitos.length - 4);
   }
 
+  /// Parsea la respuesta JSON de la API (ver backend/src/app.js).
+  factory Guia.fromJson(Map<String, dynamic> json) {
+    return Guia(
+      numeroGuia: json['numero_guia'] as String,
+      estado: estadoGuiaDesdeApi(json['estado'] as String),
+      tipoEntrega: tipoEntregaDesdeApi(json['tipo_entrega'] as String),
+      origen: json['origen'] as String,
+      destino: json['destino'] as String,
+      transportista: json['transportista'] as String,
+      destinatario: json['destinatario'] as String,
+      fechaActualizacion: DateTime.parse(json['fecha_actualizacion'] as String),
+      corregidoPorAdmin: json['corregido_por_admin'] == true,
+    );
+  }
+
   Guia copyWith({
     String? numeroGuia,
     EstadoGuia? estado,

@@ -1,9 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
+import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 
 /// Flujo de "Entrega" y "Entrega entre sucursales" (ARCHITECTURE.md,
@@ -24,6 +27,25 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
   bool _firmaCapturada = false;
   bool _comprobanteAdjunto = false;
   bool _dentroDeGeocerca = false;
+  bool _enviando = false;
+  double? _lat;
+  double? _lng;
+
+  void _toggleGps(bool activo) {
+    setState(() {
+      _gpsActivo = activo;
+      if (activo) {
+        // Simula una posición dentro de Lima: la geolocalización real
+        // todavía no está integrada (ver ARCHITECTURE.md, sección 8).
+        final rnd = Random();
+        _lat = -12.0464 + (rnd.nextDouble() - 0.5) * 0.05;
+        _lng = -77.0428 + (rnd.nextDouble() - 0.5) * 0.05;
+      } else {
+        _lat = null;
+        _lng = null;
+      }
+    });
+  }
 
   String get _tituloAccion {
     final g = widget.guia;
@@ -56,7 +78,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
         : _firmaCapturada;
   }
 
-  void _confirmar(BuildContext context) {
+  Future<void> _confirmar(BuildContext context) async {
     final appState = context.read<AppState>();
     final g = widget.guia;
     EstadoGuia nuevoEstado;
@@ -81,11 +103,32 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       mensaje = 'Entrega a cliente final registrada con firma.';
     }
 
-    appState.actualizarEstado(g.numeroGuia, nuevoEstado);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensaje)));
-    Navigator.of(context).pop();
+    setState(() => _enviando = true);
+    try {
+      await appState.actualizarEstado(
+        g.numeroGuia,
+        nuevoEstado,
+        lat: _lat,
+        lng: _lng,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mensaje)));
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.mensaje)));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
   }
 
   @override
@@ -104,7 +147,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
             color: _gpsActivo ? Colors.green[50] : Colors.red[50],
             child: SwitchListTile(
               value: _gpsActivo,
-              onChanged: (v) => setState(() => _gpsActivo = v),
+              onChanged: _toggleGps,
               title: const Text('GPS activo'),
               subtitle: Text(
                 _gpsActivo
@@ -183,9 +226,20 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
           ],
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: _puedeConfirmar ? () => _confirmar(context) : null,
-            icon: const Icon(Icons.check_circle),
-            label: const Text('Confirmar'),
+            onPressed: _puedeConfirmar && !_enviando
+                ? () => _confirmar(context)
+                : null,
+            icon: _enviando
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.check_circle),
+            label: Text(_enviando ? 'Enviando...' : 'Confirmar'),
           ),
         ],
       ),
