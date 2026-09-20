@@ -164,12 +164,29 @@ stateDiagram-v2
   vive solo en el backend; la app nunca tiene credenciales con acceso
   directo de escritura a la hoja.
 
-## 8. Decisiones pendientes
+## 8. Decisiones tomadas y pendientes
 
-- [ ] Confirmar Flutter vs. React Native con el equipo de desarrollo.
-- [ ] Definir si el backend intermedio es Cloud Functions, un servidor
-      dedicado, o Apps Script ligado directamente a la hoja.
+**Tomadas:**
+- Framework: **Flutter**.
+- Backend intermedio: **Vercel** (Node/Express), no Cloud Functions —
+  decisión tomada para evitar el plan de pago de Firebase (Blaze) mientras
+  el volumen de IPESA es bajo. Ver `backend/README.md`.
+- Login: implementado un **login simple** (nombre + PIN comparados en
+  texto plano contra una hoja "Usuarios") solo para que el equipo pruebe
+  la app internamente. **No es un mecanismo de autenticación real** — no
+  hay tokens, ni expiración de sesión, ni hashing del PIN, y el resto de
+  la API tampoco verifica quién llama cada endpoint. Antes de operar con
+  transportistas reales hay que migrar a un proveedor de autenticación de
+  verdad (por ejemplo, Firebase Auth) y proteger cada endpoint sensible.
+
+**Pendientes:**
+- [ ] Migrar el login simple a un proveedor de autenticación real
+      (Firebase Auth u otro) antes de un uso en producción.
 - [ ] Definir radios de geocerca por sucursal (Callao, Ate, otras).
 - [ ] Definir política de reintentos/offline para zonas sin señal GPS o de
       datos.
 - [ ] Definir el patrón/regex de número de guía de IPESA para afinar el OCR.
+- [ ] Integrar geolocalización real (hoy se simula una coordenada dentro
+      de Lima) y cámara/OCR real (hoy la app solo simula la captura).
+- [ ] Compilar y distribuir el APK/IPA de la app (Firebase App
+      Distribution, Play Store, App Store) — todavía no se hizo.

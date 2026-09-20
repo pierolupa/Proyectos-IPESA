@@ -14,6 +14,24 @@ http.Response _json(Object body, {int status = 200}) {
   return http.Response(jsonEncode(body), status);
 }
 
+/// Cliente simulado que responde POST /auth/login y GET /guias, para
+/// probar el flujo completo de login sin red real.
+MockClient _clienteConSesion({
+  required String nombre,
+  required String rol,
+  List<Map<String, dynamic>> guias = const [],
+}) {
+  return MockClient((request) async {
+    if (request.method == 'POST' && request.url.path.endsWith('/auth/login')) {
+      return _json({'nombre': nombre, 'rol': rol});
+    }
+    if (request.method == 'GET' && request.url.path.endsWith('/guias')) {
+      return _json(guias);
+    }
+    return http.Response('No mockeado: ${request.method} ${request.url}', 404);
+  });
+}
+
 void main() {
   testWidgets('Muestra la pantalla de selección de rol al iniciar', (
     WidgetTester tester,
@@ -26,47 +44,60 @@ void main() {
     expect(find.text('Equipo Comercial'), findsOneWidget);
   });
 
-  testWidgets('El transportista ve sus tareas cargadas desde la API', (
+  testWidgets('El transportista inicia sesión y ve sus tareas', (
     WidgetTester tester,
   ) async {
-    final client = MockClient((request) async {
-      expect(request.url.path, endsWith('/guias'));
-      return _json([
+    final client = _clienteConSesion(
+      nombre: 'Juan Pérez',
+      rol: 'transportista',
+      guias: [
         {
           'numero_guia': 'IPE-2026-000123',
           'estado': 'en_ruta',
           'tipo_entrega': 'cliente_final',
           'origen': 'Almacén Callao',
           'destino': 'Av. Siempre Viva 742',
-          'transportista': transportistaActualDemo,
+          'transportista': 'Juan Pérez',
           'destinatario': 'María Torres',
           'fecha_actualizacion': '2026-01-01T00:00:00.000Z',
           'corregido_por_admin': false,
         },
-      ]);
-    });
+      ],
+    );
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.tap(find.text('Transportista'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ingresar'), findsWidgets);
+    await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
+    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Mis tareas'), findsOneWidget);
     expect(find.text('IPE-2026-000123'), findsOneWidget);
   });
 
-  testWidgets('El transportista ve un error si la API falla', (
+  testWidgets('El login rechaza credenciales inválidas', (
     WidgetTester tester,
   ) async {
-    final client = MockClient((request) async => http.Response('boom', 500));
+    final client = MockClient(
+      (request) async => _json({'error': 'Nombre o PIN incorrecto.'}, status: 401),
+    );
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.tap(find.text('Transportista'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No se pudo cargar'), findsOneWidget);
-    expect(find.text('Reintentar'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'Nadie');
+    await tester.enterText(find.byType(TextField).last, '0000');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nombre o PIN incorrecto.'), findsOneWidget);
   });
 
   testWidgets('El rastreo público valida los últimos 4 dígitos', (

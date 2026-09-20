@@ -1,6 +1,12 @@
 const { google } = require('googleapis');
 const { GoogleAuth } = require('google-auth-library');
-const { COLUMNS, DATA_RANGE, SHEET_NAME } = require('./columns');
+const {
+  COLUMNS,
+  DATA_RANGE,
+  SHEET_NAME,
+  USUARIOS_COLUMNS,
+  USUARIOS_DATA_RANGE,
+} = require('./columns');
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
@@ -111,9 +117,31 @@ async function actualizarGuia(rowNumber, guia) {
   });
 }
 
+function rowToUsuario(row) {
+  const usuario = {};
+  USUARIOS_COLUMNS.forEach((col, i) => {
+    usuario[col] = row[i] ?? '';
+  });
+  usuario.activo = usuario.activo === 'true' || usuario.activo === true;
+  return usuario;
+}
+
+/** Lee todos los usuarios de la hoja "Usuarios" (login simple). */
+async function listarUsuarios() {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: USUARIOS_DATA_RANGE,
+  });
+  const rows = res.data.values || [];
+  return rows.map(rowToUsuario);
+}
+
 module.exports = {
   listarGuias,
   buscarPorNumero,
   crearGuia,
   actualizarGuia,
+  listarUsuarios,
 };

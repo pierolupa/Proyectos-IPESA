@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
+import '../models/rol_usuario.dart';
 import '../models/tipo_entrega.dart';
 
 /// URL base del backend (ver ../../backend/README.md). Desplegado en
@@ -17,6 +18,22 @@ class ApiException implements Exception {
 
   @override
   String toString() => mensaje;
+}
+
+/// Resultado de POST /auth/login. Login simple, sin token — ver la nota de
+/// seguridad en backend/src/app.js y backend/README.md.
+class SesionUsuario {
+  const SesionUsuario({required this.nombre, required this.rol});
+
+  final String nombre;
+  final RolUsuario rol;
+
+  factory SesionUsuario.fromJson(Map<String, dynamic> json) {
+    return SesionUsuario(
+      nombre: json['nombre'] as String,
+      rol: rolUsuarioDesdeApi(json['rol'] as String),
+    );
+  }
 }
 
 /// Resultado del rastreo público: solo los campos no sensibles que expone
@@ -60,6 +77,16 @@ class GuiasApi {
     } catch (_) {
       throw ApiException('Error inesperado del servidor (${res.statusCode}).');
     }
+  }
+
+  Future<SesionUsuario> login(String nombre, String pin) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre, 'pin': pin}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return SesionUsuario.fromJson(_decodeBody(res));
   }
 
   Future<List<Guia>> listarGuias({EstadoGuia? estado}) async {

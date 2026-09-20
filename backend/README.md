@@ -11,12 +11,15 @@ ningún costo en ningún lado para el volumen de IPESA.
 
 ## ⚠️ Antes de desplegar en serio
 
-Esta API **todavía no tiene autenticación ni autorización por rol** (ver
-`src/app.js`, nota al inicio del archivo). Ahora mismo cualquiera con la URL
-puede llamar cualquier endpoint. Es suficiente para desarrollo/pruebas, pero
-**no debe usarse en producción con transportistas reales sin agregar
-autenticación** (por ejemplo, Firebase Auth + verificación de rol en cada
-endpoint).
+El login (`POST /auth/login`) es deliberadamente simple: compara nombre y
+PIN en texto plano contra la hoja "Usuarios", sin tokens, sin expiración de
+sesión, sin hashing. Sirve para que el equipo pruebe la app internamente —
+**no es un mecanismo de autenticación real**. El resto de la API tampoco
+valida quién llama cada endpoint (ver `src/app.js`, nota al inicio del
+archivo): cualquiera con la URL puede llamar cualquier endpoint sin pasar
+por el login. **No debe usarse en producción con transportistas reales sin
+migrar a un proveedor de autenticación de verdad** (por ejemplo, Firebase
+Auth) y verificar un token en cada endpoint sensible.
 
 ## Qué necesitas antes de desplegar (una sola vez, todo gratis)
 
@@ -53,6 +56,21 @@ Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
 
 Valores válidos de `tipo_entrega`: `cliente_final`, `agencia`,
 `entre_sucursales`.
+
+Agrega además una **segunda pestaña** llamada exactamente `Usuarios`, con
+esta fila de encabezados (columnas A a D):
+
+```
+nombre | rol | pin | activo
+```
+
+- `rol`: `transportista` o `administrador` (el rol `comercial` no necesita
+  login — ver ARCHITECTURE.md sección 6).
+- `pin`: cualquier texto/número que uses como clave simple (ver advertencia
+  de seguridad arriba).
+- `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.
+
+Ejemplo de fila: `Juan Pérez | transportista | 1234 | true`.
 
 Copia el **ID de la hoja** de su URL:
 `https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit`.
@@ -95,6 +113,7 @@ Al terminar, Vercel te da una URL pública (algo como
 
 | Método | Ruta | Uso |
 |---|---|---|
+| `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |

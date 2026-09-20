@@ -38,6 +38,22 @@ const TIPOS_ENTREGA = Object.freeze({
   ENTRE_SUCURSALES: 'entre_sucursales',
 });
 
+/**
+ * Estructura de la hoja "Usuarios" (login simple, ver README.md — NO es
+ * un mecanismo de autenticación seguro: el PIN se guarda como texto
+ * plano en la hoja. Sirve solo para pruebas internas del equipo.
+ */
+const USUARIOS_COLUMNS = ['nombre', 'rol', 'pin', 'activo'];
+const USUARIOS_SHEET_NAME = 'Usuarios';
+const USUARIOS_DATA_RANGE = `${USUARIOS_SHEET_NAME}!A2:${String.fromCharCode(
+  64 + USUARIOS_COLUMNS.length,
+)}`;
+
+const ROLES = Object.freeze({
+  TRANSPORTISTA: 'transportista',
+  ADMINISTRADOR: 'administrador',
+});
+
 module.exports = {
   COLUMNS,
   SHEET_NAME,
@@ -46,4 +62,8 @@ module.exports = {
   ESTADOS,
   ESTADOS_FINALES,
   TIPOS_ENTREGA,
+  USUARIOS_COLUMNS,
+  USUARIOS_SHEET_NAME,
+  USUARIOS_DATA_RANGE,
+  ROLES,
 };

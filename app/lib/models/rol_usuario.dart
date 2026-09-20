@@ -23,3 +23,15 @@ extension RolUsuarioX on RolUsuario {
     }
   }
 }
+
+/// Convierte el `rol` que devuelve POST /auth/login (ver backend/README.md).
+RolUsuario rolUsuarioDesdeApi(String valor) {
+  switch (valor) {
+    case 'transportista':
+      return RolUsuario.transportista;
+    case 'administrador':
+      return RolUsuario.administrador;
+    default:
+      throw FormatException('Rol desconocido: $valor');
+  }
+}

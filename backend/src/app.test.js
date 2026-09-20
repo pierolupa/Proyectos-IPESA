@@ -2,7 +2,7 @@ jest.mock('./sheetsRepository');
 
 const request = require('supertest');
 const repo = require('./sheetsRepository');
-const { ESTADOS, TIPOS_ENTREGA } = require('./columns');
+const { ESTADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
 
 const app = require('./app');
 
@@ -144,5 +144,53 @@ describe('PATCH /guias/:numeroGuia/numero', () => {
     expect(res.status).toBe(200);
     expect(res.body.numero_guia).toBe('IPE-2026-000777');
     expect(res.body.corregido_por_admin).toBe(true);
+  });
+});
+
+describe('POST /auth/login', () => {
+  const usuario = (overrides = {}) => ({
+    nombre: 'Juan Pérez',
+    rol: ROLES.TRANSPORTISTA,
+    pin: '1234',
+    activo: true,
+    ...overrides,
+  });
+
+  it('exige nombre y pin', async () => {
+    const res = await request(app).post('/auth/login').send({ nombre: 'Juan' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rechaza un pin incorrecto', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario()]);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ nombre: 'Juan Pérez', pin: '9999' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rechaza un usuario inactivo', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario({ activo: false })]);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ nombre: 'Juan Pérez', pin: '1234' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rechaza un nombre que no existe', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario()]);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ nombre: 'No Existe', pin: '1234' });
+    expect(res.status).toBe(401);
+  });
+
+  it('acepta nombre/pin correctos, sin importar mayúsculas/espacios', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario()]);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ nombre: '  juan pérez  ', pin: '1234' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
   });
 });

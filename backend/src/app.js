@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { ESTADOS, ESTADOS_FINALES, TIPOS_ENTREGA } = require('./columns');
+const { ESTADOS, ESTADOS_FINALES, TIPOS_ENTREGA, ROLES } = require('./columns');
 const repo = require('./sheetsRepository');
 
 const app = express();
@@ -9,13 +9,18 @@ app.use(express.json());
 
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 const TIPOS_VALIDOS = new Set(Object.values(TIPOS_ENTREGA));
+const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
 /**
- * NOTA DE SEGURIDAD: esta API todavía no implementa autenticación ni
- * autorización por rol (ver ARCHITECTURE.md, sección 8 — decisión
- * pendiente). Antes de un despliegue real hay que exigir un token válido
- * (Firebase Auth, por ejemplo) y verificar el rol del usuario en cada
- * endpoint sensible (asignar, corregir número, editar estado como admin).
+ * NOTA DE SEGURIDAD: el login de /auth/login es deliberadamente simple
+ * (nombre + PIN comparados en texto plano contra la hoja "Usuarios") y
+ * NO reemplaza un mecanismo de autenticación real — no hay tokens, no hay
+ * expiración de sesión, no hay hashing del PIN. Sirve solo para que el
+ * equipo pruebe internamente la app. El resto de la API tampoco valida
+ * quién llama cada endpoint (ver ARCHITECTURE.md, sección 8 — decisión
+ * pendiente): antes de un despliegue real con transportistas de verdad
+ * hay que migrar a un proveedor de autenticación de verdad (Firebase Auth,
+ * por ejemplo) y exigir/verificar un token en cada endpoint sensible.
  */
 
 function guiaPublica(guia) {
@@ -34,6 +39,32 @@ function sinCamposInternos(guia) {
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Login simple contra la hoja "Usuarios" (ver nota de seguridad arriba).
+app.post('/auth/login', async (req, res, next) => {
+  try {
+    const { nombre, pin } = req.body || {};
+    if (!nombre || !pin) {
+      return res.status(400).json({ error: 'Faltan nombre y/o pin.' });
+    }
+
+    const usuarios = await repo.listarUsuarios();
+    const usuario = usuarios.find(
+      (u) => u.nombre.trim().toLowerCase() === String(nombre).trim().toLowerCase(),
+    );
+
+    if (!usuario || !usuario.activo || String(usuario.pin) !== String(pin)) {
+      return res.status(401).json({ error: 'Nombre o PIN incorrecto.' });
+    }
+    if (!ROLES_VALIDOS.has(usuario.rol)) {
+      return res.status(500).json({ error: `Rol inválido en la hoja de usuarios: ${usuario.rol}` });
+    }
+
+    res.json({ nombre: usuario.nombre, rol: usuario.rol });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Administrador: lista completa, con filtro opcional por estado.
 app.get('/guias', async (req, res, next) => {

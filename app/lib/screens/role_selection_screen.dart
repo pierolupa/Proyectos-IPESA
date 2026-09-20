@@ -3,21 +3,26 @@ import 'package:provider/provider.dart';
 
 import '../models/rol_usuario.dart';
 import '../state/app_state.dart';
-import 'admin/admin_dashboard_screen.dart';
+import 'login_screen.dart';
 import 'tracking/public_tracking_screen.dart';
-import 'transportista/task_list_screen.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
 
   void _entrar(BuildContext context, RolUsuario rol) {
-    context.read<AppState>().seleccionarRol(rol);
-    final destino = switch (rol) {
-      RolUsuario.transportista => const TaskListScreen(),
-      RolUsuario.administrador => const AdminDashboardScreen(),
-      RolUsuario.comercial => const PublicTrackingScreen(),
-    };
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => destino));
+    if (rol == RolUsuario.comercial) {
+      context.read<AppState>().entrarComoComercial();
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PublicTrackingScreen()),
+      );
+      return;
+    }
+    // Transportista y Administrador comparten la misma pantalla de login;
+    // a dónde se navega después depende del rol real que devuelva el
+    // backend, no del botón que se tocó aquí.
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   @override
@@ -40,7 +45,7 @@ class RoleSelectionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Demo con datos de prueba — sin conexión a Google Sheets aún.',
+                'Conectado a Google Sheets en vivo.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),

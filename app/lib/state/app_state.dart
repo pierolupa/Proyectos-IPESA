@@ -6,11 +6,6 @@ import '../models/rol_usuario.dart';
 import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
 
-/// Nombre del transportista "logueado". No hay autenticación real todavía
-/// (ver ARCHITECTURE.md, sección 8 — decisión pendiente), así que se usa
-/// un valor fijo para esta demo.
-const transportistaActualDemo = 'Juan Pérez';
-
 /// Estado de la app respaldado por la API real (ver ../services/guias_api.dart).
 /// Mantiene una copia en memoria de las guías para que las pantallas no
 /// tengan que repetir la llamada de red en cada rebuild.
@@ -23,21 +18,38 @@ class AppState extends ChangeNotifier {
   bool cargando = false;
   String? error;
   RolUsuario? _rolActual;
+  String? _nombreUsuario;
 
   List<Guia> get guias => List.unmodifiable(_guias);
   RolUsuario? get rolActual => _rolActual;
-  String get transportistaActual => transportistaActualDemo;
 
-  void seleccionarRol(RolUsuario rol) {
-    _rolActual = rol;
+  /// Nombre del transportista/administrador con sesión iniciada. Vacío
+  /// para el rol Comercial, que no requiere login.
+  String get transportistaActual => _nombreUsuario ?? '';
+
+  /// Login simple contra la hoja "Usuarios" (ver backend/README.md — no
+  /// es un mecanismo de autenticación real, ver la advertencia ahí).
+  /// Deja que el ApiException se propague para que la pantalla de login
+  /// muestre el mensaje de error.
+  Future<void> iniciarSesion(String nombre, String pin) async {
+    final sesion = await _api.login(nombre, pin);
+    _nombreUsuario = sesion.nombre;
+    _rolActual = sesion.rol;
     notifyListeners();
-    if (rol == RolUsuario.transportista || rol == RolUsuario.administrador) {
-      cargarGuias();
-    }
+    await cargarGuias();
+  }
+
+  /// El rol Comercial no requiere login (ver ARCHITECTURE.md, sección 6).
+  void entrarComoComercial() {
+    _rolActual = RolUsuario.comercial;
+    notifyListeners();
   }
 
   void cerrarSesion() {
     _rolActual = null;
+    _nombreUsuario = null;
+    _guias = [];
+    error = null;
     notifyListeners();
   }
 
