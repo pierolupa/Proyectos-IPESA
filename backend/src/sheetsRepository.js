@@ -7,13 +7,33 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 let sheetsClientPromise = null;
 
 /**
- * Cliente autenticado de la API de Sheets. En Cloud Functions usa las
- * credenciales por defecto de la identidad de servicio de la función
- * (Application Default Credentials) — no se maneja ninguna clave JSON.
+ * Cliente autenticado de la API de Sheets.
+ *
+ * Vercel no es Google Cloud, así que no hay una identidad automática:
+ * la cuenta de servicio se pasa completa (JSON) en la variable de entorno
+ * GOOGLE_SERVICE_ACCOUNT_KEY. Si esa variable no está (por ejemplo,
+ * corriendo dentro de Google Cloud), se usan las credenciales por defecto
+ * del entorno (Application Default Credentials) como respaldo.
  */
+function getAuthOptions() {
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!rawKey) {
+    return { scopes: SCOPES };
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(rawKey);
+  } catch (err) {
+    throw new Error(
+      'GOOGLE_SERVICE_ACCOUNT_KEY no es un JSON válido. Debe ser el contenido completo del archivo de la cuenta de servicio.',
+    );
+  }
+  return { credentials, scopes: SCOPES };
+}
+
 function getSheetsClient() {
   if (!sheetsClientPromise) {
-    const auth = new GoogleAuth({ scopes: SCOPES });
+    const auth = new GoogleAuth(getAuthOptions());
     sheetsClientPromise = auth.getClient().then(
       (authClient) => google.sheets({ version: 'v4', auth: authClient }),
     );

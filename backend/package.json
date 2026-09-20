@@ -1,20 +1,17 @@
 {
-  "name": "ipesa-guias-functions",
+  "name": "ipesa-guias-backend",
   "description": "Backend intermedio de IPESA · Control de Guías: expone una API HTTP para la app y persiste en Google Sheets.",
   "engines": {
     "node": "20"
   },
-  "main": "index.js",
   "scripts": {
-    "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
     "test": "jest"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
-    "firebase-functions": "^6.4.0",
     "google-auth-library": "^9.15.1",
     "googleapis": "^144.0.0"
   },

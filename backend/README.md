@@ -1,0 +1,104 @@
+# IPESA · Control de Guías — Backend (Vercel)
+
+API HTTP que hace de intermediario entre la app y Google Sheets, según
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md) sección 2.3. La app **nunca**
+escribe directo a la hoja de cálculo.
+
+Se despliega en **Vercel** (plan gratuito "Hobby"). Autentica contra Google
+Sheets con una cuenta de servicio cuya clave se guarda como variable de
+entorno secreta en Vercel — no requiere el plan Blaze de Google Cloud ni
+ningún costo en ningún lado para el volumen de IPESA.
+
+## ⚠️ Antes de desplegar en serio
+
+Esta API **todavía no tiene autenticación ni autorización por rol** (ver
+`src/app.js`, nota al inicio del archivo). Ahora mismo cualquiera con la URL
+puede llamar cualquier endpoint. Es suficiente para desarrollo/pruebas, pero
+**no debe usarse en producción con transportistas reales sin agregar
+autenticación** (por ejemplo, Firebase Auth + verificación de rol en cada
+endpoint).
+
+## Qué necesitas antes de desplegar (una sola vez, todo gratis)
+
+### 1. Habilitar la API de Google Sheets
+
+En https://console.cloud.google.com, con tu proyecto (el mismo que
+`ipesa---distribucion` si lo creaste desde Firebase) seleccionado:
+"APIs & Services" → "Library" → busca "Google Sheets API" → **Enable**.
+No requiere facturación activada.
+
+### 2. Crear la cuenta de servicio
+
+"IAM y administración" → "Cuentas de servicio" → **Crear cuenta de
+servicio**:
+- Nombre: `ipesa-guias-backend` (o el que prefieras).
+- No hace falta asignarle ningún rol de IAM (el acceso a la hoja se da
+  compartiéndola directamente, no por rol de proyecto).
+- Termina la creación, entra a la cuenta creada → pestaña **Claves** →
+  **Agregar clave** → **Crear clave nueva** → tipo **JSON** → se descarga
+  un archivo. Ese archivo es lo que va en `GOOGLE_SERVICE_ACCOUNT_KEY`.
+  **No lo subas a git ni lo compartas.**
+
+### 3. Crear la hoja de cálculo
+
+Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
+y esta fila de encabezados (columnas A a L):
+
+```
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion
+```
+
+Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
+`recepcion_sucursal`, `entregado`, `finalizado`.
+
+Valores válidos de `tipo_entrega`: `cliente_final`, `agencia`,
+`entre_sucursales`.
+
+Copia el **ID de la hoja** de su URL:
+`https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit`.
+
+### 4. Compartir la hoja con la cuenta de servicio
+
+Abre el archivo JSON descargado en el paso 2, copia el valor de
+`client_email` (algo como
+`ipesa-guias-backend@ipesa---distribucion.iam.gserviceaccount.com`), y
+comparte la hoja con ese correo como **Editor** (botón "Compartir" en
+Google Sheets).
+
+## Desarrollo local
+
+```bash
+npm install
+npm test              # corre los tests (mockean Sheets, no requieren credenciales)
+cp .env.example .env   # completa SHEET_ID y GOOGLE_SERVICE_ACCOUNT_KEY
+npx vercel dev         # levanta la API localmente
+```
+
+## Desplegar en Vercel
+
+1. Sube este repo a GitHub (ya lo está) y entra a https://vercel.com con
+   tu cuenta (puedes iniciar sesión directo con GitHub).
+2. **Add New… → Project** → importa el repositorio `Proyectos-IPESA`.
+3. En "Root Directory" selecciona la carpeta **`backend`** (importante:
+   no la raíz del repo).
+4. En "Environment Variables" agrega:
+   - `SHEET_ID` → el ID de la hoja del paso 3.
+   - `GOOGLE_SERVICE_ACCOUNT_KEY` → pega el contenido completo del JSON
+     de la cuenta de servicio (todo el archivo, tal cual).
+5. **Deploy**.
+
+Al terminar, Vercel te da una URL pública (algo como
+`https://ipesa-guias-backend.vercel.app`). La API queda disponible bajo
+`/api/...` (por ejemplo `https://ipesa-guias-backend.vercel.app/api/health`).
+
+## Endpoints
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
+| `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. |
+| `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |
+| `GET` | `/api/guias?estado=en_ruta` | Lista completa, con filtro opcional (administrador). |
+| `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
+| `GET` | `/api/guias/rastreo/:ultimosCuatro` | Rastreo público, sin datos sensibles. |
+| `GET` | `/api/health` | Chequeo de salud. |
