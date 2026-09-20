@@ -1,46 +1,80 @@
-# IPESA · Control de Guías (scaffold)
+# IPESA · Control de Guías — App (Flutter Web)
 
-Scaffold navegable en Flutter de la app descrita en
-[`../ARCHITECTURE.md`](../ARCHITECTURE.md). **Toda la data es simulada en
-memoria** (sin Google Sheets, sin OCR real, sin geolocalización real):
-sirve para validar pantallas, flujos y navegación antes de conectar los
-servicios reales.
+App descrita en [`../ARCHITECTURE.md`](../ARCHITECTURE.md), conectada al
+backend real (`../backend/`, desplegado en Vercel) que a su vez lee/escribe
+la hoja de Google Sheets "IPESA - Guías". No hay datos simulados: todo lo
+que hace la app queda guardado de verdad.
+
+Se despliega como **sitio web en Vercel** (no como app nativa de tienda) —
+ver la sección "Desplegar en Vercel" más abajo.
 
 ## Qué incluye
 
-- **Selector de rol** (sin login real): Transportista, Administrador,
-  Equipo Comercial.
-- **Transportista**: lista de tareas asignadas, flujo de "Nueva guía"
-  (simula foto + OCR + GPS obligatorio + validación de duplicados), y
-  flujo de entrega (firma a cliente final, comprobante de agencia, o
-  geofencing simulado para traslados entre sucursales).
+- **Login simple** (nombre + PIN, ver advertencia de seguridad abajo) para
+  Transportista y Administrador. Equipo Comercial entra sin login.
+- **Transportista**: lista de tareas asignadas (cargadas de la API), flujo
+  de "Nueva guía" (simula foto + OCR + GPS obligatorio + validación de
+  duplicados contra el backend), y flujo de entrega (firma a cliente
+  final, comprobante de agencia, o geofencing simulado para traslados
+  entre sucursales).
 - **Administrador**: panel con todas las guías, filtro por estado, edición
   manual de estado y corrección manual del número de guía.
 - **Equipo Comercial**: rastreo público por los últimos 4 dígitos de la
-  guía, sin usuario registrado.
+  guía, consultando la API directo (nunca baja la lista completa al
+  dispositivo).
 
-## Qué falta (fuera de alcance de este scaffold)
+## ⚠️ Advertencia de seguridad (login)
 
-- Integración real con la API de Google Sheets / backend intermedio.
-- OCR real (Google ML Kit / Cloud Vision).
-- Cámara real y geolocalización/geofencing real.
-- Autenticación de usuarios.
+El login es **deliberadamente simple** (nombre + PIN en texto plano,
+comparado en el backend contra una hoja de cálculo) — no hay tokens, ni
+expiración de sesión, ni cifrado del PIN. Sirve para que el equipo pruebe
+la app internamente, **no para producción con datos sensibles**. Ver
+`../backend/README.md`.
 
-Ver la sección 8 de `ARCHITECTURE.md` para las decisiones pendientes.
+## Qué falta (ver sección 8 de `ARCHITECTURE.md`)
 
-## Cómo correrlo
+- OCR real (hoy simula el número extraído).
+- Cámara real (hoy simula la foto).
+- Geolocalización real (hoy simula una coordenada dentro de Lima).
+- Autenticación real (Firebase Auth u otro, en vez del login simple).
+
+## Cómo correrlo en desarrollo
 
 ```bash
 flutter pub get
-flutter run          # dispositivo/emulador Android o iOS
-flutter run -d chrome # preview rápido en el navegador (mismo código, target web)
-flutter test         # tests de widgets
-flutter analyze      # análisis estático
+flutter run -d chrome  # abre la app en el navegador con hot reload
+flutter test           # tests de widgets (usan un cliente HTTP simulado)
+flutter analyze        # análisis estático
 ```
 
-El target `web` se agregó solo para poder previsualizar rápido la app en un
-navegador durante el desarrollo (no es una plataforma de destino del
-producto, que sigue siendo Android/iOS). El `web/flutter_bootstrap.js` está
-configurado para cargar CanvasKit desde los assets locales en vez del CDN de
-Google, así el preview también funciona detrás de redes corporativas
-restrictivas.
+El `web/flutter_bootstrap.js` está configurado para cargar CanvasKit desde
+los assets locales en vez del CDN de Google, así la app también funciona
+detrás de redes corporativas restrictivas.
+
+## Desplegar en Vercel
+
+Es un **proyecto de Vercel separado** del backend (`../backend/`), aunque
+viven en el mismo repositorio — Vercel soporta varios proyectos por
+repo, cada uno con su propio "Root Directory".
+
+1. En https://vercel.com/new, importa de nuevo el repositorio
+   `Proyectos-IPESA` (se puede importar el mismo repo más de una vez, como
+   un proyecto nuevo).
+2. **Root Directory** → Edit → selecciona **`app`**.
+3. **Framework Preset**: "Other".
+4. Abre **"Build and Output Settings"** y sobrescribe:
+   - **Install Command**: `echo "sin dependencias node"`
+   - **Build Command**:
+     ```
+     git clone https://github.com/flutter/flutter.git -b stable --depth 1 /tmp/flutter && /tmp/flutter/bin/flutter config --enable-web --no-analytics && /tmp/flutter/bin/flutter pub get && /tmp/flutter/bin/flutter build web --release
+     ```
+   - **Output Directory**: `build/web`
+5. No hace falta ninguna variable de entorno (la URL del backend está
+   fija en `lib/services/guias_api.dart`).
+6. **Deploy**.
+
+La primera build tarda más (~2-3 min, porque descarga Flutter), las
+siguientes también (no hay caché de Flutter entre builds) — es normal.
+
+Cada push a la rama conectada vuelve a desplegar automáticamente, igual
+que el backend.

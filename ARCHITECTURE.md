@@ -168,6 +168,13 @@ stateDiagram-v2
 
 **Tomadas:**
 - Framework: **Flutter**.
+- Plataforma de destino: **app web**, desplegada en Vercel (`app/` compila
+  con `flutter build web`), en vez de Android/iOS nativo por tienda de
+  aplicaciones. Se evita así compilar APK/IPA y la distribución por Play
+  Store/App Store/Firebase App Distribution — el equipo entra por un link
+  en el navegador, igual que el backend. Flutter sigue siendo capaz de
+  compilar a Android/iOS más adelante si hiciera falta, sin rehacer la
+  app.
 - Backend intermedio: **Vercel** (Node/Express), no Cloud Functions —
   decisión tomada para evitar el plan de pago de Firebase (Blaze) mientras
   el volumen de IPESA es bajo. Ver `backend/README.md`.
@@ -188,5 +195,7 @@ stateDiagram-v2
 - [ ] Definir el patrón/regex de número de guía de IPESA para afinar el OCR.
 - [ ] Integrar geolocalización real (hoy se simula una coordenada dentro
       de Lima) y cámara/OCR real (hoy la app solo simula la captura).
-- [ ] Compilar y distribuir el APK/IPA de la app (Firebase App
-      Distribution, Play Store, App Store) — todavía no se hizo.
+- [ ] Desplegar `app/` como sitio web en Vercel con URL propia (ver
+      `app/README.md`) — todavía no se hizo. Si más adelante se necesita
+      app nativa instalable, Flutter permite compilar Android/IPA desde el
+      mismo código sin rehacer la app.
