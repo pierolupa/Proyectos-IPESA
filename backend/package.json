@@ -2,7 +2,7 @@
   "name": "ipesa-guias-backend",
   "description": "Backend intermedio de IPESA · Control de Guías: expone una API HTTP para la app y persiste en Google Sheets.",
   "engines": {
-    "node": "20"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vercel dev",
