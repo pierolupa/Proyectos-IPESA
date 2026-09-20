@@ -33,6 +33,14 @@ Ver la sección 8 de `ARCHITECTURE.md` para las decisiones pendientes.
 ```bash
 flutter pub get
 flutter run          # dispositivo/emulador Android o iOS
+flutter run -d chrome # preview rápido en el navegador (mismo código, target web)
 flutter test         # tests de widgets
-flutter analyze       # análisis estático
+flutter analyze      # análisis estático
 ```
+
+El target `web` se agregó solo para poder previsualizar rápido la app en un
+navegador durante el desarrollo (no es una plataforma de destino del
+producto, que sigue siendo Android/iOS). El `web/flutter_bootstrap.js` está
+configurado para cargar CanvasKit desde los assets locales en vez del CDN de
+Google, así el preview también funciona detrás de redes corporativas
+restrictivas.
