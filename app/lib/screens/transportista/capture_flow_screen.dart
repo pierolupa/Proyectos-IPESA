@@ -1,20 +1,20 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
-import '../../services/ocr_service.dart';
 import '../../state/app_state.dart';
 
 /// Flujo de "Asignación" (ARCHITECTURE.md, sección 4.1): el transportista
 /// fotografía la guía antes de salir y valida duplicados. El GPS debe estar
-/// activo para poder subir la foto. La cámara, el GPS y el OCR (Tesseract.js,
-/// ver ocr_service.dart) son reales; el patrón exacto del número de guía de
-/// IPESA todavía no está definido, así que el número sugerido siempre queda
-/// editable — ver ARCHITECTURE.md, sección 8, "Pendientes".
+/// activo para poder subir la foto. La cámara, el GPS y la lectura de datos
+/// (IA con visión — Claude, vía backend/src/ocrAgente.js) son reales; lo
+/// que la IA no pueda leer con confianza queda en null y el transportista
+/// lo completa a mano — ningún campo se confirma sin revisión.
 class CaptureFlowScreen extends StatefulWidget {
   const CaptureFlowScreen({super.key});
 
@@ -26,9 +26,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   bool _gpsActivo = false;
   bool _cargandoGps = false;
   bool _tomandoFoto = false;
-  bool _leyendoOcr = false;
+  bool _leyendoDatos = false;
   Uint8List? _fotoBytes;
-  String? _textoOcr;
   bool _enviando = false;
   double? _lat;
   double? _lng;
@@ -100,20 +99,16 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   Future<void> _tomarFoto() async {
     setState(() => _tomandoFoto = true);
     try {
-      // Resolución alta y compresión mínima: el número de guía y los datos
-      // de "Datos adicionales" se imprimen en letra chica, y una foto muy
-      // reducida/comprimida los vuelve ilegibles para el OCR.
       final archivo = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 3000,
-        imageQuality: 95,
+        maxWidth: 1600,
+        imageQuality: 90,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
       if (!mounted) return;
       setState(() {
         _fotoBytes = bytes;
-        _textoOcr = null;
         _numeroGuiaController.clear();
         _numeroPedidoController.clear();
         _numeroEntregaController.clear();
@@ -130,13 +125,11 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   }
 
   Future<void> _leerDatosDeGuia(Uint8List bytes) async {
-    setState(() => _leyendoOcr = true);
+    setState(() => _leyendoDatos = true);
     try {
-      final texto = await reconocerTexto(bytes);
-      final datos = extraerDatosGuia(texto);
+      final datos = await context.read<AppState>().leerGuiaConIA(bytes);
       if (!mounted) return;
       setState(() {
-        _textoOcr = texto;
         if (datos.numeroGuia != null) {
           _numeroGuiaController.text = datos.numeroGuia!;
         }
@@ -161,7 +154,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _leyendoOcr = false);
+      if (mounted) setState(() => _leyendoDatos = false);
     }
   }
 
@@ -206,7 +199,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     final esDuplicado = numero.isNotEmpty && appState.esDuplicado(numero);
     final puedeConfirmar =
         !_enviando &&
-        !_leyendoOcr &&
+        !_leyendoDatos &&
         _gpsActivo &&
         _fotoSimulada &&
         numero.isNotEmpty &&
@@ -282,16 +275,16 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Número extraído por OCR',
+              'Número de guía',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 4),
             TextField(
               controller: _numeroGuiaController,
-              enabled: !_leyendoOcr,
+              enabled: !_leyendoDatos,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                prefixIcon: _leyendoOcr
+                prefixIcon: _leyendoDatos
                     ? const Padding(
                         padding: EdgeInsets.all(12),
                         child: SizedBox(
@@ -301,18 +294,14 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
                         ),
                       )
                     : const Icon(Icons.qr_code_2),
-                helperText: _leyendoOcr
-                    ? 'Leyendo el número de la foto...'
-                    : 'Editable antes de confirmar, por si el OCR se equivocó.',
+                helperText: _leyendoDatos
+                    ? 'Leyendo la foto con IA...'
+                    : 'Editable antes de confirmar, por si la IA se equivocó.',
                 errorText: esDuplicado
                     ? 'Este número ya está en ruta o registrado.'
                     : null,
               ),
             ),
-            if (!_leyendoOcr && (_textoOcr?.trim().isNotEmpty ?? false)) ...[
-              const SizedBox(height: 8),
-              _TextoOcrCrudo(texto: _textoOcr!.trim()),
-            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<TipoEntrega>(
               initialValue: _tipoEntrega,
@@ -368,65 +357,6 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
                   )
                 : const Icon(Icons.check_circle),
             label: Text(_enviando ? 'Enviando...' : 'Confirmar asignación'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Muestra el texto crudo que devolvió el OCR, colapsado por defecto, con
-/// un botón para copiarlo. Sirve para revisar a mano un campo que el
-/// heurístico no encontró, y para reportar el texto exacto si hay que
-/// ajustar el patrón de extracción.
-class _TextoOcrCrudo extends StatelessWidget {
-  const _TextoOcrCrudo({required this.texto});
-
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        title: const Text(
-          'Ver texto reconocido por la cámara',
-          style: TextStyle(fontSize: 13),
-        ),
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SelectableText(
-                  texto,
-                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      await Clipboard.setData(ClipboardData(text: texto));
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Texto copiado.')),
-                      );
-                    },
-                    icon: const Icon(Icons.copy, size: 16),
-                    label: const Text('Copiar'),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

@@ -1,7 +1,9 @@
 jest.mock('./sheetsRepository');
+jest.mock('./ocrAgente');
 
 const request = require('supertest');
 const repo = require('./sheetsRepository');
+const { leerGuiaConIA } = require('./ocrAgente');
 const { ESTADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
 
 const app = require('./app');
@@ -228,5 +230,49 @@ describe('POST /auth/registro', () => {
         activo: true,
       }),
     );
+  });
+});
+
+describe('POST /ocr/leer-guia', () => {
+  it('rechaza si falta la imagen', async () => {
+    const res = await request(app).post('/ocr/leer-guia').send({});
+    expect(res.status).toBe(400);
+    expect(leerGuiaConIA).not.toHaveBeenCalled();
+  });
+
+  it('devuelve los datos extraídos por la IA', async () => {
+    leerGuiaConIA.mockResolvedValue({
+      numero_guia: 'T028-130133',
+      destinatario: 'GENUS SVC S.A.C.',
+      destino: 'JR. SAN LORENZO 330, LA VICTORIA, LIMA',
+      numero_pedido: '0188173910',
+      numero_entrega: '0080216544',
+    });
+    const res = await request(app)
+      .post('/ocr/leer-guia')
+      .send({ imagenBase64: 'ZmFrZQ==', mediaType: 'image/png' });
+    expect(res.status).toBe(200);
+    expect(res.body.numero_guia).toBe('T028-130133');
+    expect(leerGuiaConIA).toHaveBeenCalledWith('ZmFrZQ==', 'image/png');
+  });
+
+  it('usa image/jpeg por defecto si no se manda mediaType', async () => {
+    leerGuiaConIA.mockResolvedValue({
+      numero_guia: null,
+      destinatario: null,
+      destino: null,
+      numero_pedido: null,
+      numero_entrega: null,
+    });
+    await request(app).post('/ocr/leer-guia').send({ imagenBase64: 'ZmFrZQ==' });
+    expect(leerGuiaConIA).toHaveBeenCalledWith('ZmFrZQ==', 'image/jpeg');
+  });
+
+  it('propaga un error de la IA como 500', async () => {
+    leerGuiaConIA.mockRejectedValue(new Error('falló la IA'));
+    const res = await request(app)
+      .post('/ocr/leer-guia')
+      .send({ imagenBase64: 'ZmFrZQ==' });
+    expect(res.status).toBe(500);
   });
 });

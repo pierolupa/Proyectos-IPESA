@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -54,6 +55,35 @@ class ResultadoRastreo {
       ultimosCuatro: json['ultimos_cuatro'] as String,
       estado: estadoGuiaDesdeApi(json['estado'] as String),
       destino: json['destino'] as String,
+    );
+  }
+}
+
+/// Resultado de POST /ocr/leer-guia: los 5 campos que la IA (Claude, con
+/// visión) extrae de la foto. Cualquiera puede salir null si no se pudo
+/// leer con confianza — todos quedan en campos editables en la pantalla.
+class DatosGuiaLeida {
+  const DatosGuiaLeida({
+    this.numeroGuia,
+    this.destinatario,
+    this.destino,
+    this.numeroPedido,
+    this.numeroEntrega,
+  });
+
+  final String? numeroGuia;
+  final String? destinatario;
+  final String? destino;
+  final String? numeroPedido;
+  final String? numeroEntrega;
+
+  factory DatosGuiaLeida.fromJson(Map<String, dynamic> json) {
+    return DatosGuiaLeida(
+      numeroGuia: json['numero_guia'] as String?,
+      destinatario: json['destinatario'] as String?,
+      destino: json['destino'] as String?,
+      numeroPedido: json['numero_pedido'] as String?,
+      numeroEntrega: json['numero_entrega'] as String?,
     );
   }
 }
@@ -132,6 +162,23 @@ class GuiasApi {
     return lista
         .map((e) => ResultadoRastreo.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Manda la foto a la IA (backend → Claude con visión, ver
+  /// backend/src/ocrAgente.js) para leer los datos de la guía. Reemplaza el
+  /// OCR anterior en el navegador (Tesseract.js), que no leía de forma
+  /// confiable un formulario denso con tablas.
+  Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/ocr/leer-guia'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'imagenBase64': base64Encode(fotoBytes),
+        'mediaType': 'image/jpeg',
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return DatosGuiaLeida.fromJson(_decodeBody(res));
   }
 
   Future<Guia> asignarNuevaGuia({

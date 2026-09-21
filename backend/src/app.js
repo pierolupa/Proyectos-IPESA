@@ -2,10 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const { ESTADOS, ESTADOS_FINALES, TIPOS_ENTREGA, ROLES } = require('./columns');
 const repo = require('./sheetsRepository');
+const { leerGuiaConIA } = require('./ocrAgente');
 
 const app = express();
 app.use(cors({ origin: true }));
-app.use(express.json());
+// Límite alto: el body incluye la foto de la guía en base64 para /ocr/leer-guia.
+app.use(express.json({ limit: '8mb' }));
 
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 const TIPOS_VALIDOS = new Set(Object.values(TIPOS_ENTREGA));
@@ -39,6 +41,24 @@ function sinCamposInternos(guia) {
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Lee la foto de una guía con IA (Claude, con visión) y devuelve los datos
+// extraídos. Ver ocrAgente.js — reemplaza el OCR anterior (Tesseract.js en
+// el navegador), que no leía de forma confiable formularios densos con
+// tablas. Requiere ANTHROPIC_API_KEY (ver README.md); tiene un costo
+// pequeño por foto.
+app.post('/ocr/leer-guia', async (req, res, next) => {
+  try {
+    const { imagenBase64, mediaType } = req.body || {};
+    if (!imagenBase64) {
+      return res.status(400).json({ error: 'Falta imagenBase64.' });
+    }
+    const datos = await leerGuiaConIA(imagenBase64, mediaType || 'image/jpeg');
+    res.json(datos);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Login simple contra la hoja "Usuarios" (ver nota de seguridad arriba).
 app.post('/auth/login', async (req, res, next) => {

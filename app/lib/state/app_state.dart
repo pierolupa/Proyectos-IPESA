@@ -97,6 +97,12 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Lee los datos de la foto de una guía con IA (ver
+  /// ../services/guias_api.dart). No toca `_guias`/no notifica — es solo
+  /// para pre-llenar el formulario de asignación.
+  Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) =>
+      _api.leerGuiaConIA(fotoBytes);
+
   Future<Guia> asignarNuevaGuia({
     required String numeroGuia,
     required TipoEntrega tipoEntrega,

@@ -192,13 +192,15 @@ stateDiagram-v2
 - [ ] Definir radios de geocerca por sucursal (Callao, Ate, otras).
 - [ ] Definir política de reintentos/offline para zonas sin señal GPS o de
       datos.
-- [x] Patrón/regex de número de guía: IPESA usa el formato estándar SUNAT
-      de guía de remisión electrónica, "serie-correlativo" (ej.
-      "T028-130133" — una letra + 3 dígitos, guion, 4 a 8 dígitos). La
-      geolocalización, la cámara y el OCR son reales (Tesseract.js
-      corriendo en el navegador, sin costo) y ya buscan ese patrón; si el
-      OCR no lo encuentra, cae a una heurística genérica — el campo
-      siempre queda editable por si se equivoca.
+- [x] Lectura de la guía: la geolocalización, la cámara y la lectura de la
+      foto son reales. Se probó primero OCR gratis en el navegador
+      (Tesseract.js) pero no leía de forma confiable un formulario denso
+      con tablas (número de guía, destinatario, destino, pedido, entrega);
+      se reemplazó por IA con visión (Claude, vía backend — ver
+      `backend/src/ocrAgente.js`), que sí funciona bien y a un costo
+      pequeño por foto. Cualquier campo que no pueda leer con confianza
+      queda en null/vacío — el transportista siempre lo revisa y corrige
+      antes de confirmar.
 - [ ] Desplegar `app/` como sitio web en Vercel con URL propia (ver
       `app/README.md`) — todavía no se hizo. Si más adelante se necesita
       app nativa instalable, Flutter permite compilar Android/IPA desde el
