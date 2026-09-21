@@ -4,11 +4,52 @@
 // lib/services/ocr_service.dart, que hace la extracción del número de guía
 // a partir de este texto.
 
-// Convierte la foto a escala de grises y estira el contraste (el píxel más
-// oscuro pasa a negro puro, el más claro a blanco puro) antes de pasarla al
-// OCR. Las guías tienen letra chica sobre fondo con líneas/bordes de tabla;
-// esto ayuda a separar el texto real del ruido de fondo. Si algo falla acá
-// (navegador sin soporte, etc.), se sigue con la foto original.
+// Umbral óptimo de Otsu: separa la imagen en dos grupos (texto oscuro /
+// fondo claro) probando cada nivel de gris posible y quedándose con el que
+// maximiza la diferencia entre ambos grupos. Es el método estándar para
+// binarizar documentos escaneados/fotografiados antes de un OCR.
+function umbralOtsu(histograma, totalPixeles) {
+  let sumaTotal = 0;
+  for (let i = 0; i < 256; i++) sumaTotal += i * histograma[i];
+
+  let sumaB = 0;
+  let pesoB = 0;
+  let mejorVarianza = -1;
+  // Cuando el histograma tiene un hueco entre el grupo oscuro (texto) y el
+  // claro (fondo) — lo normal en un documento escaneado —, la varianza
+  // máxima se mantiene constante en todo ese hueco ("meseta"). Hay que
+  // quedarse con el punto medio de esa meseta, no con su primer valor,
+  // porque el primero cae pegado al borde del grupo oscuro.
+  let inicioMeseta = 0;
+  let finMeseta = 0;
+
+  for (let t = 0; t < 256; t++) {
+    pesoB += histograma[t];
+    if (pesoB === 0) continue;
+    const pesoF = totalPixeles - pesoB;
+    if (pesoF === 0) break;
+
+    sumaB += t * histograma[t];
+    const mediaB = sumaB / pesoB;
+    const mediaF = (sumaTotal - sumaB) / pesoF;
+    const varianzaEntre = pesoB * pesoF * (mediaB - mediaF) * (mediaB - mediaF);
+
+    if (varianzaEntre > mejorVarianza) {
+      mejorVarianza = varianzaEntre;
+      inicioMeseta = t;
+      finMeseta = t;
+    } else if (varianzaEntre === mejorVarianza) {
+      finMeseta = t;
+    }
+  }
+  return Math.round((inicioMeseta + finMeseta) / 2);
+}
+
+// Convierte la foto a blanco/negro puro (binarización de Otsu) antes de
+// pasarla al OCR. Las guías tienen letra chica sobre fondo con líneas/
+// bordes de tabla; esto separa el texto real del ruido de fondo mucho
+// mejor que solo escala de grises. Si algo falla acá (navegador sin
+// soporte, etc.), se sigue con la foto original.
 async function preprocesarParaOcr(bytes) {
   const blobOriginal = new Blob([bytes], { type: "image/jpeg" });
   const bitmap = await createImageBitmap(blobOriginal);
@@ -20,19 +61,21 @@ async function preprocesarParaOcr(bytes) {
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-  const grises = new Float32Array(data.length / 4);
-  let min = 255;
-  let max = 0;
+  const totalPixeles = data.length / 4;
+  const grises = new Uint8ClampedArray(totalPixeles);
+  const histograma = new Array(256).fill(0);
   for (let i = 0; i < data.length; i += 4) {
-    const gris = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const gris = Math.round(
+      0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2],
+    );
     grises[i / 4] = gris;
-    if (gris < min) min = gris;
-    if (gris > max) max = gris;
+    histograma[gris]++;
   }
-  const rango = Math.max(1, max - min);
+
+  const umbral = umbralOtsu(histograma, totalPixeles);
   for (let i = 0; i < data.length; i += 4) {
-    const estirado = Math.round(((grises[i / 4] - min) / rango) * 255);
-    data[i] = data[i + 1] = data[i + 2] = estirado;
+    const valor = grises[i / 4] > umbral ? 255 : 0;
+    data[i] = data[i + 1] = data[i + 2] = valor;
   }
   ctx.putImageData(imageData, 0, 0);
 
@@ -75,16 +118,6 @@ window.ipesaReconocerGuia = async function (bytes) {
   }
 
   try {
-    // La guía es un formulario con tablas, no un documento de texto
-    // corrido: el modo automático (por defecto) confunde el layout y
-    // pierde secciones enteras. "Sparse text" busca bloques de texto sin
-    // asumir una estructura de página única, que rinde mejor en este caso.
-    try {
-      await worker.setParameters({ tessedit_pageseg_mode: "11" });
-    } catch (error) {
-      console.warn("[ocr] no se pudo ajustar el modo de segmentación", error);
-    }
-
     const { data } = await worker.recognize(blob);
     return data.text || "";
   } catch (error) {
