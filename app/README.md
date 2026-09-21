@@ -17,9 +17,10 @@ ver la sección "Desplegar en Vercel" más abajo.
   Comercial entra sin cuenta, con el link "Rastrear un envío sin cuenta".
 - **Transportista**: lista de tareas asignadas (cargadas de la API), flujo
   de "Nueva guía" (foto real con la cámara del dispositivo + GPS real
-  obligatorio + validación de duplicados contra el backend), y flujo de
-  entrega (firma a cliente final, comprobante de agencia, o geofencing
-  simulado para traslados entre sucursales).
+  obligatorio + OCR real con Tesseract.js para sugerir el número de guía +
+  validación de duplicados contra el backend), y flujo de entrega (firma a
+  cliente final, comprobante de agencia, o geofencing simulado para
+  traslados entre sucursales).
 - **Administrador**: panel con todas las guías, filtro por estado, edición
   manual de estado y corrección manual del número de guía.
 - **Equipo Comercial**: rastreo público por los últimos 4 dígitos de la
@@ -36,8 +37,10 @@ la app internamente, **no para producción con datos sensibles**. Ver
 
 ## Qué falta (ver sección 8 de `ARCHITECTURE.md`)
 
-- OCR real (la cámara y el GPS son reales; el número de guía leído de la
-  foto todavía se simula — el usuario lo corrige a mano).
+- Afinar el OCR: lee la foto de verdad (Tesseract.js, corre en el navegador,
+  sin costo), pero el patrón exacto del número de guía de IPESA todavía no
+  está definido, así que usa una heurística genérica como mejor intento —
+  el transportista siempre puede corregirlo a mano.
 - Geofencing real para traslados entre sucursales (hoy es un switch manual).
 - Autenticación real (Firebase Auth u otro, en vez del login simple).
 

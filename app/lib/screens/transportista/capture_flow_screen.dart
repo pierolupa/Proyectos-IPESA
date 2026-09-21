@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,13 +7,15 @@ import 'package:provider/provider.dart';
 
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
+import '../../services/ocr_service.dart';
 import '../../state/app_state.dart';
 
 /// Flujo de "Asignación" (ARCHITECTURE.md, sección 4.1): el transportista
 /// fotografía la guía antes de salir y valida duplicados. El GPS debe estar
-/// activo para poder subir la foto. La cámara y el GPS son reales (piden
-/// permiso al dispositivo); el OCR del número de guía sigue simulado — ver
-/// ARCHITECTURE.md, sección 8, "Pendientes".
+/// activo para poder subir la foto. La cámara, el GPS y el OCR (Tesseract.js,
+/// ver ocr_service.dart) son reales; el patrón exacto del número de guía de
+/// IPESA todavía no está definido, así que el número sugerido siempre queda
+/// editable — ver ARCHITECTURE.md, sección 8, "Pendientes".
 class CaptureFlowScreen extends StatefulWidget {
   const CaptureFlowScreen({super.key});
 
@@ -26,7 +27,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   bool _gpsActivo = false;
   bool _cargandoGps = false;
   bool _tomandoFoto = false;
+  bool _leyendoOcr = false;
   Uint8List? _fotoBytes;
+  String? _textoOcr;
   bool _enviando = false;
   double? _lat;
   double? _lng;
@@ -101,14 +104,13 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
-      // El OCR real todavía no está integrado: se genera un número de
-      // ejemplo editable a mano en vez de leerlo de la foto.
-      final aleatorio = Random().nextInt(9000) + 1000;
       if (!mounted) return;
       setState(() {
         _fotoBytes = bytes;
-        _numeroGuiaController.text = 'IPE-2026-$aleatorio';
+        _textoOcr = null;
+        _numeroGuiaController.clear();
       });
+      await _leerNumeroDeGuia(bytes);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -116,6 +118,28 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       ).showSnackBar(SnackBar(content: Text('No se pudo abrir la cámara: $e')));
     } finally {
       if (mounted) setState(() => _tomandoFoto = false);
+    }
+  }
+
+  Future<void> _leerNumeroDeGuia(Uint8List bytes) async {
+    setState(() => _leyendoOcr = true);
+    try {
+      final texto = await reconocerTexto(bytes);
+      final numero = extraerNumeroGuia(texto);
+      if (!mounted) return;
+      setState(() {
+        _textoOcr = texto;
+        if (numero != null) _numeroGuiaController.text = numero;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo leer el número automáticamente: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _leyendoOcr = false);
     }
   }
 
@@ -158,6 +182,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     final esDuplicado = numero.isNotEmpty && appState.esDuplicado(numero);
     final puedeConfirmar =
         !_enviando &&
+        !_leyendoOcr &&
         _gpsActivo &&
         _fotoSimulada &&
         numero.isNotEmpty &&
@@ -235,16 +260,40 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             const SizedBox(height: 4),
             TextField(
               controller: _numeroGuiaController,
+              enabled: !_leyendoOcr,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.qr_code_2),
-                helperText:
-                    'Editable antes de confirmar, por si el OCR se equivocó.',
+                prefixIcon: _leyendoOcr
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : const Icon(Icons.qr_code_2),
+                helperText: _leyendoOcr
+                    ? 'Leyendo el número de la foto...'
+                    : 'Editable antes de confirmar, por si el OCR se equivocó.',
                 errorText: esDuplicado
                     ? 'Este número ya está en ruta o registrado.'
                     : null,
               ),
             ),
+            if (!_leyendoOcr &&
+                numero.isEmpty &&
+                (_textoOcr?.trim().isNotEmpty ?? false)) ...[
+              const SizedBox(height: 8),
+              Text(
+                'No se encontró un número claro. Esto leyó la cámara — '
+                'cópialo o escribe el número a mano:\n"${_textoOcr!.trim()}"',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<TipoEntrega>(
               initialValue: _tipoEntrega,
