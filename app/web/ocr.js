@@ -15,13 +15,29 @@ window.ipesaReconocerGuia = async function (bytes) {
   }
 
   const blob = new Blob([bytes], { type: "image/jpeg" });
-  // API de Tesseract.js v4: createWorker + worker.recognize (el atajo
-  // "Tesseract.recognize(...)" de versiones anteriores ya no existe).
-  const worker = await Tesseract.createWorker("spa");
+
+  // "eng" en vez de "spa": el número de guía y los códigos de IPESA son
+  // básicamente dígitos/alfanuméricos, así que no hace falta el modelo de
+  // español (más pesado de descargar) para leerlos.
+  let worker;
+  try {
+    worker = await Tesseract.createWorker("eng");
+  } catch (error) {
+    console.error("[ocr] no se pudo inicializar Tesseract.js", error);
+    throw new Error("No se pudo iniciar el lector de texto.");
+  }
+
   try {
     const { data } = await worker.recognize(blob);
     return data.text || "";
+  } catch (error) {
+    console.error("[ocr] Tesseract.js falló al leer la foto", error);
+    throw new Error("El lector de texto no pudo procesar la foto.");
   } finally {
-    await worker.terminate();
+    try {
+      await worker.terminate();
+    } catch (_) {
+      // Si el worker ya quedó en mal estado, no hay nada más que hacer.
+    }
   }
 };
