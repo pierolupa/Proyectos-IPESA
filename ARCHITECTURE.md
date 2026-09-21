@@ -196,7 +196,7 @@ stateDiagram-v2
       foto son reales. Se probó primero OCR gratis en el navegador
       (Tesseract.js) pero no leía de forma confiable un formulario denso
       con tablas (número de guía, destinatario, destino, pedido, entrega);
-      se reemplazó por IA con visión (Claude, vía backend — ver
+      se reemplazó por IA con visión (Gemini, vía backend — ver
       `backend/src/ocrAgente.js`), que sí funciona bien y a un costo
       pequeño por foto. Cualquier campo que no pueda leer con confianza
       queda en null/vacío — el transportista siempre lo revisa y corrige

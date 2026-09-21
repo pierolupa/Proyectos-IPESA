@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.127.0",
+    "@google/genai": "^2.23.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "google-auth-library": "^9.15.1",

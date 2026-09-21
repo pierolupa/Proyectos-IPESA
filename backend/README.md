@@ -6,9 +6,9 @@ escribe directo a la hoja de cálculo.
 
 Se despliega en **Vercel** (plan gratuito "Hobby"). Autentica contra Google
 Sheets con una cuenta de servicio cuya clave se guarda como variable de
-entorno secreta en Vercel — no requiere el plan Blaze de Google Cloud.
-La única parte con costo (pequeño, por uso) es la lectura de la foto de la
-guía con IA — ver sección "Leer la guía con IA" más abajo.
+entorno secreta en Vercel — no requiere el plan Blaze de Google Cloud. La
+lectura de la foto de la guía usa la API de Gemini, que tiene un nivel
+gratis con cuota diaria — ver sección "Leer la guía con IA" más abajo.
 
 ## ⚠️ Antes de desplegar en serio
 
@@ -88,25 +88,26 @@ Abre el archivo JSON descargado en el paso 2, copia el valor de
 comparte la hoja con ese correo como **Editor** (botón "Compartir" en
 Google Sheets).
 
-## Leer la guía con IA (`ANTHROPIC_API_KEY`)
+## Leer la guía con IA (`GEMINI_API_KEY`)
 
-`POST /api/ocr/leer-guia` manda la foto a Claude (con visión, ver
+`POST /api/ocr/leer-guia` manda la foto a Gemini (con visión, ver
 `src/ocrAgente.js`) para extraer número de guía, destinatario, destino,
 número de pedido y número de entrega. Reemplaza el intento anterior de
 leerlo gratis en el navegador (Tesseract.js), que no lograba leer de forma
-confiable un formulario denso con tablas — con IA sí funciona bien, pero
-tiene un costo pequeño por foto (con el modelo Haiku, una fracción de
-centavo cada una; para el volumen de IPESA esto es del orden de centavos al
-mes, no dólares).
+confiable un formulario denso con tablas.
+
+Se usa Gemini (no Claude/OpenAI) porque tiene un **nivel gratis** con cuota
+diaria de solicitudes — de sobra para el volumen de IPESA, así que esto no
+debería generar ningún costo.
 
 Para activarlo:
-1. Crea una cuenta en https://console.anthropic.com (si no tienes una).
-2. "Billing" → agrega una tarjeta y carga un saldo mínimo (unos pocos
-   dólares alcanzan para mucho tiempo con este volumen).
-3. "API Keys" → **Create Key** → copia la clave (empieza con `sk-ant-`).
-4. En el proyecto `proyectos-ipesa` de Vercel → **Settings → Environment
-   Variables** → agrega `ANTHROPIC_API_KEY` con esa clave → guarda y vuelve
-   a desplegar (o espera al próximo push).
+1. Entra a https://aistudio.google.com/apikey (Google AI Studio) con tu
+   cuenta de Google.
+2. **Create API Key** → elige o crea un proyecto de Google Cloud → copia la
+   clave.
+3. En el proyecto `proyectos-ipesa` de Vercel → **Settings → Environment
+   Variables** → agrega `GEMINI_API_KEY` con esa clave → guarda y vuelve a
+   desplegar (o espera al próximo push).
 
 Sin esta variable configurada, `/api/ocr/leer-guia` devuelve error 500 — el
 resto de la API sigue funcionando normal, y el formulario de la app sigue
@@ -132,7 +133,7 @@ npx vercel dev         # levanta la API localmente
    - `SHEET_ID` → el ID de la hoja del paso 3.
    - `GOOGLE_SERVICE_ACCOUNT_KEY` → pega el contenido completo del JSON
      de la cuenta de servicio (todo el archivo, tal cual).
-   - `ANTHROPIC_API_KEY` → ver sección "Leer la guía con IA" más abajo
+   - `GEMINI_API_KEY` → ver sección "Leer la guía con IA" más abajo
      (opcional para desplegar, pero sin ella el lector de fotos no
      funciona).
 5. **Deploy**.
@@ -145,7 +146,7 @@ Al terminar, Vercel te da una URL pública (algo como
 
 | Método | Ruta | Uso |
 |---|---|---|
-| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `ANTHROPIC_API_KEY`. |
+| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |

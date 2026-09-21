@@ -1,19 +1,19 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenAI } = require('@google/genai');
 
-let clientePromise = null;
+let cliente = null;
 
 function getClient() {
-  if (!clientePromise) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!cliente) {
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('Falta la variable de entorno ANTHROPIC_API_KEY.');
+      throw new Error('Falta la variable de entorno GEMINI_API_KEY.');
     }
-    clientePromise = new Anthropic({ apiKey });
+    cliente = new GoogleGenAI({ apiKey });
   }
-  return clientePromise;
+  return cliente;
 }
 
-const MODELO = 'claude-haiku-4-5-20251001';
+const MODELO = 'gemini-2.5-flash';
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
@@ -38,30 +38,23 @@ Si no puedes leer un campo con confianza, usa null para ese campo en vez de \
 inventar un valor.`;
 
 /**
- * Manda la foto a Claude (con visión) para extraer los datos de la guía.
- * Cuesta una fracción de centavo por foto (modelo Haiku) — requiere
- * ANTHROPIC_API_KEY configurada en Vercel. Ver backend/README.md.
+ * Manda la foto a Gemini (con visión) para extraer los datos de la guía.
+ * Gemini tiene un nivel gratis con cuota diaria que alcanza de sobra para
+ * el volumen de IPESA — requiere GEMINI_API_KEY configurada en Vercel (ver
+ * backend/README.md).
  */
 async function leerGuiaConIA(imagenBase64, mediaType) {
   const client = getClient();
-  const respuesta = await client.messages.create({
+  const respuesta = await client.models.generateContent({
     model: MODELO,
-    max_tokens: 500,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: imagenBase64 },
-          },
-          { type: 'text', text: PROMPT },
-        ],
-      },
+    contents: [
+      { inlineData: { mimeType: mediaType, data: imagenBase64 } },
+      { text: PROMPT },
     ],
+    config: { responseMimeType: 'application/json' },
   });
 
-  const texto = respuesta.content.find((bloque) => bloque.type === 'text')?.text || '';
+  const texto = respuesta.text || '';
   const jsonLimpio = texto.replace(/```json\s*|```\s*/g, '').trim();
 
   let datos;

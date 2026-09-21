@@ -17,7 +17,7 @@ ver la sección "Desplegar en Vercel" más abajo.
   Comercial entra sin cuenta, con el link "Rastrear un envío sin cuenta".
 - **Transportista**: lista de tareas asignadas (cargadas de la API), flujo
   de "Nueva guía" (foto real con la cámara del dispositivo + GPS real
-  obligatorio + lectura de la foto con IA — Claude, con visión, vía backend
+  obligatorio + lectura de la foto con IA — Gemini, con visión, vía backend
   — que sugiere número de guía, destinatario, destino, pedido y entrega +
   validación de duplicados contra el backend), y flujo de entrega (firma a
   cliente final, comprobante de agencia, o geofencing simulado para
@@ -40,10 +40,10 @@ la app internamente, **no para producción con datos sensibles**. Ver
 
 - Se probó primero un OCR gratis en el navegador (Tesseract.js), pero no
   leía de forma confiable un formulario denso con tablas — se reemplazó
-  por IA con visión (Claude) en el backend, que sí funciona bien pero
-  tiene un costo pequeño por foto (ver `../backend/README.md`, sección
-  "Leer la guía con IA"). Cualquier campo que la IA no lea con confianza
-  queda vacío/editable — nunca se confirma nada sin revisión.
+  por IA con visión (Gemini) en el backend, que sí funciona bien y tiene
+  un nivel gratis (ver `../backend/README.md`, sección "Leer la guía con
+  IA"). Cualquier campo que la IA no lea con confianza queda
+  vacío/editable — nunca se confirma nada sin revisión.
 - Geofencing real para traslados entre sucursales (hoy es un switch manual).
 - Autenticación real (Firebase Auth u otro, en vez del login simple).
 
