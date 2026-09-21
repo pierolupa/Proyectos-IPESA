@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -310,18 +309,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
                     : null,
               ),
             ),
-            if (!_leyendoOcr &&
-                numero.isEmpty &&
-                (_textoOcr?.trim().isNotEmpty ?? false)) ...[
+            if (!_leyendoOcr && (_textoOcr?.trim().isNotEmpty ?? false)) ...[
               const SizedBox(height: 8),
-              Text(
-                'No se encontró un número claro. Esto leyó la cámara — '
-                'cópialo o escribe el número a mano:\n"${_textoOcr!.trim()}"',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
+              _TextoOcrCrudo(texto: _textoOcr!.trim()),
             ],
             const SizedBox(height: 16),
             DropdownButtonFormField<TipoEntrega>(
@@ -378,6 +368,65 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
                   )
                 : const Icon(Icons.check_circle),
             label: Text(_enviando ? 'Enviando...' : 'Confirmar asignación'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Muestra el texto crudo que devolvió el OCR, colapsado por defecto, con
+/// un botón para copiarlo. Sirve para revisar a mano un campo que el
+/// heurístico no encontró, y para reportar el texto exacto si hay que
+/// ajustar el patrón de extracción.
+class _TextoOcrCrudo extends StatelessWidget {
+  const _TextoOcrCrudo({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: const Text(
+          'Ver texto reconocido por la cámara',
+          style: TextStyle(fontSize: 13),
+        ),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SelectableText(
+                  texto,
+                  style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: texto));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Texto copiado.')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copiar'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
