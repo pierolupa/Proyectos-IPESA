@@ -132,6 +132,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
 
+    await tester.ensureVisible(find.text('Rastrear un envío sin cuenta'));
     await tester.tap(find.text('Rastrear un envío sin cuenta'));
     await tester.pumpAndSettle();
 

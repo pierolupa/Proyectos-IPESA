@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/login_screen.dart';
 import 'state/app_state.dart';
+import 'theme.dart';
 
 class IpesaGuiasApp extends StatelessWidget {
   const IpesaGuiasApp({super.key, this.appState});
@@ -17,10 +18,7 @@ class IpesaGuiasApp extends StatelessWidget {
       child: MaterialApp(
         title: 'IPESA · Control de Guías',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
-        ),
+        theme: buildAppTheme(),
         home: const LoginScreen(),
       ),
     );

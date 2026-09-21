@@ -173,7 +173,6 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
               controller: _numeroGuiaController,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                border: const OutlineInputBorder(),
                 prefixIcon: const Icon(Icons.qr_code_2),
                 helperText:
                     'Editable antes de confirmar, por si el OCR se equivocó.',
@@ -185,10 +184,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<TipoEntrega>(
               initialValue: _tipoEntrega,
-              decoration: const InputDecoration(
-                labelText: 'Tipo de entrega',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Tipo de entrega'),
               items: [
                 for (final tipo in TipoEntrega.values)
                   DropdownMenuItem(value: tipo, child: Text(tipo.etiqueta)),
@@ -200,19 +196,13 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _destinatarioController,
-              decoration: const InputDecoration(
-                labelText: 'Destinatario',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Destinatario'),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _destinoController,
-              decoration: const InputDecoration(
-                labelText: 'Destino',
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: 'Destino'),
               onChanged: (_) => setState(() {}),
             ),
           ],

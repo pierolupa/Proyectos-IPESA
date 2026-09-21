@@ -86,7 +86,6 @@ class _PublicTrackingScreenState extends State<PublicTrackingScreen> {
                     maxLength: 4,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
                       labelText: 'Últimos 4 dígitos',
                       counterText: '',
                     ),

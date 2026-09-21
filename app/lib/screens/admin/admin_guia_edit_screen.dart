@@ -103,7 +103,6 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
                   controller: _numeroController,
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
                     helperText:
                         'Corrección manual cuando el OCR no leyó bien la guía.',
                   ),
@@ -131,7 +130,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
           const SizedBox(height: 4),
           DropdownButtonFormField<EstadoGuia>(
             initialValue: guia.estado,
-            decoration: const InputDecoration(border: OutlineInputBorder()),
+            decoration: const InputDecoration(),
             items: [
               for (final estado in EstadoGuia.values)
                 DropdownMenuItem(value: estado, child: Text(estado.etiqueta)),

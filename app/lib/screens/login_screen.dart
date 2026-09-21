@@ -77,6 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -87,94 +89,125 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.local_shipping,
-                    size: 56,
-                    color: Colors.blue,
+                  Center(
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        Icons.local_shipping,
+                        size: 36,
+                        color: colorScheme.onPrimary,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Text(
                     'IPESA · Control de Guías',
-                    style: Theme.of(context).textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Conectado a Google Sheets en vivo.',
+                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
+                      color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  Text(
-                    _modoRegistro ? 'Crear cuenta' : 'Ingresar',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _nombreController,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.person),
+                  const SizedBox(height: 28),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            _modoRegistro ? 'Crear cuenta' : 'Ingresar',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _nombreController,
+                            textCapitalization: TextCapitalization.words,
+                            decoration: const InputDecoration(
+                              labelText: 'Nombre',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            onSubmitted: (_) => _enviar(),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _pinController,
+                            obscureText: true,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'PIN',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              helperText: _modoRegistro
+                                  ? 'Elige un PIN — lo vas a usar para volver a entrar.'
+                                  : null,
+                            ),
+                            onSubmitted: (_) => _enviar(),
+                          ),
+                          if (_modoRegistro) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'La cuenta se crea como Transportista. Si '
+                              'necesitas acceso de Administrador, pídeselo a '
+                              'quien administra la hoja de guías.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                          if (_error != null) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              _error!,
+                              style: TextStyle(color: colorScheme.error),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: _enviando ? null : _enviar,
+                            child: _enviando
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _modoRegistro
+                                        ? 'Crear cuenta'
+                                        : 'Ingresar',
+                                  ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _enviando
+                                ? null
+                                : () => setState(() {
+                                    _modoRegistro = !_modoRegistro;
+                                    _error = null;
+                                  }),
+                            child: Text(
+                              _modoRegistro
+                                  ? '¿Ya tienes cuenta? Ingresar'
+                                  : '¿No tienes cuenta? Crear una',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    onSubmitted: (_) => _enviar(),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _pinController,
-                    obscureText: true,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'PIN',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.lock),
-                      helperText: _modoRegistro
-                          ? 'Elige un PIN — lo vas a usar para volver a entrar.'
-                          : null,
-                    ),
-                    onSubmitted: (_) => _enviar(),
-                  ),
-                  if (_modoRegistro) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'La cuenta se crea como Transportista. Si necesitas '
-                      'acceso de Administrador, pídeselo a quien administra '
-                      'la hoja de guías.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _enviando ? null : _enviar,
-                    child: _enviando
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(_modoRegistro ? 'Crear cuenta' : 'Ingresar'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _enviando
-                        ? null
-                        : () => setState(() {
-                            _modoRegistro = !_modoRegistro;
-                            _error = null;
-                          }),
-                    child: Text(
-                      _modoRegistro
-                          ? '¿Ya tienes cuenta? Ingresar'
-                          : '¿No tienes cuenta? Crear una',
-                    ),
-                  ),
-                  const Divider(height: 32),
+                  const SizedBox(height: 20),
                   OutlinedButton.icon(
                     onPressed: _enviando ? null : _irARastreo,
                     icon: const Icon(Icons.search),
