@@ -62,7 +62,11 @@ function rowToGuia(row, rowNumber) {
   COLUMNS.forEach((col, i) => {
     guia[col] = row[i] ?? '';
   });
-  guia.corregido_por_admin = guia.corregido_por_admin === 'true' || guia.corregido_por_admin === true;
+  // Ver el comentario equivalente en rowToUsuario: Sheets puede devolver
+  // "TRUE"/"FALSE" en mayúsculas para valores que reconoce como booleanos.
+  guia.corregido_por_admin =
+    guia.corregido_por_admin === true ||
+    String(guia.corregido_por_admin).trim().toLowerCase() === 'true';
   guia._row = rowNumber; // fila real en la hoja (1-indexed), uso interno
   return guia;
 }
@@ -122,7 +126,13 @@ function rowToUsuario(row) {
   USUARIOS_COLUMNS.forEach((col, i) => {
     usuario[col] = row[i] ?? '';
   });
-  usuario.activo = usuario.activo === 'true' || usuario.activo === true;
+  // Google Sheets autoformatea "true"/"false" escrito a mano como
+  // "TRUE"/"FALSE" (mayúsculas) al mostrarlo, y la API de Sheets devuelve
+  // ese mismo texto formateado — de ahí la comparación insensible a
+  // mayúsculas en vez de solo 'true'.
+  usuario.activo =
+    usuario.activo === true ||
+    String(usuario.activo).trim().toLowerCase() === 'true';
   return usuario;
 }
 
@@ -165,4 +175,7 @@ module.exports = {
   actualizarGuia,
   listarUsuarios,
   crearUsuario,
+  // Exportadas además para poder testear el parseo sin credenciales reales.
+  rowToUsuario,
+  rowToGuia,
 };
