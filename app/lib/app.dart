@@ -16,7 +16,7 @@ class IpesaGuiasApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => appState ?? AppState(),
       child: MaterialApp(
-        title: 'IPESA · Control de Guías',
+        title: 'IPESA · Tracking Distribución',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         home: const LoginScreen(),

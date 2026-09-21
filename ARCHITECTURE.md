@@ -192,9 +192,10 @@ stateDiagram-v2
 - [ ] Definir radios de geocerca por sucursal (Callao, Ate, otras).
 - [ ] Definir política de reintentos/offline para zonas sin señal GPS o de
       datos.
-- [ ] Definir el patrón/regex de número de guía de IPESA para afinar el OCR.
-- [ ] Integrar geolocalización real (hoy se simula una coordenada dentro
-      de Lima) y cámara/OCR real (hoy la app solo simula la captura).
+- [ ] Definir el patrón/regex de número de guía de IPESA para afinar el OCR
+      (la geolocalización y la cámara ya son reales — piden permiso al
+      dispositivo —, pero el número que se lee de la foto todavía se
+      simula y el usuario lo corrige a mano).
 - [ ] Desplegar `app/` como sitio web en Vercel con URL propia (ver
       `app/README.md`) — todavía no se hizo. Si más adelante se necesita
       app nativa instalable, Flutter permite compilar Android/IPA desde el

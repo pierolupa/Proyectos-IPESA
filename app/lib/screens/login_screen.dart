@@ -182,7 +182,7 @@ class _PanelMarca extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'CONTROL DE GUÍAS',
+                    'TRACKING DISTRIBUCIÓN',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.75),
                       fontSize: 13,

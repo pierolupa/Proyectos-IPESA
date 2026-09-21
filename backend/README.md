@@ -1,4 +1,4 @@
-# IPESA · Control de Guías — Backend (Vercel)
+# IPESA · Tracking Distribución — Backend (Vercel)
 
 API HTTP que hace de intermediario entre la app y Google Sheets, según
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) sección 2.3. La app **nunca**

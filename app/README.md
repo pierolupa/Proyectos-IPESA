@@ -1,4 +1,4 @@
-# IPESA · Control de Guías — App (Flutter Web)
+# IPESA · Tracking Distribución — App (Flutter Web)
 
 App descrita en [`../ARCHITECTURE.md`](../ARCHITECTURE.md), conectada al
 backend real (`../backend/`, desplegado en Vercel) que a su vez lee/escribe
@@ -16,10 +16,10 @@ ver la sección "Desplegar en Vercel" más abajo.
   que se entra lo decide el backend, no un selector previo. Equipo
   Comercial entra sin cuenta, con el link "Rastrear un envío sin cuenta".
 - **Transportista**: lista de tareas asignadas (cargadas de la API), flujo
-  de "Nueva guía" (simula foto + OCR + GPS obligatorio + validación de
-  duplicados contra el backend), y flujo de entrega (firma a cliente
-  final, comprobante de agencia, o geofencing simulado para traslados
-  entre sucursales).
+  de "Nueva guía" (foto real con la cámara del dispositivo + GPS real
+  obligatorio + validación de duplicados contra el backend), y flujo de
+  entrega (firma a cliente final, comprobante de agencia, o geofencing
+  simulado para traslados entre sucursales).
 - **Administrador**: panel con todas las guías, filtro por estado, edición
   manual de estado y corrección manual del número de guía.
 - **Equipo Comercial**: rastreo público por los últimos 4 dígitos de la
@@ -36,9 +36,9 @@ la app internamente, **no para producción con datos sensibles**. Ver
 
 ## Qué falta (ver sección 8 de `ARCHITECTURE.md`)
 
-- OCR real (hoy simula el número extraído).
-- Cámara real (hoy simula la foto).
-- Geolocalización real (hoy simula una coordenada dentro de Lima).
+- OCR real (la cámara y el GPS son reales; el número de guía leído de la
+  foto todavía se simula — el usuario lo corrige a mano).
+- Geofencing real para traslados entre sucursales (hoy es un switch manual).
 - Autenticación real (Firebase Auth u otro, en vez del login simple).
 
 ## Cómo correrlo en desarrollo
