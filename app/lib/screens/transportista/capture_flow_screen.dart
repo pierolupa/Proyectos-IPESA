@@ -245,11 +245,15 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
             ),
           if (_fotoSimulada) ...[
             const SizedBox(height: 16),
-            AspectRatio(
-              aspectRatio: 4 / 3,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.memory(_fotoBytes!, fit: BoxFit.cover),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: Image.memory(
+                  _fotoBytes!,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                ),
               ),
             ),
             const SizedBox(height: 16),

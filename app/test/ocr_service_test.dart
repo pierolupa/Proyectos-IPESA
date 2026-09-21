@@ -3,17 +3,25 @@ import 'package:ipesa_guias/services/ocr_service.dart';
 
 void main() {
   group('extraerNumeroGuia', () {
-    test('reconoce el formato IPE-AAAA-NNNNNN entre texto ruidoso', () {
-      const texto = 'GUIA DE REMISION\nIPE-2026-000123\nFECHA 20/09/2026';
-      expect(extraerNumeroGuia(texto), 'IPE-2026-000123');
+    test('reconoce el formato SUNAT serie-correlativo entre texto ruidoso',
+        () {
+      const texto =
+          'GUIA DE REMISION ELECTRONICA - REMITENTE\nT028-130133\nRUC: 20101639275';
+      expect(extraerNumeroGuia(texto), 'T028-130133');
     });
 
-    test('normaliza espacios en vez de guiones dentro del patrón IPE', () {
-      const texto = 'IPE 2026 000123';
-      expect(extraerNumeroGuia(texto), 'IPE-2026-000123');
+    test('no confunde el número de guía con un RUC de 11 dígitos', () {
+      const texto = 'RUC: 20601771641\nT028-130133\nRUC: 20613317997';
+      expect(extraerNumeroGuia(texto), 'T028-130133');
     });
 
-    test('sin patrón IPE, usa el token con más dígitos como mejor intento', () {
+    test('quita espacios sueltos que a veces mete el OCR', () {
+      const texto = 'T028 - 130133';
+      expect(extraerNumeroGuia(texto), 'T028-130133');
+    });
+
+    test('sin el patrón SUNAT, usa el token con más dígitos como mejor intento',
+        () {
       const texto = 'GUIA DE REMISION N 00123456 FECHA 20/09/2026';
       expect(extraerNumeroGuia(texto), '00123456');
     });

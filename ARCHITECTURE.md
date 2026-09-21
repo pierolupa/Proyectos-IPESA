@@ -192,12 +192,13 @@ stateDiagram-v2
 - [ ] Definir radios de geocerca por sucursal (Callao, Ate, otras).
 - [ ] Definir política de reintentos/offline para zonas sin señal GPS o de
       datos.
-- [ ] Definir el patrón/regex de número de guía de IPESA para afinar el OCR.
-      La geolocalización, la cámara y el OCR ya son reales (Tesseract.js
-      corriendo en el navegador, sin costo): lee el texto de la foto de
-      verdad y sugiere un número con una heurística genérica, pero sin el
-      patrón exacto de IPESA puede equivocarse — por eso el campo siempre
-      queda editable.
+- [x] Patrón/regex de número de guía: IPESA usa el formato estándar SUNAT
+      de guía de remisión electrónica, "serie-correlativo" (ej.
+      "T028-130133" — una letra + 3 dígitos, guion, 4 a 8 dígitos). La
+      geolocalización, la cámara y el OCR son reales (Tesseract.js
+      corriendo en el navegador, sin costo) y ya buscan ese patrón; si el
+      OCR no lo encuentra, cae a una heurística genérica — el campo
+      siempre queda editable por si se equivoca.
 - [ ] Desplegar `app/` como sitio web en Vercel con URL propia (ver
       `app/README.md`) — todavía no se hizo. Si más adelante se necesita
       app nativa instalable, Flutter permite compilar Android/IPA desde el

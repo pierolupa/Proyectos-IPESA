@@ -37,10 +37,10 @@ la app internamente, **no para producción con datos sensibles**. Ver
 
 ## Qué falta (ver sección 8 de `ARCHITECTURE.md`)
 
-- Afinar el OCR: lee la foto de verdad (Tesseract.js, corre en el navegador,
-  sin costo), pero el patrón exacto del número de guía de IPESA todavía no
-  está definido, así que usa una heurística genérica como mejor intento —
-  el transportista siempre puede corregirlo a mano.
+- El OCR (Tesseract.js, corre en el navegador, sin costo) ya busca el
+  formato real de guía de remisión electrónica SUNAT ("T028-130133"); si
+  no lo encuentra cae a una heurística genérica — el transportista siempre
+  puede corregirlo a mano.
 - Geofencing real para traslados entre sucursales (hoy es un switch manual).
 - Autenticación real (Firebase Auth u otro, en vez del login simple).
 

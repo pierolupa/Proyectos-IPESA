@@ -11,21 +11,20 @@ import 'ocr_service_stub.dart'
 Future<String> reconocerTexto(Uint8List fotoBytes) =>
     impl.reconocerTexto(fotoBytes);
 
-/// El patrón/regex exacto de IPESA para números de guía todavía no está
-/// definido (ver ARCHITECTURE.md, sección 8, "Pendientes"). Mientras tanto:
-/// 1) si el texto reconocido contiene algo con forma "IPE-2026-000123"
-///    (el formato que usa esta app), se usa eso;
-/// 2) si no, se toma como mejor intento el token alfanumérico más largo que
-///    tenga al menos 4 dígitos.
+/// Las guías de IPESA son guías de remisión electrónica SUNAT, con el
+/// formato estándar "serie-correlativo": una letra + 3 dígitos, guion, y
+/// 4 a 8 dígitos más (ej. "T028-130133"). 1) si el texto reconocido
+/// contiene algo con esa forma, se usa eso; 2) si no, se toma como mejor
+/// intento el token alfanumérico más largo que tenga al menos 4 dígitos.
 /// El resultado siempre queda en un campo editable — nunca se confirma sin
 /// que el transportista lo revise.
 String? extraerNumeroGuia(String textoOcr) {
   final texto = textoOcr.toUpperCase();
 
-  final patronIpesa = RegExp(r'IPE[\s-]?\d{4}[\s-]?\d{3,8}');
-  final matchIpesa = patronIpesa.firstMatch(texto);
-  if (matchIpesa != null) {
-    return matchIpesa.group(0)!.replaceAll(RegExp(r'\s+'), '-');
+  final patronSunat = RegExp(r'[A-Z]\s?\d{3}\s?-\s?\d{4,8}');
+  final matchSunat = patronSunat.firstMatch(texto);
+  if (matchSunat != null) {
+    return matchSunat.group(0)!.replaceAll(RegExp(r'\s+'), '');
   }
 
   final patronGenerico = RegExp(r'[A-Z0-9-]*\d[A-Z0-9-]*');
