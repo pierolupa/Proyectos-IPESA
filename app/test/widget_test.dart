@@ -38,10 +38,13 @@ void main() {
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
 
-    expect(find.text('IPESA · Control de Guías'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
-    expect(find.text('¿No tienes cuenta? Crear una'), findsOneWidget);
-    expect(find.text('Rastrear un envío sin cuenta'), findsOneWidget);
+    expect(find.text('¿No tienes cuenta? Regístrate'), findsOneWidget);
+    expect(
+      find.text('¿Eres cliente? Rastrea tu envío aquí'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('El transportista inicia sesión y ve sus tareas', (
@@ -115,7 +118,7 @@ void main() {
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
 
-    await tester.tap(find.text('¿No tienes cuenta? Crear una'));
+    await tester.tap(find.text('¿No tienes cuenta? Regístrate'));
     await tester.pumpAndSettle();
     expect(find.text('Crear cuenta'), findsWidgets);
 
@@ -132,8 +135,9 @@ void main() {
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
 
-    await tester.ensureVisible(find.text('Rastrear un envío sin cuenta'));
-    await tester.tap(find.text('Rastrear un envío sin cuenta'));
+    final rastrearFinder = find.text('¿Eres cliente? Rastrea tu envío aquí');
+    await tester.ensureVisible(rastrearFinder);
+    await tester.tap(rastrearFinder);
     await tester.pumpAndSettle();
 
     expect(find.text('Rastreo de envío'), findsOneWidget);

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// para que todas las pantallas se vean consistentes sin repetir estilos.
 ThemeData buildAppTheme() {
   final colorScheme = ColorScheme.fromSeed(
-    seedColor: const Color(0xFF1B5FBF),
+    seedColor: const Color(0xFF14345E),
     brightness: Brightness.light,
   );
 
