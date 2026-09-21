@@ -10,8 +10,11 @@ ver la sección "Desplegar en Vercel" más abajo.
 
 ## Qué incluye
 
-- **Login simple** (nombre + PIN, ver advertencia de seguridad abajo) para
-  Transportista y Administrador. Equipo Comercial entra sin login.
+- **Login simple** (nombre + PIN, ver advertencia de seguridad abajo) como
+  pantalla de inicio, con opción de auto-registro ("Crear cuenta" — siempre
+  crea la cuenta como Transportista, nunca Administrador). El rol con el
+  que se entra lo decide el backend, no un selector previo. Equipo
+  Comercial entra sin cuenta, con el link "Rastrear un envío sin cuenta".
 - **Transportista**: lista de tareas asignadas (cargadas de la API), flujo
   de "Nueva guía" (simula foto + OCR + GPS obligatorio + validación de
   duplicados contra el backend), y flujo de entrega (firma a cliente

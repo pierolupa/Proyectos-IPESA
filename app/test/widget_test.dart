@@ -33,15 +33,15 @@ MockClient _clienteConSesion({
 }
 
 void main() {
-  testWidgets('Muestra la pantalla de selección de rol al iniciar', (
+  testWidgets('Muestra el login como pantalla de inicio', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
 
     expect(find.text('IPESA · Control de Guías'), findsOneWidget);
-    expect(find.text('Transportista'), findsOneWidget);
-    expect(find.text('Administrador'), findsOneWidget);
-    expect(find.text('Equipo Comercial'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
+    expect(find.text('¿No tienes cuenta? Crear una'), findsOneWidget);
+    expect(find.text('Rastrear un envío sin cuenta'), findsOneWidget);
   });
 
   testWidgets('El transportista inicia sesión y ve sus tareas', (
@@ -67,10 +67,7 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
-    await tester.tap(find.text('Transportista'));
-    await tester.pumpAndSettle();
 
-    expect(find.text('Ingresar'), findsWidgets);
     await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
     await tester.enterText(find.byType(TextField).last, '1234');
     await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
@@ -89,8 +86,6 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
-    await tester.tap(find.text('Transportista'));
-    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Nadie');
     await tester.enterText(find.byType(TextField).last, '0000');
@@ -119,8 +114,6 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
-    await tester.tap(find.text('Transportista'));
-    await tester.pumpAndSettle();
 
     await tester.tap(find.text('¿No tienes cuenta? Crear una'));
     await tester.pumpAndSettle();
@@ -132,6 +125,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Mis tareas'), findsOneWidget);
+  });
+
+  testWidgets('Se puede rastrear un envío sin cuenta desde el login', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const IpesaGuiasApp());
+
+    await tester.tap(find.text('Rastrear un envío sin cuenta'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Rastreo de envío'), findsOneWidget);
   });
 
   testWidgets('El rastreo público valida los últimos 4 dígitos', (

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'screens/role_selection_screen.dart';
+import 'screens/login_screen.dart';
 import 'state/app_state.dart';
 
 class IpesaGuiasApp extends StatelessWidget {
@@ -21,7 +21,7 @@ class IpesaGuiasApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
-        home: const RoleSelectionScreen(),
+        home: const LoginScreen(),
       ),
     );
   }

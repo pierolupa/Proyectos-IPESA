@@ -27,7 +27,7 @@ class TaskListScreen extends StatelessWidget {
                 : () => context.read<AppState>().cargarGuias(),
           ),
           IconButton(
-            tooltip: 'Cambiar rol',
+            tooltip: 'Cerrar sesión',
             icon: const Icon(Icons.logout),
             onPressed: () {
               context.read<AppState>().cerrarSesion();
