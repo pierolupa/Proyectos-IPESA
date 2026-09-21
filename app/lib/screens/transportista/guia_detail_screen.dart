@@ -59,6 +59,10 @@ class GuiaDetailScreen extends StatelessWidget {
           _DetailRow(label: 'Origen', value: guia.origen),
           _DetailRow(label: 'Destino', value: guia.destino),
           _DetailRow(label: 'Transportista', value: guia.transportista),
+          if (guia.numeroPedido.isNotEmpty)
+            _DetailRow(label: 'N° de pedido', value: guia.numeroPedido),
+          if (guia.numeroEntrega.isNotEmpty)
+            _DetailRow(label: 'N° de entrega', value: guia.numeroEntrega),
           _DetailRow(
             label: 'Última actualización',
             value: guia.fechaActualizacion.toString().substring(0, 16),

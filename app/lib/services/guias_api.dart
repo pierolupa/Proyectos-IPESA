@@ -143,6 +143,8 @@ class GuiasApi {
     required String destinatario,
     required double lat,
     required double lng,
+    String? numeroPedido,
+    String? numeroEntrega,
   }) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/guias'),
@@ -155,6 +157,10 @@ class GuiasApi {
         'transportista': transportista,
         'destinatario': destinatario,
         'geo': {'lat': lat, 'lng': lng},
+        if (numeroPedido != null && numeroPedido.isNotEmpty)
+          'numeroPedido': numeroPedido,
+        if (numeroEntrega != null && numeroEntrega.isNotEmpty)
+          'numeroEntrega': numeroEntrega,
       }),
     );
     if (res.statusCode != 201) _lanzarError(res);

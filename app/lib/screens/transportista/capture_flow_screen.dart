@@ -40,6 +40,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   final _destinoController = TextEditingController(
     text: 'Av. Principal 123, Lima',
   );
+  final _numeroPedidoController = TextEditingController();
+  final _numeroEntregaController = TextEditingController();
 
   bool get _fotoSimulada => _fotoBytes != null;
 
@@ -48,6 +50,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     _numeroGuiaController.dispose();
     _destinatarioController.dispose();
     _destinoController.dispose();
+    _numeroPedidoController.dispose();
+    _numeroEntregaController.dispose();
     super.dispose();
   }
 
@@ -109,8 +113,10 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         _fotoBytes = bytes;
         _textoOcr = null;
         _numeroGuiaController.clear();
+        _numeroPedidoController.clear();
+        _numeroEntregaController.clear();
       });
-      await _leerNumeroDeGuia(bytes);
+      await _leerDatosDeGuia(bytes);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -121,21 +127,35 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
     }
   }
 
-  Future<void> _leerNumeroDeGuia(Uint8List bytes) async {
+  Future<void> _leerDatosDeGuia(Uint8List bytes) async {
     setState(() => _leyendoOcr = true);
     try {
       final texto = await reconocerTexto(bytes);
-      final numero = extraerNumeroGuia(texto);
+      final datos = extraerDatosGuia(texto);
       if (!mounted) return;
       setState(() {
         _textoOcr = texto;
-        if (numero != null) _numeroGuiaController.text = numero;
+        if (datos.numeroGuia != null) {
+          _numeroGuiaController.text = datos.numeroGuia!;
+        }
+        if (datos.destinatario != null) {
+          _destinatarioController.text = datos.destinatario!;
+        }
+        if (datos.destino != null) {
+          _destinoController.text = datos.destino!;
+        }
+        if (datos.numeroPedido != null) {
+          _numeroPedidoController.text = datos.numeroPedido!;
+        }
+        if (datos.numeroEntrega != null) {
+          _numeroEntregaController.text = datos.numeroEntrega!;
+        }
       });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo leer el número automáticamente: $e'),
+          content: Text('No se pudo leer los datos automáticamente: $e'),
         ),
       );
     } finally {
@@ -154,6 +174,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         destinatario: _destinatarioController.text.trim(),
         lat: _lat!,
         lng: _lng!,
+        numeroPedido: _numeroPedidoController.text.trim(),
+        numeroEntrega: _numeroEntregaController.text.trim(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -321,6 +343,22 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
               controller: _destinoController,
               decoration: const InputDecoration(labelText: 'Destino'),
               onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _numeroPedidoController,
+              decoration: const InputDecoration(
+                labelText: 'Número de pedido',
+                helperText: 'De "Datos adicionales" — opcional.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _numeroEntregaController,
+              decoration: const InputDecoration(
+                labelText: 'Número de entrega',
+                helperText: 'De "Datos adicionales" — opcional.',
+              ),
             ),
           ],
           const SizedBox(height: 24),

@@ -13,6 +13,8 @@ class Guia {
   final String destinatario;
   final DateTime fechaActualizacion;
   final bool corregidoPorAdmin;
+  final String numeroPedido;
+  final String numeroEntrega;
 
   const Guia({
     required this.numeroGuia,
@@ -24,6 +26,8 @@ class Guia {
     required this.destinatario,
     required this.fechaActualizacion,
     this.corregidoPorAdmin = false,
+    this.numeroPedido = '',
+    this.numeroEntrega = '',
   });
 
   String get ultimosCuatroDigitos {
@@ -44,6 +48,8 @@ class Guia {
       destinatario: json['destinatario'] as String,
       fechaActualizacion: DateTime.parse(json['fecha_actualizacion'] as String),
       corregidoPorAdmin: json['corregido_por_admin'] == true,
+      numeroPedido: json['numero_pedido'] as String? ?? '',
+      numeroEntrega: json['numero_entrega'] as String? ?? '',
     );
   }
 
@@ -57,6 +63,8 @@ class Guia {
     String? destinatario,
     DateTime? fechaActualizacion,
     bool? corregidoPorAdmin,
+    String? numeroPedido,
+    String? numeroEntrega,
   }) {
     return Guia(
       numeroGuia: numeroGuia ?? this.numeroGuia,
@@ -68,6 +76,8 @@ class Guia {
       destinatario: destinatario ?? this.destinatario,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
       corregidoPorAdmin: corregidoPorAdmin ?? this.corregidoPorAdmin,
+      numeroPedido: numeroPedido ?? this.numeroPedido,
+      numeroEntrega: numeroEntrega ?? this.numeroEntrega,
     );
   }
 }

@@ -45,11 +45,15 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a L):
+y esta fila de encabezados (columnas A a N):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega
 ```
+
+Si ya tenías la hoja creada con solo A-L, agrega `numero_pedido` en M1 y
+`numero_entrega` en N1 — las filas existentes quedan igual, esas dos
+columnas se leen vacías para ellas.
 
 Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
 `recepcion_sucursal`, `entregado`, `finalizado`.

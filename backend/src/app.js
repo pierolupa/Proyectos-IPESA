@@ -155,6 +155,8 @@ app.post('/guias', async (req, res, next) => {
       transportista,
       destinatario,
       geo,
+      numeroPedido,
+      numeroEntrega,
     } = req.body || {};
 
     if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
@@ -190,6 +192,10 @@ app.post('/guias', async (req, res, next) => {
       corregido_por_admin: false,
       fecha_creacion: ahora,
       fecha_actualizacion: ahora,
+      // Leídos por OCR de la sección "Datos adicionales" de la guía;
+      // opcionales porque el OCR no siempre los encuentra.
+      numero_pedido: numeroPedido || '',
+      numero_entrega: numeroEntrega || '',
     });
 
     res.status(201).json({ numeroGuia, estado: ESTADOS.EN_RUTA });

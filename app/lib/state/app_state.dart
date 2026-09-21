@@ -105,6 +105,8 @@ class AppState extends ChangeNotifier {
     required String destinatario,
     required double lat,
     required double lng,
+    String? numeroPedido,
+    String? numeroEntrega,
   }) async {
     final nueva = await _api.asignarNuevaGuia(
       numeroGuia: numeroGuia,
@@ -115,6 +117,8 @@ class AppState extends ChangeNotifier {
       destinatario: destinatario,
       lat: lat,
       lng: lng,
+      numeroPedido: numeroPedido,
+      numeroEntrega: numeroEntrega,
     );
     _guias.insert(0, nueva);
     notifyListeners();

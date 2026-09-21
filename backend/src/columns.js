@@ -16,6 +16,8 @@ const COLUMNS = [
   'corregido_por_admin',
   'fecha_creacion',
   'fecha_actualizacion',
+  'numero_pedido',
+  'numero_entrega',
 ];
 
 const SHEET_NAME = 'Guias';
