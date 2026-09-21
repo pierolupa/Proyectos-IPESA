@@ -73,8 +73,13 @@ String? extraerNumeroGuia(String textoOcr) {
       .map((m) => m.group(0)!.trim())
       .where((s) => RegExp(r'\d').allMatches(s).length >= 4)
       // Los códigos de producto de la tabla (ej. "NA1400000158") tienen 2+
-      // letras seguidas de muchos dígitos sin guion; se descartan.
+      // letras seguidas de muchos dígitos sin guion, y el número MTC del
+      // transportista es al revés (dígitos y luego letras, "15183748CNG");
+      // un RUC peruano son 11 dígitos exactos. Ninguno de esos tres es el
+      // número de guía, así que se descartan.
       .where((s) => !RegExp(r'^[A-Z]{2,}\d{5,}$').hasMatch(s))
+      .where((s) => !RegExp(r'^\d{5,}[A-Z]{2,}$').hasMatch(s))
+      .where((s) => !RegExp(r'^\d{11}$').hasMatch(s))
       .toList();
   if (candidatos.isEmpty) return null;
 
@@ -96,7 +101,11 @@ const _siguientesEtiquetas = [
 
 String? _extraerEtiqueta(String textoOcr, String patronEtiqueta) {
   final texto = textoOcr.toUpperCase();
-  final match = RegExp('$patronEtiqueta\\s*:?\\s*([^\\n]{2,120})')
+  // Entre la etiqueta y el valor el OCR mete de todo (":", ";", espacios,
+  // símbolos que no reconoció bien) — se tolera cualquier combinación corta
+  // de caracteres que no sean letras/dígitos en vez de exigir "espacio +
+  // dos puntos + espacio" exacto.
+  final match = RegExp('$patronEtiqueta[^A-Z0-9]{0,4}([^\\n]{2,120})')
       .firstMatch(texto);
   if (match == null) return null;
 
@@ -111,6 +120,7 @@ String? _extraerEtiqueta(String textoOcr, String patronEtiqueta) {
 
 String? _extraerNumeroTrasEtiqueta(String textoOcr, String etiqueta) {
   final texto = textoOcr.toUpperCase();
-  final match = RegExp('$etiqueta\\s*:?\\s*(\\d{4,})').firstMatch(texto);
+  final match =
+      RegExp('$etiqueta[^A-Z0-9]{0,4}(\\d{4,})').firstMatch(texto);
   return match?.group(1);
 }

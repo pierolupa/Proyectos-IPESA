@@ -101,10 +101,13 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   Future<void> _tomarFoto() async {
     setState(() => _tomandoFoto = true);
     try {
+      // Resolución alta y compresión mínima: el número de guía y los datos
+      // de "Datos adicionales" se imprimen en letra chica, y una foto muy
+      // reducida/comprimida los vuelve ilegibles para el OCR.
       final archivo = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: 3000,
+        imageQuality: 95,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();

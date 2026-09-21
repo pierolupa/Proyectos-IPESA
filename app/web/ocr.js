@@ -16,12 +16,12 @@ window.ipesaReconocerGuia = async function (bytes) {
 
   const blob = new Blob([bytes], { type: "image/jpeg" });
 
-  // "eng" en vez de "spa": el número de guía y los códigos de IPESA son
-  // básicamente dígitos/alfanuméricos, así que no hace falta el modelo de
-  // español (más pesado de descargar) para leerlos.
+  // "spa": el documento tiene etiquetas en español con tildes/eñes
+  // ("Señor(es)", "Número") — el modelo en inglés las leía mal y esos
+  // campos no se detectaban nunca.
   let worker;
   try {
-    worker = await Tesseract.createWorker("eng");
+    worker = await Tesseract.createWorker("spa");
   } catch (error) {
     console.error("[ocr] no se pudo inicializar Tesseract.js", error);
     throw new Error("No se pudo iniciar el lector de texto.");

@@ -35,6 +35,14 @@ void main() {
       expect(datos.numeroPedido, '0188173910');
       expect(datos.numeroEntrega, '0080216544');
     });
+
+    test('tolera separadores raros que a veces mete el OCR entre etiqueta y valor',
+        () {
+      const texto = 'Señor(es)  GENUS SVC S.A.C.\nPedido~0188173910';
+      final datos = extraerDatosGuia(texto);
+      expect(datos.destinatario, 'GENUS SVC S.A.C.');
+      expect(datos.numeroPedido, '0188173910');
+    });
   });
 
   group('extraerNumeroGuia', () {
@@ -53,6 +61,13 @@ void main() {
     test('no confunde el número de guía con códigos de producto de la tabla',
         () {
       const texto = 'NA1400000158 TYVEK TALLA M NA1400000357 JGO LLAVE';
+      expect(extraerNumeroGuia(texto), isNull);
+    });
+
+    test(
+        'si el patrón SUNAT no aparece para nada, no cae de rebote en un RUC de 11 dígitos',
+        () {
+      const texto = 'RUC: 20101639275\nGUIA DE REMISION ELECTRONICA';
       expect(extraerNumeroGuia(texto), isNull);
     });
 
