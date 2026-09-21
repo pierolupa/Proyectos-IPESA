@@ -32,7 +32,16 @@ class AppState extends ChangeNotifier {
   /// Deja que el ApiException se propague para que la pantalla de login
   /// muestre el mensaje de error.
   Future<void> iniciarSesion(String nombre, String pin) async {
-    final sesion = await _api.login(nombre, pin);
+    await _establecerSesion(await _api.login(nombre, pin));
+  }
+
+  /// Auto-registro; siempre crea la cuenta como transportista (ver
+  /// backend/src/app.js).
+  Future<void> registrarUsuario(String nombre, String pin) async {
+    await _establecerSesion(await _api.registrar(nombre, pin));
+  }
+
+  Future<void> _establecerSesion(SesionUsuario sesion) async {
     _nombreUsuario = sesion.nombre;
     _rolActual = sesion.rol;
     notifyListeners();

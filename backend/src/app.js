@@ -66,6 +66,40 @@ app.post('/auth/login', async (req, res, next) => {
   }
 });
 
+// Auto-registro (ver nota de seguridad arriba). Siempre crea el usuario
+// como "transportista" — las cuentas de administrador se dan de alta a
+// mano en la hoja, para que el auto-registro no pueda auto-otorgarse ese
+// rol.
+app.post('/auth/registro', async (req, res, next) => {
+  try {
+    const { nombre, pin } = req.body || {};
+    if (!nombre || !pin) {
+      return res.status(400).json({ error: 'Faltan nombre y/o pin.' });
+    }
+
+    const nombreLimpio = String(nombre).trim();
+    const usuarios = await repo.listarUsuarios();
+    const yaExiste = usuarios.some(
+      (u) => u.nombre.trim().toLowerCase() === nombreLimpio.toLowerCase(),
+    );
+    if (yaExiste) {
+      return res.status(409).json({ error: `Ya existe un usuario con el nombre "${nombreLimpio}".` });
+    }
+
+    const nuevoUsuario = {
+      nombre: nombreLimpio,
+      rol: ROLES.TRANSPORTISTA,
+      pin: String(pin).trim(),
+      activo: true,
+    };
+    await repo.crearUsuario(nuevoUsuario);
+
+    res.status(201).json({ nombre: nuevoUsuario.nombre, rol: nuevoUsuario.rol });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Administrador: lista completa, con filtro opcional por estado.
 app.get('/guias', async (req, res, next) => {
   try {

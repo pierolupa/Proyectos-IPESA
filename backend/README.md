@@ -114,6 +114,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | Método | Ruta | Uso |
 |---|---|---|
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
+| `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |

@@ -126,6 +126,13 @@ function rowToUsuario(row) {
   return usuario;
 }
 
+function usuarioToRow(usuario) {
+  return USUARIOS_COLUMNS.map((col) => {
+    const value = usuario[col];
+    return value === undefined || value === null ? '' : value;
+  });
+}
+
 /** Lee todos los usuarios de la hoja "Usuarios" (login simple). */
 async function listarUsuarios() {
   const sheets = await getSheetsClient();
@@ -138,10 +145,24 @@ async function listarUsuarios() {
   return rows.map(rowToUsuario);
 }
 
+/** Agrega una nueva fila a la hoja "Usuarios" (auto-registro). */
+async function crearUsuario(usuario) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: USUARIOS_DATA_RANGE,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: [usuarioToRow(usuario)] },
+  });
+}
+
 module.exports = {
   listarGuias,
   buscarPorNumero,
   crearGuia,
   actualizarGuia,
   listarUsuarios,
+  crearUsuario,
 };

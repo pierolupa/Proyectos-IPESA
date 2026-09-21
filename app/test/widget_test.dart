@@ -100,6 +100,40 @@ void main() {
     expect(find.text('Nombre o PIN incorrecto.'), findsOneWidget);
   });
 
+  testWidgets('Crear cuenta registra al usuario como transportista', (
+    WidgetTester tester,
+  ) async {
+    final client = MockClient((request) async {
+      if (request.method == 'POST' &&
+          request.url.path.endsWith('/auth/registro')) {
+        return _json({
+          'nombre': 'Chofer Nuevo',
+          'rol': 'transportista',
+        }, status: 201);
+      }
+      if (request.method == 'GET' && request.url.path.endsWith('/guias')) {
+        return _json([]);
+      }
+      return http.Response('No mockeado: ${request.method} ${request.url}', 404);
+    });
+    final appState = AppState(api: GuiasApi(client: client));
+
+    await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    await tester.tap(find.text('Transportista'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('¿No tienes cuenta? Crear una'));
+    await tester.pumpAndSettle();
+    expect(find.text('Crear cuenta'), findsWidgets);
+
+    await tester.enterText(find.byType(TextField).first, 'Chofer Nuevo');
+    await tester.enterText(find.byType(TextField).last, '9999');
+    await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Mis tareas'), findsOneWidget);
+  });
+
   testWidgets('El rastreo público valida los últimos 4 dígitos', (
     WidgetTester tester,
   ) async {

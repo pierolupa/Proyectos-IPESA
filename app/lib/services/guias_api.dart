@@ -89,6 +89,18 @@ class GuiasApi {
     return SesionUsuario.fromJson(_decodeBody(res));
   }
 
+  /// Auto-registro. El backend siempre crea la cuenta como transportista
+  /// (ver backend/src/app.js) — nunca se puede auto-otorgar administrador.
+  Future<SesionUsuario> registrar(String nombre, String pin) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/auth/registro'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre, 'pin': pin}),
+    );
+    if (res.statusCode != 201) _lanzarError(res);
+    return SesionUsuario.fromJson(_decodeBody(res));
+  }
+
   Future<List<Guia>> listarGuias({EstadoGuia? estado}) async {
     final uri = Uri.parse(apiBaseUrl).replace(
       path: '${Uri.parse(apiBaseUrl).path}/guias',

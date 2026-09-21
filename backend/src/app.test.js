@@ -194,3 +194,39 @@ describe('POST /auth/login', () => {
     expect(res.body).toEqual({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
   });
 });
+
+describe('POST /auth/registro', () => {
+  it('exige nombre y pin', async () => {
+    const res = await request(app).post('/auth/registro').send({ nombre: 'Juan' });
+    expect(res.status).toBe(400);
+    expect(repo.crearUsuario).not.toHaveBeenCalled();
+  });
+
+  it('rechaza un nombre ya usado, sin importar mayúsculas/espacios', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA, pin: '1234', activo: true },
+    ]);
+    const res = await request(app)
+      .post('/auth/registro')
+      .send({ nombre: '  juan pérez  ', pin: '0000' });
+    expect(res.status).toBe(409);
+    expect(repo.crearUsuario).not.toHaveBeenCalled();
+  });
+
+  it('crea el usuario siempre como transportista, nunca administrador', async () => {
+    repo.listarUsuarios.mockResolvedValue([]);
+    const res = await request(app)
+      .post('/auth/registro')
+      .send({ nombre: 'Nuevo Chofer', pin: '4321' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ nombre: 'Nuevo Chofer', rol: ROLES.TRANSPORTISTA });
+    expect(repo.crearUsuario).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nombre: 'Nuevo Chofer',
+        rol: ROLES.TRANSPORTISTA,
+        pin: '4321',
+        activo: true,
+      }),
+    );
+  });
+});

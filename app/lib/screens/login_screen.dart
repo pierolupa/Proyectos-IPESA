@@ -7,11 +7,11 @@ import '../state/app_state.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'transportista/task_list_screen.dart';
 
-/// Login simple por nombre + PIN (ver backend/README.md — no es un
-/// mecanismo de autenticación real, es solo para pruebas del equipo).
-/// Sirve tanto para Transportistas como para Administradores; la pantalla
-/// a la que se entra depende del rol que devuelva el backend, no de cómo
-/// se llegó aquí.
+/// Login simple por nombre + PIN, con opción de auto-registro (ver
+/// backend/README.md — no es un mecanismo de autenticación real, es solo
+/// para pruebas del equipo). El auto-registro siempre crea la cuenta como
+/// Transportista; las cuentas de Administrador se dan de alta a mano en
+/// la hoja "Usuarios".
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -22,7 +22,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _nombreController = TextEditingController();
   final _pinController = TextEditingController();
-  bool _ingresando = false;
+  bool _modoRegistro = false;
+  bool _enviando = false;
   String? _error;
 
   @override
@@ -32,18 +33,22 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _ingresar() async {
+  Future<void> _enviar() async {
     final nombre = _nombreController.text.trim();
     final pin = _pinController.text.trim();
     if (nombre.isEmpty || pin.isEmpty) return;
 
     setState(() {
-      _ingresando = true;
+      _enviando = true;
       _error = null;
     });
     try {
       final appState = context.read<AppState>();
-      await appState.iniciarSesion(nombre, pin);
+      if (_modoRegistro) {
+        await appState.registrarUsuario(nombre, pin);
+      } else {
+        await appState.iniciarSesion(nombre, pin);
+      }
       if (!mounted) return;
       final destino = appState.rolActual == RolUsuario.administrador
           ? const AdminDashboardScreen()
@@ -56,14 +61,16 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       setState(() => _error = 'Error de conexión: $e');
     } finally {
-      if (mounted) setState(() => _ingresando = false);
+      if (mounted) setState(() => _enviando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ingresar')),
+      appBar: AppBar(
+        title: Text(_modoRegistro ? 'Crear cuenta' : 'Ingresar'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -78,34 +85,60 @@ class _LoginScreenState extends State<LoginScreen> {
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.person),
               ),
-              onSubmitted: (_) => _ingresar(),
+              onSubmitted: (_) => _enviar(),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _pinController,
               obscureText: true,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'PIN',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.lock),
+                helperText: _modoRegistro
+                    ? 'Elige un PIN — lo vas a usar para volver a entrar.'
+                    : null,
               ),
-              onSubmitted: (_) => _ingresar(),
+              onSubmitted: (_) => _enviar(),
             ),
+            if (_modoRegistro) ...[
+              const SizedBox(height: 8),
+              Text(
+                'La cuenta se crea como Transportista. Si necesitas acceso '
+                'de Administrador, pídeselo a quien administra la hoja de '
+                'guías.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 16),
               Text(_error!, style: const TextStyle(color: Colors.red)),
             ],
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _ingresando ? null : _ingresar,
-              child: _ingresando
+              onPressed: _enviando ? null : _enviar,
+              child: _enviando
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Ingresar'),
+                  : Text(_modoRegistro ? 'Crear cuenta' : 'Ingresar'),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _enviando
+                  ? null
+                  : () => setState(() {
+                      _modoRegistro = !_modoRegistro;
+                      _error = null;
+                    }),
+              child: Text(
+                _modoRegistro
+                    ? '¿Ya tienes cuenta? Ingresar'
+                    : '¿No tienes cuenta? Crear una',
+              ),
             ),
           ],
         ),
