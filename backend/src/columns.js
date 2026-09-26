@@ -1,7 +1,9 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..L.
+ * El orden de este arreglo es el orden real de las columnas A..Q.
+ * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
+ * el transportista la cerró (entregado/finalizado), para el mapa del admin.
  */
 const COLUMNS = [
   'numero_guia',
@@ -18,6 +20,9 @@ const COLUMNS = [
   'fecha_actualizacion',
   'numero_pedido',
   'numero_entrega',
+  'cierre_lat',
+  'cierre_lng',
+  'fecha_cierre',
 ];
 
 const SHEET_NAME = 'Guias';

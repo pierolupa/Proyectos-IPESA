@@ -46,15 +46,21 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a N):
+y esta fila de encabezados (columnas A a Q):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre
 ```
 
-Si ya tenías la hoja creada con solo A-L, agrega `numero_pedido` en M1 y
-`numero_entrega` en N1 — las filas existentes quedan igual, esas dos
-columnas se leen vacías para ellas.
+Si ya tenías la hoja creada con menos columnas, agrega las que falten al
+final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
+`cierre_lng` en P1, `fecha_cierre` en Q1) — las filas existentes quedan
+igual y esas columnas se leen vacías para ellas.
+
+`geo_lat`/`geo_lng` guardan la ubicación del último evento. `cierre_*` se
+llenan solo cuando el transportista cierra la guía (entregado/finalizado)
+con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
+administrador no las llena.
 
 Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
 `recepcion_sucursal`, `entregado`, `finalizado`.

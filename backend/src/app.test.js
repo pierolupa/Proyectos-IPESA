@@ -97,6 +97,34 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     }));
   });
 
+  it('guarda la ubicación y fecha de cierre cuando el transportista entrega', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(200);
+    expect(res.body.cierre_lat).toBe(-12.1);
+    expect(res.body.cierre_lng).toBe(-77.02);
+    expect(res.body.fecha_cierre).toBe(res.body.fecha_actualizacion);
+  });
+
+  it('no marca cierre en un estado intermedio', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.EN_PROCESO_TRASBORDO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(200);
+    expect(res.body.cierre_lat).toBeUndefined();
+  });
+
+  it('un cierre manual del administrador no inventa ubicación de cierre', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, porAdmin: true });
+    expect(res.body.cierre_lat).toBeUndefined();
+  });
+
   it('responde 404 si la guía no existe', async () => {
     repo.buscarPorNumero.mockResolvedValue(null);
     const res = await request(app)

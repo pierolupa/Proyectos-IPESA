@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
+import '../../models/guia.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../widgets/estado_badge.dart';
+import '../../widgets/mapa_ubicacion.dart';
 
 /// Corrección manual de datos (ARCHITECTURE.md, sección 6): el
 /// administrador tiene acceso total para cambiar el estado de cualquier
@@ -152,8 +155,76 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             '${guia.numeroEntrega.isNotEmpty ? '\nN° de entrega: ${guia.numeroEntrega}' : ''}',
             style: TextStyle(color: Colors.grey[700]),
           ),
+          const SizedBox(height: 24),
+          _SeccionUbicacion(guia: guia),
         ],
       ),
     );
   }
+}
+
+class _SeccionUbicacion extends StatelessWidget {
+  const _SeccionUbicacion({required this.guia});
+
+  final Guia guia;
+
+  @override
+  Widget build(BuildContext context) {
+    final titulo = Theme.of(context).textTheme.labelLarge;
+    final gris = TextStyle(color: Colors.grey[700]);
+
+    if (guia.tieneUbicacionCierre) {
+      final fecha = guia.fechaCierre == null
+          ? ''
+          : ' el ${DateFormat('dd/MM/yyyy HH:mm').format(guia.fechaCierre!.toLocal())}';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Dónde se cerró la tarea', style: titulo),
+          const SizedBox(height: 4),
+          Text(
+            'Cerrada por ${guia.transportista}$fecha · '
+            '${_coordenadas(guia.cierreLat!, guia.cierreLng!)}',
+            style: gris,
+          ),
+          const SizedBox(height: 8),
+          MapaUbicacion(lat: guia.cierreLat!, lng: guia.cierreLng!),
+        ],
+      );
+    }
+
+    final estaCerrada = guia.estado.esFinal;
+    final tieneUltima = guia.ultimaLat != null && guia.ultimaLng != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          estaCerrada ? 'Dónde se cerró la tarea' : 'Última ubicación registrada',
+          style: titulo,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          estaCerrada
+              ? 'Sin ubicación de cierre: la cerró un administrador a mano o '
+                    'se cerró antes de que la app registrara el cierre.'
+              : tieneUltima
+              ? 'Aún no se cierra. Último registro del transportista · '
+                    '${_coordenadas(guia.ultimaLat!, guia.ultimaLng!)}'
+              : 'Sin ubicación registrada.',
+          style: gris,
+        ),
+        if (!estaCerrada && tieneUltima) ...[
+          const SizedBox(height: 8),
+          MapaUbicacion(
+            lat: guia.ultimaLat!,
+            lng: guia.ultimaLng!,
+            color: Colors.blue,
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _coordenadas(double lat, double lng) =>
+      '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
 }

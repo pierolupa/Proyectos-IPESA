@@ -260,6 +260,10 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     }
     if (porAdmin) {
       guia.corregido_por_admin = true;
+    } else if (ESTADOS_FINALES.has(estado)) {
+      guia.cierre_lat = geo.lat;
+      guia.cierre_lng = geo.lng;
+      guia.fecha_cierre = guia.fecha_actualizacion;
     }
     await repo.actualizarGuia(guia._row, guia);
 

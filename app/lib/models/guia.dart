@@ -16,6 +16,16 @@ class Guia {
   final String numeroPedido;
   final String numeroEntrega;
 
+  /// Ubicación del último evento registrado (asignación o entrega).
+  final double? ultimaLat;
+  final double? ultimaLng;
+
+  /// Dónde y cuándo el transportista cerró la guía (entregado/finalizado).
+  /// Null si sigue abierta o si la cerró un administrador a mano.
+  final double? cierreLat;
+  final double? cierreLng;
+  final DateTime? fechaCierre;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -28,7 +38,14 @@ class Guia {
     this.corregidoPorAdmin = false,
     this.numeroPedido = '',
     this.numeroEntrega = '',
+    this.ultimaLat,
+    this.ultimaLng,
+    this.cierreLat,
+    this.cierreLng,
+    this.fechaCierre,
   });
+
+  bool get tieneUbicacionCierre => cierreLat != null && cierreLng != null;
 
   String get ultimosCuatroDigitos {
     final soloDigitos = numeroGuia.replaceAll(RegExp(r'[^0-9]'), '');
@@ -50,7 +67,20 @@ class Guia {
       corregidoPorAdmin: json['corregido_por_admin'] == true,
       numeroPedido: json['numero_pedido'] as String? ?? '',
       numeroEntrega: json['numero_entrega'] as String? ?? '',
+      ultimaLat: _coordenada(json['geo_lat']),
+      ultimaLng: _coordenada(json['geo_lng']),
+      cierreLat: _coordenada(json['cierre_lat']),
+      cierreLng: _coordenada(json['cierre_lng']),
+      fechaCierre: DateTime.tryParse(json['fecha_cierre'] as String? ?? ''),
     );
+  }
+
+  // Sheets devuelve los números como texto formateado, y según el idioma de
+  // la hoja puede usar coma decimal ("-12,05").
+  static double? _coordenada(Object? valor) {
+    if (valor is num) return valor.toDouble();
+    if (valor is! String || valor.trim().isEmpty) return null;
+    return double.tryParse(valor.trim().replaceAll(',', '.'));
   }
 
   Guia copyWith({
@@ -78,6 +108,11 @@ class Guia {
       corregidoPorAdmin: corregidoPorAdmin ?? this.corregidoPorAdmin,
       numeroPedido: numeroPedido ?? this.numeroPedido,
       numeroEntrega: numeroEntrega ?? this.numeroEntrega,
+      ultimaLat: ultimaLat,
+      ultimaLng: ultimaLng,
+      cierreLat: cierreLat,
+      cierreLng: cierreLng,
+      fechaCierre: fechaCierre,
     );
   }
 }

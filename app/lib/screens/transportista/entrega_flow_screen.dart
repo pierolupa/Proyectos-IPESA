@@ -39,25 +39,27 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
 
   bool get _fotoSimulada => _fotoBytes != null;
 
+  Future<Position> _leerPosicion() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw 'La ubicación está desactivada en tu dispositivo.';
+    }
+    var permiso = await Geolocator.checkPermission();
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+    }
+    if (permiso == LocationPermission.denied ||
+        permiso == LocationPermission.deniedForever) {
+      throw 'Debes dar permiso de ubicación para continuar.';
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+  }
+
   Future<void> _activarGps() async {
     setState(() => _cargandoGps = true);
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw 'La ubicación está desactivada en tu dispositivo.';
-      }
-      var permiso = await Geolocator.checkPermission();
-      if (permiso == LocationPermission.denied) {
-        permiso = await Geolocator.requestPermission();
-      }
-      if (permiso == LocationPermission.denied ||
-          permiso == LocationPermission.deniedForever) {
-        throw 'Debes dar permiso de ubicación para continuar.';
-      }
-      final posicion = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      final posicion = await _leerPosicion();
       if (!mounted) return;
       setState(() {
         _gpsActivo = true;
@@ -162,6 +164,20 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
 
     setState(() => _enviando = true);
     try {
+      // Se vuelve a leer el GPS al confirmar para registrar dónde se marcó
+      // realmente, no dónde se encendió el GPS.
+      final Position posicion;
+      try {
+        posicion = await _leerPosicion();
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo leer tu ubicación: $e')),
+        );
+        return;
+      }
+      _lat = posicion.latitude;
+      _lng = posicion.longitude;
       await appState.actualizarEstado(
         g.numeroGuia,
         nuevoEstado,
