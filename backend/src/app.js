@@ -56,7 +56,13 @@ app.post('/ocr/leer-guia', async (req, res, next) => {
     const datos = await leerGuiaConIA(imagenBase64, mediaType || 'image/jpeg');
     res.json(datos);
   } catch (err) {
-    next(err);
+    // Se responde con el mensaje real (a diferencia del resto de rutas, que
+    // usan el manejador genérico) porque este proyecto de Vercel no tiene
+    // acceso a runtime logs (403) — sin esto, un fallo de la IA es
+    // indiagnosticable desde afuera. No es información sensible: es un
+    // error de la librería de Gemini, no un dato de la guía ni la API key.
+    console.error(err);
+    res.status(500).json({ error: `Fallo al leer la guía con IA: ${err.message}` });
   }
 });
 

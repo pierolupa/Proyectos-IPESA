@@ -268,11 +268,12 @@ describe('POST /ocr/leer-guia', () => {
     expect(leerGuiaConIA).toHaveBeenCalledWith('ZmFrZQ==', 'image/jpeg');
   });
 
-  it('propaga un error de la IA como 500', async () => {
+  it('propaga un error de la IA como 500 con el mensaje real', async () => {
     leerGuiaConIA.mockRejectedValue(new Error('falló la IA'));
     const res = await request(app)
       .post('/ocr/leer-guia')
       .send({ imagenBase64: 'ZmFrZQ==' });
     expect(res.status).toBe(500);
+    expect(res.body.error).toContain('falló la IA');
   });
 });
