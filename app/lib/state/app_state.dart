@@ -9,6 +9,14 @@ import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
 
 const _prefNombre = 'sesion_nombre';
+
+/// Novedad detectada al actualizar en segundo plano (para notificar al admin).
+class CambioGuia {
+  const CambioGuia(this.guia, this.mensaje);
+  final Guia guia;
+  final String mensaje;
+}
+
 const _prefRol = 'sesion_rol';
 
 /// Estado de la app respaldado por la API real (ver ../services/guias_api.dart).
@@ -117,6 +125,49 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Recarga las guías sin mostrar carga ni borrar la lista si falla (para
+  /// el refresco automático) y devuelve lo que cambió desde la última vez.
+  Future<List<CambioGuia>> actualizarEnSegundoPlano() async {
+    if (cargando) return const [];
+    final List<Guia> nuevas;
+    try {
+      nuevas = await _api.listarGuias();
+    } catch (_) {
+      return const [];
+    }
+    final anteriores = {for (final g in _guias) g.numeroGuia: g};
+    final cambios = <CambioGuia>[
+      for (final g in nuevas)
+        if (_describirCambio(anteriores[g.numeroGuia], g) case final mensaje?)
+          CambioGuia(g, mensaje),
+    ];
+    _guias = nuevas;
+    error = null;
+    notifyListeners();
+    return cambios;
+  }
+
+  static String? _describirCambio(Guia? antes, Guia ahora) {
+    final quien = ahora.transportista;
+    final n = ahora.numeroGuia;
+    if (antes == null) {
+      return '$quien registró la guía $n (${ahora.tipoEntrega.etiqueta}).';
+    }
+    if (antes.estado == ahora.estado) return null;
+    switch (ahora.estado) {
+      case EstadoGuia.enRuta:
+        return 'La guía $n volvió a "En ruta".';
+      case EstadoGuia.enProcesoTrasbordo:
+        return '$quien inició el traslado de $n a ${ahora.destino}.';
+      case EstadoGuia.recepcionSucursal:
+        return '$quien llegó con $n a ${ahora.destino}.';
+      case EstadoGuia.entregado:
+        return '$quien entregó la guía $n.';
+      case EstadoGuia.finalizado:
+        return '$quien entregó la guía $n en agencia.';
+    }
+  }
+
   Sucursal? sucursalPorNombre(String nombre) {
     final clave = nombre.trim().toLowerCase();
     for (final s in _sucursales) {
@@ -153,9 +204,7 @@ class AppState extends ChangeNotifier {
   /// cargada. La validación definitiva la hace el backend al confirmar
   /// (responde 409 si hay conflicto).
   bool esDuplicado(String numeroGuia) {
-    return _guias.any(
-      (g) => g.numeroGuia == numeroGuia && !g.estado.esFinal,
-    );
+    return _guias.any((g) => g.numeroGuia == numeroGuia && !g.estado.esFinal);
   }
 
   /// Lee los datos de la foto de una guía con IA (ver

@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
+import '../../services/notificador.dart';
 import '../../state/app_state.dart';
+import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/guia_card.dart';
 import 'admin_guia_edit_screen.dart';
 import 'sucursal_edit_screen.dart';
@@ -17,8 +19,72 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _pestana = 0;
+  bool _notificacionesActivas = Notificador.permitido;
 
   static const _titulos = ['Guías', 'Tareas por transportista', 'Sucursales'];
+
+  Future<void> _activarNotificaciones() async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!Notificador.soportado) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Este navegador no permite notificaciones. Los avisos se '
+            'mostrarán solo dentro de la app.',
+          ),
+        ),
+      );
+      return;
+    }
+    final ok = await Notificador.pedirPermiso();
+    if (!mounted) return;
+    setState(() => _notificacionesActivas = ok);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Notificaciones activadas: te avisaremos aunque tengas otra '
+                    'pestaña abierta.'
+              : 'El navegador bloqueó las notificaciones. Actívalas desde el '
+                    'candado junto a la dirección de la página.',
+        ),
+      ),
+    );
+  }
+
+  void _avisarCambios(List<CambioGuia> cambios) {
+    final titulo = cambios.length == 1
+        ? 'IPESA · Novedad'
+        : 'IPESA · ${cambios.length} novedades';
+    final cuerpo = cambios.map((c) => c.mensaje).join('\n');
+    if (Notificador.paginaOculta) Notificador.mostrar(titulo, cuerpo);
+
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Row(
+          children: [
+            const Icon(Icons.notifications_active, color: Colors.amber),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                cambios.length == 1
+                    ? cambios.first.mensaje
+                    : '${cambios.length} novedades:\n$cuerpo',
+              ),
+            ),
+          ],
+        ),
+        action: cambios.length == 1
+            ? SnackBarAction(
+                label: 'Ver',
+                onPressed: () => _abrirGuia(context, cambios.first.guia),
+              )
+            : null,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +94,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         title: Text(_titulos[_pestana]),
         actions: [
+          IconButton(
+            tooltip: _notificacionesActivas
+                ? 'Notificaciones activadas'
+                : 'Activar notificaciones',
+            icon: Icon(
+              _notificacionesActivas
+                  ? Icons.notifications_active
+                  : Icons.notifications_off_outlined,
+            ),
+            onPressed: _notificacionesActivas ? null : _activarNotificaciones,
+          ),
           IconButton(
             tooltip: 'Actualizar',
             icon: const Icon(Icons.refresh),
@@ -45,11 +122,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ],
       ),
-      body: switch (_pestana) {
-        0 => const _PestanaGuias(),
-        1 => const _PestanaTareas(),
-        _ => const _PestanaSucursales(),
-      },
+      body: ActualizacionAutomatica(
+        intervalo: const Duration(seconds: 15),
+        onCambios: _avisarCambios,
+        child: switch (_pestana) {
+          0 => const _PestanaGuias(),
+          1 => const _PestanaTareas(),
+          _ => const _PestanaSucursales(),
+        },
+      ),
       floatingActionButton: _pestana == 2
           ? FloatingActionButton.extended(
               onPressed: () => Navigator.of(context).push(
@@ -128,10 +209,13 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final todas = appState.guias;
-    final guias = todas
-        .where((g) => _filtro == null || g.estado.grupo == _filtro)
-        .toList()
-      ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));
+    final guias =
+        todas
+            .where((g) => _filtro == null || g.estado.grupo == _filtro)
+            .toList()
+          ..sort(
+            (a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion),
+          );
 
     return Column(
       children: [
@@ -215,8 +299,9 @@ class _PestanaTareas extends StatelessWidget {
                     nombre: nombre,
                     guias: porTransportista[nombre]!
                       ..sort(
-                        (a, b) =>
-                            b.fechaActualizacion.compareTo(a.fechaActualizacion),
+                        (a, b) => b.fechaActualizacion.compareTo(
+                          a.fechaActualizacion,
+                        ),
                       ),
                   ),
               ],

@@ -223,7 +223,10 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(mensaje)));
-      Navigator.of(context).pop();
+      // Entregada: vuelve directo a "Mis tareas" (cierra también el detalle),
+      // donde la guía ya no aparece.
+      final navigator = Navigator.of(context)..pop();
+      if (nuevoEstado.esFinal) navigator.pop();
     } on ApiException catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(

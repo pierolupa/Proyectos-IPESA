@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../state/app_state.dart';
+import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/guia_card.dart';
 import 'capture_flow_screen.dart';
 import 'guia_detail_screen.dart';
@@ -13,7 +15,11 @@ class TaskListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final guias = appState.guiasDelTransportista(appState.transportistaActual);
+    // Las entregadas desaparecen: el transportista solo ve lo pendiente.
+    final guias = appState
+        .guiasDelTransportista(appState.transportistaActual)
+        .where((g) => !g.estado.esFinal)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -45,7 +51,10 @@ class TaskListScreen extends StatelessWidget {
           ).push(MaterialPageRoute(builder: (_) => const CaptureFlowScreen()));
         },
       ),
-      body: _buildBody(context, appState, guias),
+      body: ActualizacionAutomatica(
+        intervalo: const Duration(seconds: 60),
+        child: _buildBody(context, appState, guias),
+      ),
     );
   }
 
@@ -81,7 +90,7 @@ class TaskListScreen extends StatelessWidget {
       );
     }
     if (guias.isEmpty) {
-      return const Center(child: Text('No tienes guías asignadas todavía.'));
+      return const Center(child: Text('No tienes tareas pendientes.'));
     }
     return RefreshIndicator(
       onRefresh: () => context.read<AppState>().cargarGuias(),
