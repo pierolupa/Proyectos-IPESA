@@ -113,6 +113,11 @@ Sin esta variable configurada, `/api/ocr/leer-guia` devuelve error 500 — el
 resto de la API sigue funcionando normal, y el formulario de la app sigue
 dejando escribir todos los campos a mano.
 
+El modelo por defecto es `gemini-3.8-flash`. Si Google lo retira (el error
+dirá algo como "This model ... is no longer available"), agrega en Vercel
+la variable `GEMINI_MODEL` con el modelo que recomiende el mensaje y
+vuelve a desplegar — no hace falta cambiar código.
+
 ## Desarrollo local
 
 ```bash

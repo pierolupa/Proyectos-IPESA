@@ -13,7 +13,9 @@ function getClient() {
   return cliente;
 }
 
-const MODELO = 'gemini-2.5-flash';
+// Google retira modelos viejos para claves nuevas (gemini-2.5-flash ya
+// respondía 404); GEMINI_MODEL permite cambiarlo desde Vercel sin tocar código.
+const MODELO = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
