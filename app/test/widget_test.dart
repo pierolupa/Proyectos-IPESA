@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ipesa_guias/app.dart';
 import 'package:ipesa_guias/screens/tracking/public_tracking_screen.dart';
@@ -33,10 +34,20 @@ MockClient _clienteConSesion({
 }
 
 void main() {
+  // AppState ahora guarda la sesión en SharedPreferences (ver
+  // restaurarSesion/_establecerSesion) — sin este mock, getInstance()
+  // fallaría en los tests por no tener un canal de plataforma real. Se
+  // resetea antes de cada test para que ninguno herede la sesión guardada
+  // por el anterior.
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('Muestra el login como pantalla de inicio', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('Iniciar sesión'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
@@ -70,6 +81,7 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
     await tester.enterText(find.byType(TextField).last, '1234');
@@ -89,6 +101,7 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Nadie');
     await tester.enterText(find.byType(TextField).last, '0000');
@@ -117,6 +130,7 @@ void main() {
     final appState = AppState(api: GuiasApi(client: client));
 
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('¿No tienes cuenta? Regístrate'));
     await tester.pumpAndSettle();
@@ -134,6 +148,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const IpesaGuiasApp());
+    await tester.pumpAndSettle();
 
     final rastrearFinder = find.text('¿Eres cliente? Rastrea tu envío aquí');
     await tester.ensureVisible(rastrearFinder);

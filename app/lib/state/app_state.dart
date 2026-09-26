@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
 import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
+
+const _prefNombre = 'sesion_nombre';
+const _prefRol = 'sesion_rol';
 
 /// Estado de la app respaldado por la API real (ver ../services/guias_api.dart).
 /// Mantiene una copia en memoria de las guías para que las pantallas no
@@ -45,6 +49,30 @@ class AppState extends ChangeNotifier {
     _nombreUsuario = sesion.nombre;
     _rolActual = sesion.rol;
     notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefNombre, sesion.nombre);
+    await prefs.setString(_prefRol, sesion.rol.name);
+    await cargarGuias();
+  }
+
+  /// Restaura la sesión guardada (si hay una) al abrir la app — sin esto,
+  /// recargar la página siempre volvía al login aunque ya se hubiera
+  /// iniciado sesión antes, porque el estado solo vivía en memoria.
+  /// No hace nada si no hay nada guardado (deja `rolActual` en null).
+  Future<void> restaurarSesion() async {
+    final prefs = await SharedPreferences.getInstance();
+    final nombre = prefs.getString(_prefNombre);
+    final rolTexto = prefs.getString(_prefRol);
+    if (nombre == null || rolTexto == null) return;
+
+    final rol = RolUsuario.values.asNameMap()[rolTexto];
+    if (rol != RolUsuario.transportista && rol != RolUsuario.administrador) {
+      return;
+    }
+
+    _nombreUsuario = nombre;
+    _rolActual = rol;
+    notifyListeners();
     await cargarGuias();
   }
 
@@ -54,12 +82,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void cerrarSesion() {
+  Future<void> cerrarSesion() async {
     _rolActual = null;
     _nombreUsuario = null;
     _guias = [];
     error = null;
     notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefNombre);
+    await prefs.remove(_prefRol);
   }
 
   Future<void> cargarGuias() async {

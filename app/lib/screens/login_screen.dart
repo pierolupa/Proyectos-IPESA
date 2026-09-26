@@ -34,13 +34,39 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _modoRegistro = false;
   bool _verPin = false;
   bool _enviando = false;
+  bool _verificandoSesion = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _verificarSesionGuardada(),
+    );
+  }
 
   @override
   void dispose() {
     _nombreController.dispose();
     _pinController.dispose();
     super.dispose();
+  }
+
+  /// Si ya había una sesión iniciada (ver AppState.restaurarSesion), entra
+  /// directo al panel correspondiente en vez de mostrar el login — así
+  /// recargar la página no obliga a volver a ingresar cada vez.
+  Future<void> _verificarSesionGuardada() async {
+    final appState = context.read<AppState>();
+    await appState.restaurarSesion();
+    if (!mounted) return;
+    if (appState.rolActual == RolUsuario.administrador ||
+        appState.rolActual == RolUsuario.transportista) {
+      final destino = appState.rolActual == RolUsuario.administrador
+          ? const AdminDashboardScreen()
+          : const TaskListScreen();
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => destino));
+    }
+    if (mounted) setState(() => _verificandoSesion = false);
   }
 
   Future<void> _enviar() async {
@@ -84,6 +110,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_verificandoSesion) {
+      return const Scaffold(
+        backgroundColor: _navy,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _navy,
       body: SafeArea(
