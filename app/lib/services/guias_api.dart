@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
+import '../models/sucursal.dart';
 import '../models/tipo_entrega.dart';
 
 /// URL base del backend (ver ../../backend/README.md). Desplegado en
@@ -129,6 +130,37 @@ class GuiasApi {
     );
     if (res.statusCode != 201) _lanzarError(res);
     return SesionUsuario.fromJson(_decodeBody(res));
+  }
+
+  Future<List<Sucursal>> listarSucursales() async {
+    final res = await _client.get(Uri.parse('$apiBaseUrl/sucursales'));
+    if (res.statusCode != 200) _lanzarError(res);
+    final lista = jsonDecode(res.body) as List<dynamic>;
+    return lista
+        .map((e) => Sucursal.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> guardarSucursal(Sucursal sucursal) async {
+    final res = await _client.put(
+      Uri.parse(
+        '$apiBaseUrl/sucursales/${Uri.encodeComponent(sucursal.nombre)}',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'lat': sucursal.lat,
+        'lng': sucursal.lng,
+        'radioM': sucursal.radioM,
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+  }
+
+  Future<void> eliminarSucursal(String nombre) async {
+    final res = await _client.delete(
+      Uri.parse('$apiBaseUrl/sucursales/${Uri.encodeComponent(nombre)}'),
+    );
+    if (res.statusCode != 204) _lanzarError(res);
   }
 
   Future<List<Guia>> listarGuias({EstadoGuia? estado}) async {

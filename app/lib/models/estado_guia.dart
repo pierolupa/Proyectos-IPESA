@@ -40,6 +40,19 @@ extension EstadoGuiaX on EstadoGuia {
     }
   }
 
+  GrupoEstado get grupo {
+    switch (this) {
+      case EstadoGuia.enRuta:
+        return GrupoEstado.enRuta;
+      case EstadoGuia.enProcesoTrasbordo:
+      case EstadoGuia.recepcionSucursal:
+        return GrupoEstado.trasbordo;
+      case EstadoGuia.entregado:
+      case EstadoGuia.finalizado:
+        return GrupoEstado.entregado;
+    }
+  }
+
   bool get esFinal =>
       this == EstadoGuia.entregado || this == EstadoGuia.finalizado;
 
@@ -56,6 +69,23 @@ extension EstadoGuiaX on EstadoGuia {
         return 'entregado';
       case EstadoGuia.finalizado:
         return 'finalizado';
+    }
+  }
+}
+
+/// Agrupación simplificada para el panel del administrador: los 5 estados
+/// internos se mantienen, pero el admin solo filtra por estos 3.
+enum GrupoEstado { enRuta, trasbordo, entregado }
+
+extension GrupoEstadoX on GrupoEstado {
+  String get etiqueta {
+    switch (this) {
+      case GrupoEstado.enRuta:
+        return 'En ruta';
+      case GrupoEstado.trasbordo:
+        return 'Trasbordo';
+      case GrupoEstado.entregado:
+        return 'Entregado';
     }
   }
 }

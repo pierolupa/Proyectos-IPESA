@@ -33,6 +33,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   double? _lng;
   final _picker = ImagePicker();
   TipoEntrega _tipoEntrega = TipoEntrega.clienteFinal;
+  String? _sucursalDestino;
+
+  bool get _esTraslado => _tipoEntrega == TipoEntrega.entreSucursales;
   final _numeroGuiaController = TextEditingController();
   final _destinatarioController = TextEditingController(text: 'Cliente Demo');
   final _destinoController = TextEditingController(
@@ -165,7 +168,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         numeroGuia: numero,
         tipoEntrega: _tipoEntrega,
         origen: 'Almacén Callao',
-        destino: _destinoController.text.trim(),
+        destino: _esTraslado
+            ? _sucursalDestino!
+            : _destinoController.text.trim(),
         destinatario: _destinatarioController.text.trim(),
         lat: _lat!,
         lng: _lng!,
@@ -204,7 +209,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         _fotoSimulada &&
         numero.isNotEmpty &&
         !esDuplicado &&
-        _destinatarioController.text.trim().isNotEmpty;
+        _destinatarioController.text.trim().isNotEmpty &&
+        (!_esTraslado || _sucursalDestino != null);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nueva guía · Asignación')),
@@ -321,11 +327,27 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _destinoController,
-              decoration: const InputDecoration(labelText: 'Destino'),
-              onChanged: (_) => setState(() {}),
-            ),
+            if (_esTraslado)
+              DropdownButtonFormField<String>(
+                initialValue: _sucursalDestino,
+                decoration: InputDecoration(
+                  labelText: 'Sucursal destino',
+                  helperText: appState.sucursales.isEmpty
+                      ? 'El administrador aún no registró sucursales.'
+                      : 'La llegada solo se registra dentro de su perímetro.',
+                ),
+                items: [
+                  for (final s in appState.sucursales)
+                    DropdownMenuItem(value: s.nombre, child: Text(s.nombre)),
+                ],
+                onChanged: (v) => setState(() => _sucursalDestino = v),
+              )
+            else
+              TextField(
+                controller: _destinoController,
+                decoration: const InputDecoration(labelText: 'Destino'),
+                onChanged: (_) => setState(() {}),
+              ),
             const SizedBox(height: 12),
             TextField(
               controller: _numeroPedidoController,

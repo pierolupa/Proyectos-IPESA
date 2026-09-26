@@ -35,6 +35,21 @@ function guiaPublica(guia) {
   };
 }
 
+function distanciaMetros(lat1, lng1, lat2, lng2) {
+  const rad = (g) => (g * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLng = rad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(a));
+}
+
+function buscarSucursal(sucursales, nombre) {
+  const clave = String(nombre).trim().toLowerCase();
+  return sucursales.find((s) => s.nombre.toLowerCase() === clave) || null;
+}
+
 function sinCamposInternos(guia) {
   const { _row, ...resto } = guia;
   return resto;
@@ -126,6 +141,50 @@ app.post('/auth/registro', async (req, res, next) => {
   }
 });
 
+// Perímetros de sucursal (los marca el administrador en el mapa).
+app.get('/sucursales', async (_req, res, next) => {
+  try {
+    const sucursales = await repo.listarSucursales();
+    res.json(sucursales.map(sinCamposInternos));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.put('/sucursales/:nombre', async (req, res, next) => {
+  try {
+    const nombre = String(req.params.nombre).trim();
+    const { lat, lng, radioM } = req.body || {};
+    if (!nombre) {
+      return res.status(400).json({ error: 'Falta el nombre de la sucursal.' });
+    }
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ error: 'Marca el centro de la sucursal en el mapa.' });
+    }
+    if (typeof radioM !== 'number' || radioM < 20 || radioM > 5000) {
+      return res.status(400).json({ error: 'El radio debe estar entre 20 y 5000 metros.' });
+    }
+    const sucursal = { nombre, lat, lng, radio_m: radioM };
+    await repo.guardarSucursal(sucursal);
+    res.json(sucursal);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete('/sucursales/:nombre', async (req, res, next) => {
+  try {
+    const sucursal = buscarSucursal(await repo.listarSucursales(), req.params.nombre);
+    if (!sucursal) {
+      return res.status(404).json({ error: `Sucursal no encontrada: ${req.params.nombre}` });
+    }
+    await repo.eliminarSucursal(sucursal._row);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Administrador: lista completa, con filtro opcional por estado.
 app.get('/guias', async (req, res, next) => {
   try {
@@ -197,6 +256,17 @@ app.post('/guias', async (req, res, next) => {
       });
     }
 
+    let destinoFinal = destino;
+    if (tipoEntrega === TIPOS_ENTREGA.ENTRE_SUCURSALES) {
+      const sucursal = buscarSucursal(await repo.listarSucursales(), destino);
+      if (!sucursal) {
+        return res.status(400).json({
+          error: `"${destino}" no es una sucursal registrada. Elige una de la lista.`,
+        });
+      }
+      destinoFinal = sucursal.nombre;
+    }
+
     const existente = await repo.buscarPorNumero(numeroGuia);
     if (existente && !ESTADOS_FINALES.has(existente.estado)) {
       return res.status(409).json({
@@ -210,7 +280,7 @@ app.post('/guias', async (req, res, next) => {
       estado: ESTADOS.EN_RUTA,
       tipo_entrega: tipoEntrega,
       origen,
-      destino,
+      destino: destinoFinal,
       transportista,
       destinatario,
       geo_lat: geo.lat,
@@ -250,6 +320,22 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     const guia = await repo.buscarPorNumero(numeroGuia);
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+
+    // Geocerca: la llegada a la sucursal solo cuenta dentro de su perímetro.
+    if (!porAdmin && estado === ESTADOS.RECEPCION_SUCURSAL) {
+      const sucursal = buscarSucursal(await repo.listarSucursales(), guia.destino);
+      if (!sucursal) {
+        return res.status(409).json({
+          error: `La sucursal "${guia.destino}" no tiene perímetro en el mapa. Pide al administrador que lo marque.`,
+        });
+      }
+      const distancia = distanciaMetros(geo.lat, geo.lng, sucursal.lat, sucursal.lng);
+      if (distancia > sucursal.radio_m) {
+        return res.status(403).json({
+          error: `Estás a ${Math.round(distancia)} m de ${sucursal.nombre}; debes estar dentro de ${sucursal.radio_m} m para registrar la llegada.`,
+        });
+      }
     }
 
     guia.estado = estado;

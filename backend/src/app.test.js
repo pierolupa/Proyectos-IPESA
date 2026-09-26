@@ -305,3 +305,96 @@ describe('POST /ocr/leer-guia', () => {
     expect(res.body.error).toContain('falló la IA');
   });
 });
+
+describe('Sucursales y geocerca', () => {
+  // Sucursal de ejemplo con un radio de 200 m alrededor de este punto.
+  const sucursal = { nombre: 'Sucursal Arequipa', lat: -16.4, lng: -71.53, radio_m: 200, _row: 2 };
+
+  it('lista las sucursales sin campos internos', async () => {
+    repo.listarSucursales.mockResolvedValue([sucursal]);
+    const res = await request(app).get('/sucursales');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { nombre: 'Sucursal Arequipa', lat: -16.4, lng: -71.53, radio_m: 200 },
+    ]);
+  });
+
+  it('guarda el perímetro de una sucursal', async () => {
+    const res = await request(app)
+      .put('/sucursales/Sucursal%20Arequipa')
+      .send({ lat: -16.4, lng: -71.53, radioM: 150 });
+    expect(res.status).toBe(200);
+    expect(repo.guardarSucursal).toHaveBeenCalledWith({
+      nombre: 'Sucursal Arequipa',
+      lat: -16.4,
+      lng: -71.53,
+      radio_m: 150,
+    });
+  });
+
+  it('rechaza un radio fuera de rango', async () => {
+    const res = await request(app)
+      .put('/sucursales/X')
+      .send({ lat: -16.4, lng: -71.53, radioM: 5 });
+    expect(res.status).toBe(400);
+    expect(repo.guardarSucursal).not.toHaveBeenCalled();
+  });
+
+  it('elimina una sucursal existente', async () => {
+    repo.listarSucursales.mockResolvedValue([sucursal]);
+    const res = await request(app).delete('/sucursales/sucursal%20arequipa');
+    expect(res.status).toBe(204);
+    expect(repo.eliminarSucursal).toHaveBeenCalledWith(2);
+  });
+
+  it('no crea un traslado hacia una sucursal que no existe', async () => {
+    repo.listarSucursales.mockResolvedValue([sucursal]);
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'T001-1',
+      tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES,
+      origen: 'Almacén Callao',
+      destino: 'Sucursal Cusco',
+      transportista: 'Juan Pérez',
+      destinatario: 'Sucursal',
+      geo: { lat: -12.05, lng: -77.04 },
+    });
+    expect(res.status).toBe(400);
+    expect(repo.crearGuia).not.toHaveBeenCalled();
+  });
+
+  it('acepta la llegada dentro del perímetro', async () => {
+    repo.listarSucursales.mockResolvedValue([sucursal]);
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ tipo_entrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Sucursal Arequipa', estado: ESTADOS.EN_PROCESO_TRASBORDO }),
+    );
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.RECEPCION_SUCURSAL, geo: { lat: -16.4005, lng: -71.5302 } });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(ESTADOS.RECEPCION_SUCURSAL);
+  });
+
+  it('rechaza la llegada fuera del perímetro e indica la distancia', async () => {
+    repo.listarSucursales.mockResolvedValue([sucursal]);
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ tipo_entrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Sucursal Arequipa', estado: ESTADOS.EN_PROCESO_TRASBORDO }),
+    );
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.RECEPCION_SUCURSAL, geo: { lat: -16.41, lng: -71.53 } });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/Estás a 11\d\d m de Sucursal Arequipa/);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('pide marcar el perímetro si la sucursal destino no lo tiene', async () => {
+    repo.listarSucursales.mockResolvedValue([]);
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ tipo_entrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Sucursal Cusco', estado: ESTADOS.EN_PROCESO_TRASBORDO }),
+    );
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.RECEPCION_SUCURSAL, geo: { lat: -13.5, lng: -71.9 } });
+    expect(res.status).toBe(409);
+  });
+});

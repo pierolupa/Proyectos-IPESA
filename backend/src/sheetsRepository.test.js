@@ -46,3 +46,17 @@ describe('rowToGuia', () => {
     expect(guia.corregido_por_admin).toBe(true);
   });
 });
+
+describe('rowToSucursal', () => {
+  const { rowToSucursal } = require('./sheetsRepository');
+
+  it('lee coordenadas con coma decimal', () => {
+    expect(rowToSucursal(['Sucursal Arequipa', '-16,4', '-71,53', '200'], 3)).toEqual({
+      nombre: 'Sucursal Arequipa',
+      lat: -16.4,
+      lng: -71.53,
+      radio_m: 200,
+      _row: 3,
+    });
+  });
+});

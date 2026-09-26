@@ -56,6 +56,17 @@ const USUARIOS_DATA_RANGE = `${USUARIOS_SHEET_NAME}!A2:${String.fromCharCode(
   64 + USUARIOS_COLUMNS.length,
 )}`;
 
+/**
+ * Hoja "Sucursales": el perímetro (círculo) de cada sucursal, que el
+ * administrador marca en el mapa. La recepción de un traslado entre
+ * sucursales solo se acepta con el GPS dentro de ese círculo.
+ */
+const SUCURSALES_COLUMNS = ['nombre', 'lat', 'lng', 'radio_m'];
+const SUCURSALES_SHEET_NAME = 'Sucursales';
+const SUCURSALES_DATA_RANGE = `${SUCURSALES_SHEET_NAME}!A2:${String.fromCharCode(
+  64 + SUCURSALES_COLUMNS.length,
+)}`;
+
 const ROLES = Object.freeze({
   TRANSPORTISTA: 'transportista',
   ADMINISTRADOR: 'administrador',
@@ -72,5 +83,8 @@ module.exports = {
   USUARIOS_COLUMNS,
   USUARIOS_SHEET_NAME,
   USUARIOS_DATA_RANGE,
+  SUCURSALES_COLUMNS,
+  SUCURSALES_SHEET_NAME,
+  SUCURSALES_DATA_RANGE,
   ROLES,
 };

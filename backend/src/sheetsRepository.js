@@ -6,6 +6,9 @@ const {
   SHEET_NAME,
   USUARIOS_COLUMNS,
   USUARIOS_DATA_RANGE,
+  SUCURSALES_COLUMNS,
+  SUCURSALES_SHEET_NAME,
+  SUCURSALES_DATA_RANGE,
 } = require('./columns');
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
@@ -168,7 +171,106 @@ async function crearUsuario(usuario) {
   });
 }
 
+function numeroDeHoja(valor) {
+  if (typeof valor === 'number') return valor;
+  const n = Number(String(valor).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function rowToSucursal(row, rowNumber) {
+  const [nombre = '', lat = '', lng = '', radio = ''] = row;
+  return {
+    nombre: String(nombre).trim(),
+    lat: numeroDeHoja(lat),
+    lng: numeroDeHoja(lng),
+    radio_m: numeroDeHoja(radio),
+    _row: rowNumber,
+  };
+}
+
+// La pestaña "Sucursales" se crea sola la primera vez, para no pedirle al
+// usuario un paso manual más en la hoja.
+async function crearHojaSucursales(sheets, spreadsheetId) {
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{ addSheet: { properties: { title: SUCURSALES_SHEET_NAME } } }],
+    },
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${SUCURSALES_SHEET_NAME}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [SUCURSALES_COLUMNS] },
+  });
+}
+
+/** Lee las sucursales (omite filas borradas/vacías). */
+async function listarSucursales() {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  let res;
+  try {
+    res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: SUCURSALES_DATA_RANGE,
+    });
+  } catch (err) {
+    if (!String(err.message).includes('Unable to parse range')) throw err;
+    await crearHojaSucursales(sheets, spreadsheetId);
+    return [];
+  }
+  const rows = res.data.values || [];
+  return rows
+    .map((row, i) => rowToSucursal(row, i + 2))
+    .filter((s) => s.nombre && s.lat !== null && s.lng !== null && s.radio_m !== null);
+}
+
+function sucursalToRow(sucursal) {
+  return [sucursal.nombre, sucursal.lat, sucursal.lng, sucursal.radio_m];
+}
+
+/** Crea la sucursal o, si ya existe una con ese nombre, la reemplaza. */
+async function guardarSucursal(sucursal) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const existentes = await listarSucursales();
+  const existente = existentes.find(
+    (s) => s.nombre.toLowerCase() === sucursal.nombre.toLowerCase(),
+  );
+  if (existente) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SUCURSALES_SHEET_NAME}!A${existente._row}:D${existente._row}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [sucursalToRow({ ...sucursal, nombre: existente.nombre })] },
+    });
+    return;
+  }
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: SUCURSALES_DATA_RANGE,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: [sucursalToRow(sucursal)] },
+  });
+}
+
+/** Borra el contenido de la fila (la fila vacía se ignora al listar). */
+async function eliminarSucursal(rowNumber) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `${SUCURSALES_SHEET_NAME}!A${rowNumber}:D${rowNumber}`,
+  });
+}
+
 module.exports = {
+  listarSucursales,
+  guardarSucursal,
+  eliminarSucursal,
+  rowToSucursal,
   listarGuias,
   buscarPorNumero,
   crearGuia,

@@ -62,6 +62,11 @@ llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
 
+La pestaña `Sucursales` (columnas `nombre | lat | lng | radio_m`) **se crea
+sola** la primera vez que la app la usa — no hace falta crearla a mano. Ahí
+se guardan los perímetros que el administrador marca en el mapa. Las guías
+"entre sucursales" guardan en `destino` el nombre exacto de la sucursal.
+
 Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
 `recepcion_sucursal`, `entregado`, `finalizado`.
 
@@ -161,8 +166,11 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
-| `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. |
+| `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |
+| `GET` | `/api/sucursales` | Sucursales con su perímetro (centro + radio en metros). |
+| `PUT` | `/api/sucursales/:nombre` | Crea o actualiza el perímetro de una sucursal (`lat`, `lng`, `radioM` entre 20 y 5000). |
+| `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
 | `GET` | `/api/guias?estado=en_ruta` | Lista completa, con filtro opcional (administrador). |
 | `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
 | `GET` | `/api/guias/rastreo/:ultimosCuatro` | Rastreo público, sin datos sensibles. |

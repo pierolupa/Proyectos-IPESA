@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
+import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
@@ -32,6 +33,8 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
   bool _firmaCapturada = false;
   bool _comprobanteAdjunto = false;
   bool _dentroDeGeocerca = false;
+  bool _verificandoPerimetro = false;
+  String? _resultadoPerimetro;
   bool _enviando = false;
   double? _lat;
   double? _lng;
@@ -73,6 +76,38 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       ).showSnackBar(SnackBar(content: Text('No se pudo activar el GPS: $e')));
     } finally {
       if (mounted) setState(() => _cargandoGps = false);
+    }
+  }
+
+  Future<void> _verificarPerimetro(Sucursal sucursal) async {
+    setState(() => _verificandoPerimetro = true);
+    try {
+      final posicion = await _leerPosicion();
+      final distancia = Geolocator.distanceBetween(
+        posicion.latitude,
+        posicion.longitude,
+        sucursal.lat,
+        sucursal.lng,
+      );
+      if (!mounted) return;
+      final dentro = distancia <= sucursal.radioM;
+      setState(() {
+        _lat = posicion.latitude;
+        _lng = posicion.longitude;
+        _dentroDeGeocerca = dentro;
+        _resultadoPerimetro = dentro
+            ? 'Estás dentro del perímetro de ${sucursal.nombre}.'
+            : 'Estás a ${distancia.round()} m de ${sucursal.nombre}; '
+                  'acércate a menos de ${sucursal.radioM.round()} m.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dentroDeGeocerca = false;
+        _resultadoPerimetro = 'No se pudo leer tu ubicación: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _verificandoPerimetro = false);
     }
   }
 
@@ -149,7 +184,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
         mensaje = 'Traslado iniciado hacia ${g.destino}.';
       } else if (g.estado == EstadoGuia.enProcesoTrasbordo) {
         nuevoEstado = EstadoGuia.recepcionSucursal;
-        mensaje = 'Geocerca detectó la llegada a ${g.destino}.';
+        mensaje = 'Llegada a ${g.destino} registrada dentro del perímetro.';
       } else {
         nuevoEstado = EstadoGuia.entregado;
         mensaje = 'Recepción en sucursal confirmada.';
@@ -210,6 +245,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
     final esPasoGeocerca =
         g.tipoEntrega == TipoEntrega.entreSucursales &&
         g.estado == EstadoGuia.enProcesoTrasbordo;
+    final sucursal = context.watch<AppState>().sucursalPorNombre(g.destino);
 
     return Scaffold(
       appBar: AppBar(title: Text(_tituloAccion)),
@@ -245,20 +281,16 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
           ),
           const SizedBox(height: 16),
           if (esPasoGeocerca) ...[
-            Card(
-              color: _dentroDeGeocerca ? Colors.purple[50] : null,
-              child: SwitchListTile(
-                value: _dentroDeGeocerca,
-                onChanged: _gpsActivo
-                    ? (v) => setState(() => _dentroDeGeocerca = v)
-                    : null,
-                title: const Text('Dentro del área de la sucursal'),
-                subtitle: Text(
-                  'Simula el geofencing de ${g.destino}: al entrar al radio '
-                  'designado, el estado cambia automáticamente.',
-                ),
-                secondary: const Icon(Icons.location_on, color: Colors.purple),
-              ),
+            _TarjetaPerimetro(
+              sucursal: sucursal,
+              destino: g.destino,
+              gpsActivo: _gpsActivo,
+              verificando: _verificandoPerimetro,
+              dentro: _dentroDeGeocerca,
+              resultado: _resultadoPerimetro,
+              onVerificar: sucursal == null
+                  ? null
+                  : () => _verificarPerimetro(sucursal),
             ),
           ] else ...[
             OutlinedButton.icon(
@@ -326,6 +358,86 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
             label: Text(_enviando ? 'Enviando...' : 'Confirmar'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TarjetaPerimetro extends StatelessWidget {
+  const _TarjetaPerimetro({
+    required this.sucursal,
+    required this.destino,
+    required this.gpsActivo,
+    required this.verificando,
+    required this.dentro,
+    required this.resultado,
+    required this.onVerificar,
+  });
+
+  final Sucursal? sucursal;
+  final String destino;
+  final bool gpsActivo;
+  final bool verificando;
+  final bool dentro;
+  final String? resultado;
+  final VoidCallback? onVerificar;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sucursal == null) {
+      return Card(
+        color: Colors.red[50],
+        child: ListTile(
+          leading: const Icon(Icons.location_off, color: Colors.red),
+          title: Text('$destino no tiene perímetro'),
+          subtitle: const Text(
+            'Pide al administrador que marque la sucursal en el mapa para '
+            'poder registrar la llegada.',
+          ),
+        ),
+      );
+    }
+    return Card(
+      color: dentro ? Colors.purple[50] : null,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.purple),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Llegada a ${sucursal!.nombre} '
+                    '(perímetro de ${sucursal!.radioM.round()} m)',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: gpsActivo && !verificando ? onVerificar : null,
+              icon: verificando
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location),
+              label: const Text('Verificar que estoy en la sucursal'),
+            ),
+            if (resultado != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                resultado!,
+                style: TextStyle(color: dentro ? Colors.green[800] : Colors.red),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
+import '../models/sucursal.dart';
 import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
 
@@ -19,12 +20,14 @@ class AppState extends ChangeNotifier {
   final GuiasApi _api;
 
   List<Guia> _guias = [];
+  List<Sucursal> _sucursales = [];
   bool cargando = false;
   String? error;
   RolUsuario? _rolActual;
   String? _nombreUsuario;
 
   List<Guia> get guias => List.unmodifiable(_guias);
+  List<Sucursal> get sucursales => List.unmodifiable(_sucursales);
   RolUsuario? get rolActual => _rolActual;
 
   /// Nombre del transportista/administrador con sesión iniciada. Vacío
@@ -86,6 +89,7 @@ class AppState extends ChangeNotifier {
     _rolActual = null;
     _nombreUsuario = null;
     _guias = [];
+    _sucursales = [];
     error = null;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
@@ -101,10 +105,36 @@ class AppState extends ChangeNotifier {
       _guias = await _api.listarGuias();
     } catch (e) {
       error = e.toString();
+    }
+    // Las sucursales son secundarias: si fallan no bloquean la lista.
+    try {
+      _sucursales = await _api.listarSucursales();
+    } catch (_) {
+      _sucursales = [];
     } finally {
       cargando = false;
       notifyListeners();
     }
+  }
+
+  Sucursal? sucursalPorNombre(String nombre) {
+    final clave = nombre.trim().toLowerCase();
+    for (final s in _sucursales) {
+      if (s.nombre.toLowerCase() == clave) return s;
+    }
+    return null;
+  }
+
+  Future<void> guardarSucursal(Sucursal sucursal) async {
+    await _api.guardarSucursal(sucursal);
+    _sucursales = await _api.listarSucursales();
+    notifyListeners();
+  }
+
+  Future<void> eliminarSucursal(String nombre) async {
+    await _api.eliminarSucursal(nombre);
+    _sucursales = await _api.listarSucursales();
+    notifyListeners();
   }
 
   List<Guia> guiasDelTransportista(String nombre) {
