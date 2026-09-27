@@ -38,8 +38,8 @@ class AppState extends ChangeNotifier {
   List<Sucursal> get sucursales => List.unmodifiable(_sucursales);
   RolUsuario? get rolActual => _rolActual;
 
-  /// Nombre del transportista/administrador con sesión iniciada. Vacío
-  /// para el rol Comercial, que no requiere login.
+  /// Nombre del usuario con sesión iniciada. Vacío en el rastreo público
+  /// por últimos 4 dígitos, que no requiere login.
   String get transportistaActual => _nombreUsuario ?? '';
 
   /// Login simple contra la hoja "Usuarios" (ver backend/README.md — no
@@ -77,9 +77,7 @@ class AppState extends ChangeNotifier {
     if (nombre == null || rolTexto == null) return;
 
     final rol = RolUsuario.values.asNameMap()[rolTexto];
-    if (rol != RolUsuario.transportista && rol != RolUsuario.administrador) {
-      return;
-    }
+    if (rol == null) return;
 
     _nombreUsuario = nombre;
     _rolActual = rol;
@@ -87,7 +85,9 @@ class AppState extends ChangeNotifier {
     await cargarGuias();
   }
 
-  /// El rol Comercial no requiere login (ver ARCHITECTURE.md, sección 6).
+  /// Rastreo público por últimos 4 dígitos: no requiere login (ver
+  /// ARCHITECTURE.md, sección 6). El equipo comercial con cuenta entra por
+  /// el login normal y ve la vista completa de rastreo.
   void entrarComoComercial() {
     _rolActual = RolUsuario.comercial;
     notifyListeners();

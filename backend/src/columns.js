@@ -73,6 +73,9 @@ const SUCURSALES_DATA_RANGE = `${SUCURSALES_SHEET_NAME}!A2:${String.fromCharCode
 const ROLES = Object.freeze({
   TRANSPORTISTA: 'transportista',
   ADMINISTRADOR: 'administrador',
+  // Equipo comercial: rastrea todas las guías (solo lectura). Se da de
+  // alta a mano en la hoja "Usuarios", igual que los administradores.
+  COMERCIAL: 'comercial',
 });
 
 module.exports = {

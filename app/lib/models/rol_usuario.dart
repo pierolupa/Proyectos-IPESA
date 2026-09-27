@@ -19,7 +19,7 @@ extension RolUsuarioX on RolUsuario {
       case RolUsuario.administrador:
         return 'Supervisa todas las tareas y corrige datos manualmente.';
       case RolUsuario.comercial:
-        return 'Rastrea envíos con los últimos 4 dígitos de la guía.';
+        return 'Rastrea todas las guías con filtros de fecha, cliente, pedido y entrega.';
     }
   }
 }
@@ -31,6 +31,8 @@ RolUsuario rolUsuarioDesdeApi(String valor) {
       return RolUsuario.transportista;
     case 'administrador':
       return RolUsuario.administrador;
+    case 'comercial':
+      return RolUsuario.comercial;
     default:
       throw FormatException('Rol desconocido: $valor');
   }

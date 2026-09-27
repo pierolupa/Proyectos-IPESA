@@ -145,7 +145,8 @@ stateDiagram-v2
 |---|---|
 | **Transportista** | Tomar fotografías de guías. Validador automático de duplicados (no puede registrar dos veces el mismo número). Solo puede actualizar estados dentro de las zonas geográficas permitidas (según geofencing). |
 | **Administrador** | Acceso total al panel: supervisión de todas las tareas, cambios manuales de estado, corrección manual del número de guía cuando el OCR falla, gestión de usuarios y sucursales. |
-| **Visualizador / Equipo Comercial** | Vista simplificada, sin usuario registrado. Rastreo de envío ingresando solo los últimos 4 dígitos del número de guía (acceso de solo lectura, información limitada por privacidad). |
+| **Equipo Comercial** | Con cuenta (rol `comercial` en la hoja "Usuarios"): vista **Rastreo de guías** de solo lectura con todas las guías y filtros por fecha de salida o de entrega, número de guía, cliente, N° de entrega, N° de pedido y estado; el detalle muestra la foto de la entrega y dónde se entregó. |
+| **Visualizador (público)** | Sin usuario registrado. Rastreo de envío ingresando solo los últimos 4 dígitos del número de guía (acceso de solo lectura, información limitada por privacidad). |
 
 ## 7. Consideraciones técnicas adicionales
 

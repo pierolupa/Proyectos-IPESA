@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/login_screen.dart';
@@ -19,6 +20,11 @@ class IpesaGuiasApp extends StatelessWidget {
         title: 'IPESA · Tracking Distribución',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
+        // Calendarios y textos de Material (p. ej. el selector de fechas
+        // del rastreo) en español.
+        locale: const Locale('es', 'PE'),
+        supportedLocales: const [Locale('es', 'PE'), Locale('es')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         home: const LoginScreen(),
       ),
     );

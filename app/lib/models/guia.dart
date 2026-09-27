@@ -12,6 +12,10 @@ class Guia {
   final String transportista;
   final String destinatario;
   final DateTime fechaActualizacion;
+
+  /// Cuándo se asignó (salió del almacén). Si la hoja no la tiene, se usa
+  /// la fecha de actualización.
+  final DateTime fechaCreacion;
   final bool corregidoPorAdmin;
   final String numeroPedido;
   final String numeroEntrega;
@@ -40,6 +44,7 @@ class Guia {
     required this.transportista,
     required this.destinatario,
     required this.fechaActualizacion,
+    DateTime? fechaCreacion,
     this.corregidoPorAdmin = false,
     this.numeroPedido = '',
     this.numeroEntrega = '',
@@ -49,7 +54,7 @@ class Guia {
     this.cierreLng,
     this.fechaCierre,
     this.fotoEntregaUrl = '',
-  });
+  }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
@@ -72,6 +77,7 @@ class Guia {
       transportista: json['transportista'] as String,
       destinatario: json['destinatario'] as String,
       fechaActualizacion: DateTime.parse(json['fecha_actualizacion'] as String),
+      fechaCreacion: DateTime.tryParse(json['fecha_creacion'] as String? ?? ''),
       corregidoPorAdmin: json['corregido_por_admin'] == true,
       numeroPedido: json['numero_pedido'] as String? ?? '',
       numeroEntrega: json['numero_entrega'] as String? ?? '',
@@ -114,6 +120,7 @@ class Guia {
       transportista: transportista ?? this.transportista,
       destinatario: destinatario ?? this.destinatario,
       fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
+      fechaCreacion: fechaCreacion,
       corregidoPorAdmin: corregidoPorAdmin ?? this.corregidoPorAdmin,
       numeroPedido: numeroPedido ?? this.numeroPedido,
       numeroEntrega: numeroEntrega ?? this.numeroEntrega,

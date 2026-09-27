@@ -229,6 +229,17 @@ describe('POST /auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
   });
+
+  it('acepta cuentas del equipo comercial', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      usuario({ nombre: 'Lucía Ramos', rol: 'comercial', pin: '5678' }),
+    ]);
+    const res = await request(app)
+      .post('/auth/login')
+      .send({ nombre: 'Lucía Ramos', pin: '5678' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ nombre: 'Lucía Ramos', rol: 'comercial' });
+  });
 });
 
 describe('POST /auth/registro', () => {

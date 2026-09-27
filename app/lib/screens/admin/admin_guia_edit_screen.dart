@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
-import '../../models/guia.dart';
-import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/foto_entrega.dart';
-import '../../widgets/mapa_ubicacion.dart';
+import '../../widgets/seccion_ubicacion.dart';
 
 /// Corrección manual de datos (ARCHITECTURE.md, sección 6): el
 /// administrador tiene acceso total para cambiar el estado de cualquier
@@ -164,7 +161,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             guia: guia,
           ),
           const SizedBox(height: 24),
-          _SeccionUbicacion(
+          SeccionUbicacion(
             guia: guia,
             perimetro: guia.tipoEntrega == TipoEntrega.entreSucursales
                 ? appState.sucursalPorNombre(guia.destino)
@@ -174,91 +171,4 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
       ),
     );
   }
-}
-
-class _SeccionUbicacion extends StatelessWidget {
-  const _SeccionUbicacion({required this.guia, this.perimetro});
-
-  final Guia guia;
-  final Sucursal? perimetro;
-
-  @override
-  Widget build(BuildContext context) {
-    final titulo = Theme.of(context).textTheme.labelLarge;
-    final gris = TextStyle(color: Colors.grey[700]);
-    final avisoPerimetro = guia.tipoEntrega != TipoEntrega.entreSucursales
-        ? null
-        : perimetro == null
-        ? Text(
-            'La sucursal "${guia.destino}" no tiene perímetro marcado: la '
-            'llegada no se podrá registrar. Márcalo en la pestaña Sucursales.',
-            style: const TextStyle(color: Colors.red),
-          )
-        : Text(
-            'Perímetro de ${perimetro!.nombre}: ${perimetro!.radioM.round()} m '
-            '(círculo turquesa).',
-            style: gris,
-          );
-
-    if (guia.tieneUbicacionCierre) {
-      final fecha = guia.fechaCierre == null
-          ? ''
-          : ' el ${DateFormat('dd/MM/yyyy HH:mm').format(guia.fechaCierre!.toLocal())}';
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Dónde se cerró la tarea', style: titulo),
-          const SizedBox(height: 4),
-          Text(
-            'Cerrada por ${guia.transportista}$fecha · '
-            '${_coordenadas(guia.cierreLat!, guia.cierreLng!)}',
-            style: gris,
-          ),
-          ?avisoPerimetro,
-          const SizedBox(height: 8),
-          MapaUbicacion(
-            lat: guia.cierreLat!,
-            lng: guia.cierreLng!,
-            perimetro: perimetro,
-          ),
-        ],
-      );
-    }
-
-    final estaCerrada = guia.estado.esFinal;
-    final tieneUltima = guia.ultimaLat != null && guia.ultimaLng != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          estaCerrada ? 'Dónde se cerró la tarea' : 'Última ubicación registrada',
-          style: titulo,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          estaCerrada
-              ? 'Sin ubicación de cierre: la cerró un administrador a mano o '
-                    'se cerró antes de que la app registrara el cierre.'
-              : tieneUltima
-              ? 'Aún no se cierra. Último registro del transportista · '
-                    '${_coordenadas(guia.ultimaLat!, guia.ultimaLng!)}'
-              : 'Sin ubicación registrada.',
-          style: gris,
-        ),
-        ?avisoPerimetro,
-        if (!estaCerrada && tieneUltima) ...[
-          const SizedBox(height: 8),
-          MapaUbicacion(
-            lat: guia.ultimaLat!,
-            lng: guia.ultimaLng!,
-            color: guia.estado.color,
-            perimetro: perimetro,
-          ),
-        ],
-      ],
-    );
-  }
-
-  static String _coordenadas(double lat, double lng) =>
-      '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
 }

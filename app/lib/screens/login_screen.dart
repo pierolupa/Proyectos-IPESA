@@ -6,6 +6,7 @@ import '../services/guias_api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import 'admin/admin_dashboard_screen.dart';
+import 'comercial/rastreo_screen.dart';
 import 'tracking/public_tracking_screen.dart';
 import 'transportista/task_list_screen.dart';
 
@@ -56,11 +57,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final appState = context.read<AppState>();
     await appState.restaurarSesion();
     if (!mounted) return;
-    if (appState.rolActual == RolUsuario.administrador ||
-        appState.rolActual == RolUsuario.transportista) {
-      final destino = appState.rolActual == RolUsuario.administrador
-          ? const AdminDashboardScreen()
-          : const TaskListScreen();
+    final rol = appState.rolActual;
+    if (rol != null) {
+      final destino = _pantallaDeInicio(rol);
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => destino));
     }
     if (mounted) setState(() => _verificandoSesion = false);
@@ -83,9 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await appState.iniciarSesion(nombre, pin);
       }
       if (!mounted) return;
-      final destino = appState.rolActual == RolUsuario.administrador
-          ? const AdminDashboardScreen()
-          : const TaskListScreen();
+      final destino = _pantallaDeInicio(appState.rolActual!);
       // push (no pushReplacement): LoginScreen es la ruta raíz de la app,
       // y el logout hace popUntil(isFirst) para volver a ella.
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => destino));
@@ -97,6 +94,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _enviando = false);
     }
   }
+
+  static Widget _pantallaDeInicio(RolUsuario rol) => switch (rol) {
+    RolUsuario.administrador => const AdminDashboardScreen(),
+    RolUsuario.transportista => const TaskListScreen(),
+    RolUsuario.comercial => const RastreoScreen(),
+  };
 
   void _irARastreo() {
     final digitos = _rastreoController.text.trim();

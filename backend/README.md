@@ -99,13 +99,18 @@ esta fila de encabezados (columnas A a D):
 nombre | rol | pin | activo
 ```
 
-- `rol`: `transportista` o `administrador` (el rol `comercial` no necesita
-  login — ver ARCHITECTURE.md sección 6).
+- `rol`: `transportista`, `administrador` o `comercial`. El equipo
+  comercial entra a la vista **Rastreo de guías** (todas las guías, solo
+  lectura, con filtros de fecha, número de guía, cliente, entrega y pedido).
+  Las cuentas `administrador` y `comercial` se crean a mano en la hoja; el
+  auto-registro siempre crea `transportista`. (El rastreo por los últimos 4
+  dígitos sigue siendo público, sin login.)
 - `pin`: cualquier texto/número que uses como clave simple (ver advertencia
   de seguridad arriba).
 - `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.
 
-Ejemplo de fila: `Juan Pérez | transportista | 1234 | true`.
+Ejemplos de fila: `Juan Pérez | transportista | 1234 | true`,
+`Lucía Ramos | comercial | 5678 | true`.
 
 Copia el **ID de la hoja** de su URL:
 `https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit`.
