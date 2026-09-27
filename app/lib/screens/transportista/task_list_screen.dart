@@ -436,12 +436,20 @@ class _Progreso extends StatelessWidget {
         Row(children: items),
         const SizedBox(height: 6),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            for (final p in pasos)
-              Text(
-                p,
-                style: const TextStyle(fontSize: 12, color: Ipesa.textoSuave),
+            for (final (i, p) in pasos.indexed)
+              Expanded(
+                child: Text(
+                  p,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: i == 0
+                      ? TextAlign.start
+                      : i == pasos.length - 1
+                      ? TextAlign.end
+                      : TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Ipesa.textoSuave),
+                ),
               ),
           ],
         ),

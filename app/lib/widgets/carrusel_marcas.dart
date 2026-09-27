@@ -41,6 +41,7 @@ class CarruselMarcas extends StatefulWidget {
     this.separacion = 12,
     this.pixelesPorSegundo = 36,
     this.bordeTarjeta = Ipesa.borde,
+    this.difuminar = true,
   });
 
   final double alto;
@@ -48,6 +49,10 @@ class CarruselMarcas extends StatefulWidget {
   final double separacion;
   final double pixelesPorSegundo;
   final Color bordeTarjeta;
+
+  /// Desvanece los extremos de la cinta. Se apaga cuando la cinta ya
+  /// sale de la pantalla por los lados (la cinta verde del login).
+  final bool difuminar;
 
   /// Los tests lo apagan (test/flutter_test_config.dart): una animación
   /// sin fin haría que `pumpAndSettle` no termine nunca.
@@ -149,6 +154,8 @@ class _CarruselMarcasState extends State<CarruselMarcas>
         },
       );
     }
+
+    if (!widget.difuminar) return SizedBox(height: widget.alto, child: cinta);
 
     // Los extremos se desvanecen (máscara de opacidad) sobre cualquier fondo.
     return SizedBox(

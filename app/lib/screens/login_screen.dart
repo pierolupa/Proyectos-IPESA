@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -141,76 +143,150 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final formulario = Align(
-              alignment: Alignment.topCenter,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 420,
-                    minHeight: constraints.maxHeight - 64,
-                  ),
-                  child: IntrinsicHeight(child: _formulario(context)),
-                ),
-              ),
-            );
-            if (constraints.maxWidth < 900) return formulario;
-            return Row(
-              children: [
-                const Expanded(child: _PanelMarca()),
-                Expanded(child: formulario),
-              ],
-            );
-          },
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 900
+            ? _movil(context)
+            : _escritorio(context),
       ),
     );
   }
 
+  /// Celular: portada negra arriba, cinta verde de marcas cruzada y el
+  /// formulario debajo, en blanco.
+  Widget _movil(BuildContext context) {
+    final relleno = MediaQuery.paddingOf(context);
+    final altoPortada = 392 + relleno.top;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: altoPortada + 60,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: altoPortada,
+                  child: _Portada(margenSuperior: relleno.top + 52),
+                ),
+                Positioned(
+                  left: -40,
+                  right: -40,
+                  top: altoPortada - 34,
+                  child: const _CintaMarcas(),
+                ),
+              ],
+            ),
+          ),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(28, 14, 28, 28 + relleno.bottom),
+                child: _formulario(context),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Computadora: la portada negra ocupa la izquierda (con la cinta
+  /// cruzándola) y el formulario va a la derecha.
+  Widget _escritorio(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 11,
+          child: LayoutBuilder(
+            builder: (context, constraints) => Stack(
+              children: [
+                const Positioned.fill(
+                  child: _Portada(margenSuperior: 72, escala: 1.35),
+                ),
+                Positioned(
+                  left: -60,
+                  right: -60,
+                  bottom: constraints.maxHeight * 0.14,
+                  child: const _CintaMarcas(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 9,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(48),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: _formulario(context),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _cambiarModo() => setState(() {
+    _modoRegistro = !_modoRegistro;
+    _error = null;
+  });
+
   Widget _formulario(BuildContext context) {
+    final registro = _modoRegistro;
+    final accion = _enviando ? null : _enviar;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const _Marca(),
-        const SizedBox(height: 48),
         Text(
-          _modoRegistro ? 'Crear cuenta' : 'Bienvenido',
-          style: Ipesa.titulo(34),
+          registro ? 'Crea tu cuenta' : 'Ingresa a tu cuenta',
+          style: Ipesa.titulo(26, color: Colors.black),
         ),
-        const SizedBox(height: 8),
-        Text(
-          _modoRegistro
-              ? 'Tu cuenta se crea como transportista.'
-              : 'Ingresa para ver y registrar tus guías.',
-          style: const TextStyle(fontSize: 17, color: Ipesa.textoSuave),
-        ),
-        const SizedBox(height: 32),
-        const _Etiqueta('Nombre'),
+        if (registro) ...[
+          const SizedBox(height: 6),
+          const Text(
+            'Tu cuenta se crea como transportista.',
+            style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+          ),
+        ],
+        const SizedBox(height: 20),
+        const _EtiquetaLinea('NOMBRE'),
         TextField(
           controller: _nombreController,
           textCapitalization: TextCapitalization.words,
-          style: const TextStyle(fontSize: 17),
-          decoration: const InputDecoration(hintText: 'Ej. Juan Pérez'),
+          style: const TextStyle(fontSize: 18, color: Colors.black),
+          decoration: _decoracionLinea(pista: 'Juan Pérez'),
           onSubmitted: (_) => _enviar(),
         ),
-        const SizedBox(height: 14),
-        const _Etiqueta('PIN'),
+        const SizedBox(height: 18),
+        const _EtiquetaLinea('PIN'),
         TextField(
           controller: _pinController,
           obscureText: !_verPin,
           keyboardType: TextInputType.number,
-          style: const TextStyle(fontSize: 17),
-          decoration: InputDecoration(
-            hintText: '4 dígitos',
-            helperText: _modoRegistro
+          style: const TextStyle(
+            fontSize: 18,
+            letterSpacing: 4,
+            color: Colors.black,
+          ),
+          decoration: _decoracionLinea(
+            pista: '••••',
+            ayuda: registro
                 ? 'Elige un PIN: lo usarás para volver a entrar.'
                 : null,
-            suffixIcon: IconButton(
+            sufijo: IconButton(
               tooltip: _verPin ? 'Ocultar PIN' : 'Mostrar PIN',
-              icon: Icon(_verPin ? Icons.visibility_off : Icons.visibility),
+              icon: Icon(
+                _verPin ? Icons.visibility_off : Icons.visibility,
+                color: Ipesa.textoSuave,
+              ),
               onPressed: () => setState(() => _verPin = !_verPin),
             ),
           ),
@@ -223,171 +299,259 @@ class _LoginScreenState extends State<LoginScreen> {
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ],
-        const SizedBox(height: 22),
-        FilledButton(
-          onPressed: _enviando ? null : _enviar,
-          child: _enviando
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+        const SizedBox(height: 26),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: accion,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  minimumSize: const Size(0, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                )
-              : Text(_modoRegistro ? 'Crear cuenta' : 'Ingresar'),
+                ),
+                child: _enviando
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(registro ? 'Crear cuenta' : 'Ingresar'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: IconButton.filled(
+                tooltip: registro ? 'Crear cuenta' : 'Ingresar',
+                onPressed: accion,
+                style: IconButton.styleFrom(
+                  backgroundColor: _verdeIpesa,
+                  disabledBackgroundColor: _verdeIpesa.withValues(alpha: .5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                icon: const Icon(Icons.arrow_forward, color: Colors.white),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _enviando
-              ? null
-              : () => setState(() {
-                  _modoRegistro = !_modoRegistro;
-                  _error = null;
-                }),
-          child: Text(
-            _modoRegistro ? 'Ya tengo cuenta: ingresar' : 'Crear una cuenta',
-          ),
+        const SizedBox(height: 12),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              registro ? '¿Ya tienes cuenta? ' : '¿Transportista nuevo? ',
+              style: const TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+            ),
+            TextButton(
+              onPressed: _enviando ? null : _cambiarModo,
+              style: TextButton.styleFrom(
+                foregroundColor: _verdeIpesa,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 44),
+                textStyle: const TextStyle(
+                  fontFamily: Ipesa.fuenteTexto,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+              child: Text(registro ? 'Ingresa' : 'Crea tu cuenta'),
+            ),
+          ],
         ),
-        const Spacer(),
-        // En computadora las marcas van en el panel de la izquierda.
-        if (MediaQuery.sizeOf(context).width < 900) ...[
-          const SizedBox(height: 32),
-          const _TituloMarcas(color: Ipesa.textoSuave),
-          const SizedBox(height: 10),
-          const CarruselMarcas(),
-        ],
       ],
     );
   }
-}
 
-class _TituloMarcas extends StatelessWidget {
-  const _TituloMarcas({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      'MARCAS QUE REPRESENTAMOS',
-      style: TextStyle(
-        fontSize: 12,
-        letterSpacing: 1.6,
-        fontWeight: FontWeight.w700,
-        color: color,
+  static InputDecoration _decoracionLinea({
+    required String pista,
+    String? ayuda,
+    Widget? sufijo,
+  }) {
+    const linea = UnderlineInputBorder(
+      borderSide: BorderSide(color: Color(0xFF111111), width: 2),
+    );
+    return InputDecoration(
+      hintText: pista,
+      helperText: ayuda,
+      suffixIcon: sufijo,
+      filled: false,
+      isDense: true,
+      contentPadding: const EdgeInsets.fromLTRB(2, 10, 2, 12),
+      border: linea,
+      enabledBorder: linea,
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: _verdeIpesa, width: 2.5),
       ),
     );
   }
 }
 
-class _Marca extends StatelessWidget {
-  const _Marca();
+/// Verde de IPESA (el del botón "Cotiza" de ipesa.com.pe, oscurecido para
+/// que el texto blanco encima se lea bien).
+const _verdeIpesa = Color(0xFF0E7A3A);
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: colorSplash,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Image.asset(
-            'assets/brand/ipesa_blanco.png',
-            height: 16,
-            semanticLabel: 'IPESA',
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Flexible(
-          child: Text(
-            'Tracking Distribución',
-            style: TextStyle(fontSize: 14, color: Ipesa.textoSuave),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Etiqueta extends StatelessWidget {
-  const _Etiqueta(this.texto);
+class _EtiquetaLinea extends StatelessWidget {
+  const _EtiquetaLinea(this.texto);
 
   final String texto;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        texto,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Ipesa.etiqueta,
+    return Text(
+      texto,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.6,
+        color: Ipesa.textoSuave,
+      ),
+    );
+  }
+}
+
+/// Portada negra: "IPESA" gigante en contorno de fondo, el logo, y una
+/// línea que dice para qué es la app. [escala] la agranda en computadora.
+class _Portada extends StatelessWidget {
+  const _Portada({required this.margenSuperior, this.escala = 1});
+
+  final double margenSuperior;
+  final double escala;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black,
+      child: ClipRect(
+        child: Stack(
+          children: [
+            Positioned(
+              left: -18 * escala,
+              top: margenSuperior - 30,
+              child: ExcludeSemantics(
+                child: Text(
+                  'IPESA\nIPESA\nIPESA',
+                  softWrap: false,
+                  style: TextStyle(
+                    fontFamily: Ipesa.fuenteTitulos,
+                    fontSize: 150 * escala,
+                    fontWeight: FontWeight.w800,
+                    height: 0.92,
+                    letterSpacing: -4,
+                    foreground: Paint()
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = 1.5
+                      ..color = const Color(0x2EFFFFFF),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                28 * escala,
+                margenSuperior,
+                28,
+                0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: _verdeIpesa,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Flexible(
+                        child: Text(
+                          'TRACKING DISTRIBUCIÓN',
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          softWrap: false,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 62 * escala),
+                  Image.asset(
+                    'assets/brand/ipesa_blanco.png',
+                    width: 220 * escala,
+                    semanticLabel: 'IPESA',
+                  ),
+                  const SizedBox(height: 18),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: 300 * escala),
+                    child: Text(
+                      'Guías, entregas y rastreo para el equipo de '
+                      'distribución de IPESA.',
+                      style: TextStyle(
+                        fontSize: 17 * (escala > 1 ? 1.15 : 1),
+                        height: 1.45,
+                        color: const Color(0xFFC9CFCD),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Panel de marca a la izquierda en pantallas anchas (computadora).
-class _PanelMarca extends StatelessWidget {
-  const _PanelMarca();
+/// Cinta verde inclinada con las marcas que representa IPESA avanzando.
+class _CintaMarcas extends StatelessWidget {
+  const _CintaMarcas();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Ipesa.petroleo,
-      padding: const EdgeInsets.all(56),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset(
-            'assets/brand/ipesa_blanco.png',
-            height: 30,
-            semanticLabel: 'IPESA',
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Cada guía,\ndesde la salida\nhasta la entrega.',
-                style: Ipesa.titulo(
-                  44,
-                  color: Colors.white,
-                ).copyWith(height: 1.15),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Foto de la guía leída con IA, GPS obligatorio, perímetro de '
-                'sucursales y avisos en vivo para el administrador.',
-                style: TextStyle(
-                  fontSize: 17,
-                  height: 1.5,
-                  color: Ipesa.suaveSobrePetroleo,
-                ),
-              ),
-            ],
-          ),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _TituloMarcas(color: Ipesa.suaveSobrePetroleo),
-              SizedBox(height: 12),
-              CarruselMarcas(bordeTarjeta: Colors.transparent),
-              SizedBox(height: 20),
-              Text(
-                'IPESA S.A.C. · Tracking Distribución',
-                style: TextStyle(fontSize: 14, color: Ipesa.suaveSobrePetroleo),
-              ),
-            ],
-          ),
-        ],
+    return Transform.rotate(
+      angle: -4 * math.pi / 180,
+      child: Container(
+        height: 62,
+        alignment: Alignment.center,
+        decoration: const BoxDecoration(
+          color: _verdeIpesa,
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x38000000),
+              blurRadius: 26,
+              offset: Offset(0, 12),
+            ),
+          ],
+        ),
+        child: const CarruselMarcas(
+          alto: 40,
+          ancho: 100,
+          separacion: 12,
+          pixelesPorSegundo: 34,
+          bordeTarjeta: Colors.transparent,
+          difuminar: false,
+        ),
       ),
     );
   }

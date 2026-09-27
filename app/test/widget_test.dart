@@ -32,6 +32,14 @@ MockClient _clienteConSesion({
   });
 }
 
+/// Pantalla de celular (390×900): el login tiene la portada arriba y el
+/// formulario abajo, que en la de 800×600 por defecto quedaría fuera.
+void _pantallaCelular(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   // AppState ahora guarda la sesión en SharedPreferences (ver
   // restaurarSesion/_establecerSesion) — sin este mock, getInstance()
@@ -45,12 +53,13 @@ void main() {
   testWidgets('Muestra el login como pantalla de inicio', (
     WidgetTester tester,
   ) async {
+    _pantallaCelular(tester);
     await tester.pumpWidget(const IpesaGuiasApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Bienvenido'), findsOneWidget);
+    expect(find.text('Ingresa a tu cuenta'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
-    expect(find.text('Crear una cuenta'), findsOneWidget);
+    expect(find.text('Crea tu cuenta'), findsOneWidget);
     expect(find.text('¿Eres cliente? Rastrea tu envío'), findsNothing);
   });
 
@@ -76,6 +85,7 @@ void main() {
     );
     final appState = AppState(api: GuiasApi(client: client));
 
+    _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
@@ -96,6 +106,7 @@ void main() {
     );
     final appState = AppState(api: GuiasApi(client: client));
 
+    _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
@@ -125,10 +136,11 @@ void main() {
     });
     final appState = AppState(api: GuiasApi(client: client));
 
+    _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Crear una cuenta'));
+    await tester.tap(find.text('Crea tu cuenta'));
     await tester.pumpAndSettle();
     expect(find.text('Crear cuenta'), findsWidgets);
 
