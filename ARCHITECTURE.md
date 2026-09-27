@@ -76,7 +76,7 @@ flowchart LR
     BE -->|geofence check| Geo[Servicio de geocercas por sucursal]
 
     Admin[Panel Administrador] -->|HTTPS API| BE
-    Viewer[Vista Comercial / Rastreo público] -->|consulta por últimos 4 dígitos| BE
+    Viewer[Equipo Comercial - Rastreo de guías] -->|HTTPS API, solo lectura| BE
 ```
 
 ## 3. Modelo de datos (hoja de tareas)
@@ -146,7 +146,6 @@ stateDiagram-v2
 | **Transportista** | Tomar fotografías de guías. Validador automático de duplicados (no puede registrar dos veces el mismo número). Solo puede actualizar estados dentro de las zonas geográficas permitidas (según geofencing). |
 | **Administrador** | Acceso total al panel: supervisión de todas las tareas, cambios manuales de estado, corrección manual del número de guía cuando el OCR falla, gestión de usuarios y sucursales. |
 | **Equipo Comercial** | Con cuenta (rol `comercial` en la hoja "Usuarios"): vista **Rastreo de guías** de solo lectura con todas las guías y filtros por fecha de salida o de entrega, número de guía, cliente, N° de entrega, N° de pedido y estado; el detalle muestra la foto de la entrega y dónde se entregó. |
-| **Visualizador (público)** | Sin usuario registrado. Rastreo de envío ingresando solo los últimos 4 dígitos del número de guía (acceso de solo lectura, información limitada por privacidad). |
 
 ## 7. Consideraciones técnicas adicionales
 
@@ -157,8 +156,8 @@ stateDiagram-v2
   fotos/eventos con reintento automático cuando vuelva la conectividad,
   manteniendo la restricción de que el GPS debe haberse capturado en el
   momento de la foto (no se permite geolocalización diferida).
-- **Privacidad**: la vista de rastreo público (últimos 4 dígitos) no debe
-  exponer datos completos del destinatario ni del transportista.
+- **Privacidad**: no hay rastreo público; el detalle de las guías solo se
+  ve con cuenta (administrador o equipo comercial).
 - **Auditoría**: todo cambio manual de administrador (estado o número de
   guía) debe quedar registrado con usuario, motivo y timestamp.
 - **Seguridad de credenciales**: la Service Account de Google Sheets/Cloud

@@ -9,16 +9,15 @@ import '../widgets/carrusel_marcas.dart';
 import '../widgets/splash_ipesa.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'comercial/rastreo_screen.dart';
-import 'tracking/public_tracking_screen.dart';
 import 'transportista/task_list_screen.dart';
 
 /// Pantalla de inicio de la app: login simple por nombre + PIN, con
 /// opción de auto-registro (ver backend/README.md — no es un mecanismo
 /// de autenticación real, es solo para pruebas del equipo). El
 /// auto-registro siempre crea la cuenta como Transportista; las cuentas
-/// de Administrador se dan de alta a mano en la hoja "Usuarios". El
-/// rol con el que se entra lo decide el backend, no un selector previo.
-/// Los clientes no necesitan cuenta: rastrean desde la tarjeta de abajo.
+/// de Administrador y de Equipo Comercial se dan de alta a mano en la hoja
+/// "Usuarios". El rol con el que se entra lo decide el backend, no un
+/// selector previo.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,7 +28,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _nombreController = TextEditingController();
   final _pinController = TextEditingController();
-  final _rastreoController = TextEditingController();
   bool _modoRegistro = false;
   bool _verPin = false;
   bool _enviando = false;
@@ -48,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _nombreController.dispose();
     _pinController.dispose();
-    _rastreoController.dispose();
     super.dispose();
   }
 
@@ -106,18 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
     RolUsuario.transportista => const TaskListScreen(),
     RolUsuario.comercial => const RastreoScreen(),
   };
-
-  void _irARastreo() {
-    final digitos = _rastreoController.text.trim();
-    context.read<AppState>().entrarComoComercial();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PublicTrackingScreen(
-          ultimosCuatro: digitos.length == 4 ? digitos : null,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -234,14 +219,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         const Spacer(),
-        const SizedBox(height: 24),
-        _TarjetaRastreo(
-          controller: _rastreoController,
-          onBuscar: _enviando ? null : _irARastreo,
-        ),
         // En computadora las marcas van en el panel de la izquierda.
         if (MediaQuery.sizeOf(context).width < 900) ...[
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           const _TituloMarcas(color: Ipesa.textoSuave),
           const SizedBox(height: 10),
           const CarruselMarcas(),
@@ -318,71 +298,6 @@ class _Etiqueta extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: Ipesa.etiqueta,
         ),
-      ),
-    );
-  }
-}
-
-class _TarjetaRastreo extends StatelessWidget {
-  const _TarjetaRastreo({required this.controller, required this.onBuscar});
-
-  final TextEditingController controller;
-  final VoidCallback? onBuscar;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Ipesa.menta,
-        borderRadius: BorderRadius.circular(Ipesa.radio),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('¿Eres cliente? Rastrea tu envío', style: Ipesa.titulo(16)),
-          const SizedBox(height: 8),
-          const Text(
-            'Escribe los últimos 4 dígitos de tu guía.',
-            style: TextStyle(fontSize: 14, color: Ipesa.etiqueta),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              SizedBox(
-                width: 120,
-                child: TextField(
-                  controller: controller,
-                  maxLength: 4,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(fontSize: 18, letterSpacing: 4),
-                  decoration: const InputDecoration(
-                    hintText: '0133',
-                    counterText: '',
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                      borderSide: BorderSide(color: Ipesa.mentaBorde),
-                    ),
-                  ),
-                  onSubmitted: (_) => onBuscar?.call(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton(
-                  onPressed: onBuscar,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Ipesa.turquesa,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Buscar'),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

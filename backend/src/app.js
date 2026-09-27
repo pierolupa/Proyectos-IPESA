@@ -27,16 +27,6 @@ const ROLES_VALIDOS = new Set(Object.values(ROLES));
  * por ejemplo) y exigir/verificar un token en cada endpoint sensible.
  */
 
-function guiaPublica(guia) {
-  // Vista de rastreo (equipo comercial): nunca exponer datos completos del
-  // destinatario ni del transportista (ARCHITECTURE.md, sección 6).
-  return {
-    ultimos_cuatro: guia.numero_guia.slice(-4),
-    estado: guia.estado,
-    destino: guia.destino,
-  };
-}
-
 function distanciaMetros(lat1, lng1, lat2, lng2) {
   const rad = (g) => (g * Math.PI) / 180;
   const dLat = rad(lat2 - lat1);
@@ -224,21 +214,6 @@ app.get('/guias/transportista/:nombre', async (req, res, next) => {
     const guias = await repo.listarGuias();
     const propias = guias.filter((g) => g.transportista === req.params.nombre);
     res.json(propias.map(sinCamposInternos));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Equipo comercial / público: rastreo por últimos 4 dígitos, sin login.
-app.get('/guias/rastreo/:ultimosCuatro', async (req, res, next) => {
-  try {
-    const { ultimosCuatro } = req.params;
-    if (!/^\d{4}$/.test(ultimosCuatro)) {
-      return res.status(400).json({ error: 'Debe enviar exactamente 4 dígitos.' });
-    }
-    const guias = await repo.listarGuias();
-    const encontradas = guias.filter((g) => g.numero_guia.endsWith(ultimosCuatro));
-    res.json(encontradas.map(guiaPublica));
   } catch (err) {
     next(err);
   }

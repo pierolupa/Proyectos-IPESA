@@ -140,22 +140,6 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
   });
 });
 
-describe('GET /guias/rastreo/:ultimosCuatro', () => {
-  it('valida que sean exactamente 4 dígitos', async () => {
-    const res = await request(app).get('/guias/rastreo/12a4');
-    expect(res.status).toBe(400);
-  });
-
-  it('no expone destinatario ni transportista', async () => {
-    repo.listarGuias.mockResolvedValue([guia({ numero_guia: 'IPE-2026-000123' })]);
-    const res = await request(app).get('/guias/rastreo/0123');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([
-      { ultimos_cuatro: '0123', estado: ESTADOS.EN_RUTA, destino: 'Av. Siempre Viva 742' },
-    ]);
-  });
-});
-
 describe('PATCH /guias/:numeroGuia/numero', () => {
   it('rechaza si el número nuevo ya está activo en otra guía', async () => {
     repo.buscarPorNumero.mockImplementation((numero) => {

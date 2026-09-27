@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ipesa_guias/app.dart';
-import 'package:ipesa_guias/screens/tracking/public_tracking_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
@@ -62,7 +61,7 @@ void main() {
     expect(find.text('Bienvenido'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
     expect(find.text('Crear una cuenta'), findsOneWidget);
-    expect(find.text('¿Eres cliente? Rastrea tu envío'), findsOneWidget);
+    expect(find.text('¿Eres cliente? Rastrea tu envío'), findsNothing);
   });
 
   testWidgets('El transportista inicia sesión y ve sus tareas', (
@@ -152,43 +151,5 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Pendientes'), findsOneWidget);
-  });
-
-  testWidgets('Se puede rastrear un envío sin cuenta desde el login', (
-    WidgetTester tester,
-  ) async {
-    _sinAnimaciones(tester);
-    await tester.pumpWidget(const IpesaGuiasApp());
-    await tester.pumpAndSettle();
-
-    final rastrearFinder = find.widgetWithText(FilledButton, 'Buscar');
-    await tester.ensureVisible(rastrearFinder);
-    await tester.tap(rastrearFinder);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Rastreo de envío'), findsOneWidget);
-  });
-
-  testWidgets('El rastreo público valida los últimos 4 dígitos', (
-    WidgetTester tester,
-  ) async {
-    final client = MockClient((request) async {
-      expect(request.url.path, endsWith('/guias/rastreo/4821'));
-      return _json([
-        {'ultimos_cuatro': '4821', 'estado': 'en_ruta', 'destino': 'San Miguel'},
-      ]);
-    });
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: PublicTrackingScreen(api: GuiasApi(client: client)),
-      ),
-    );
-
-    await tester.enterText(find.byType(TextField), '4821');
-    await tester.tap(find.text('Buscar'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('•••• 4821'), findsOneWidget);
   });
 }

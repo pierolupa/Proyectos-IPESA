@@ -64,28 +64,6 @@ class SesionUsuario {
   }
 }
 
-/// Resultado del rastreo público: solo los campos no sensibles que expone
-/// GET /guias/rastreo/:ultimosCuatro (ver backend/src/app.js).
-class ResultadoRastreo {
-  const ResultadoRastreo({
-    required this.ultimosCuatro,
-    required this.estado,
-    required this.destino,
-  });
-
-  final String ultimosCuatro;
-  final EstadoGuia estado;
-  final String destino;
-
-  factory ResultadoRastreo.fromJson(Map<String, dynamic> json) {
-    return ResultadoRastreo(
-      ultimosCuatro: json['ultimos_cuatro'] as String,
-      estado: estadoGuiaDesdeApi(json['estado'] as String),
-      destino: json['destino'] as String,
-    );
-  }
-}
-
 /// Resultado de POST /ocr/leer-guia: los 5 campos que la IA (Claude, con
 /// visión) extrae de la foto. Cualquiera puede salir null si no se pudo
 /// leer con confianza — todos quedan en campos editables en la pantalla.
@@ -207,19 +185,6 @@ class GuiasApi {
     if (res.statusCode != 200) _lanzarError(res);
     final lista = jsonDecode(res.body) as List<dynamic>;
     return lista.map((e) => Guia.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  Future<List<ResultadoRastreo>> buscarPorUltimosCuatroDigitos(
-    String ultimosCuatro,
-  ) async {
-    final res = await _client.get(
-      Uri.parse('$apiBaseUrl/guias/rastreo/$ultimosCuatro'),
-    );
-    if (res.statusCode != 200) _lanzarError(res);
-    final lista = jsonDecode(res.body) as List<dynamic>;
-    return lista
-        .map((e) => ResultadoRastreo.fromJson(e as Map<String, dynamic>))
-        .toList();
   }
 
   /// Manda la foto a la IA (backend → Claude con visión, ver

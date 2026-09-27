@@ -103,8 +103,7 @@ nombre | rol | pin | activo
   comercial entra a la vista **Rastreo de guías** (todas las guías, solo
   lectura, con filtros de fecha, número de guía, cliente, entrega y pedido).
   Las cuentas `administrador` y `comercial` se crean a mano en la hoja; el
-  auto-registro siempre crea `transportista`. (El rastreo por los últimos 4
-  dígitos sigue siendo público, sin login.)
+  auto-registro siempre crea `transportista`.
 - `pin`: cualquier texto/número que uses como clave simple (ver advertencia
   de seguridad arriba).
 - `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.
@@ -199,5 +198,4 @@ Al terminar, Vercel te da una URL pública (algo como
 | `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
 | `GET` | `/api/guias?estado=en_ruta` | Lista completa, con filtro opcional (administrador). |
 | `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
-| `GET` | `/api/guias/rastreo/:ultimosCuatro` | Rastreo público, sin datos sensibles. |
 | `GET` | `/api/health` | Chequeo de salud. |
