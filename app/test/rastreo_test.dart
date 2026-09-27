@@ -14,6 +14,7 @@ import 'package:ipesa_guias/models/rol_usuario.dart';
 import 'package:ipesa_guias/screens/comercial/rastreo_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
+import 'package:ipesa_guias/widgets/escena_ruta.dart';
 
 Map<String, dynamic> _guia(
   String numero,
@@ -150,34 +151,77 @@ void main() {
     expect(rolUsuarioDesdeApi('comercial'), RolUsuario.comercial);
   });
 
-  testWidgets('El comercial filtra por cliente y abre el detalle', (
+  testWidgets('El comercial busca por cliente y abre el detalle', (
     tester,
   ) async {
     await _abrirRastreo(tester);
 
-    expect(find.text('Rastreo de guías'), findsOneWidget);
-    expect(find.text('3 guías'), findsOneWidget);
+    expect(find.text('Rastrea tus guías'), findsOneWidget);
+    expect(find.byType(EscenaRuta), findsOneWidget);
 
-    await tester.tap(find.text('Filtros'));
-    await tester.pump();
     await tester.enterText(
       find.widgetWithText(TextField, 'Cliente'),
       'shougang',
     );
     await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
 
-    expect(find.text('1 de 3 guías'), findsOneWidget);
+    expect(find.text('Resultados'), findsOneWidget);
+    expect(find.text('Cliente: shougang'), findsOneWidget);
+    expect(find.text('1 guía'), findsOneWidget);
     expect(find.text('T033-3455'), findsOneWidget);
     expect(find.text('T028-130133'), findsNothing);
 
-    await tester.tap(find.text('Ocultar filtros · 1'));
-    await tester.pump();
     await tester.tap(find.text('T033-3455'));
     await tester.pumpAndSettle();
 
     expect(find.text('Guía T033-3455'), findsOneWidget);
     expect(find.text('0188170001'), findsOneWidget);
     expect(find.text('Pendiente'), findsOneWidget);
+  });
+
+  testWidgets('Ver todas lista todo y los chips filtran por estado', (
+    tester,
+  ) async {
+    await _abrirRastreo(tester);
+
+    await tester.ensureVisible(find.text('Ver todas las guías'));
+    await tester.tap(find.text('Ver todas las guías'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Todas las guías'), findsOneWidget);
+    expect(find.text('3 guías'), findsOneWidget);
+    await tester.tap(find.text('Entregado · 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 de 3 guías'), findsOneWidget);
+    expect(find.text('T028-130133'), findsOneWidget);
+    expect(find.text('T033-3455'), findsNothing);
+  });
+
+  testWidgets('El teclado no le quita el foco al campo de búsqueda', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _abrirRastreo(tester);
+
+    await tester.tap(find.widgetWithText(TextField, 'N° de guía'));
+    await tester.pump();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+
+    final campo = tester.widget<EditableText>(
+      find.descendant(
+        of: find.widgetWithText(TextField, 'N° de guía'),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(campo.focusNode.hasFocus, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('En pantalla ancha muestra la tabla con todas las columnas', (
@@ -187,6 +231,11 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await _abrirRastreo(tester);
+    expect(tester.takeException(), isNull);
+
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
 
     for (final columna in [
       'N° de guía',
@@ -200,6 +249,16 @@ void main() {
       expect(find.text(columna), findsWidgets);
     }
     expect(find.text('0188169522'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('La vista del comercial entra en un celular sin desbordes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _abrirRastreo(tester);
     expect(tester.takeException(), isNull);
   });
 }

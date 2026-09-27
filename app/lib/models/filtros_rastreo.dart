@@ -36,6 +36,18 @@ class FiltrosRastreo {
 
   bool get tieneRango => desde != null && hasta != null;
 
+  /// Los mismos filtros con otro estado (null = todos).
+  FiltrosRastreo conGrupo(GrupoEstado? nuevo) => FiltrosRastreo(
+    numeroGuia: numeroGuia,
+    cliente: cliente,
+    numeroEntrega: numeroEntrega,
+    numeroPedido: numeroPedido,
+    grupo: nuevo,
+    campoFecha: campoFecha,
+    desde: desde,
+    hasta: hasta,
+  );
+
   static String _normalizar(String texto) =>
       texto.toLowerCase().replaceAll(RegExp(r'\s+'), '');
 
