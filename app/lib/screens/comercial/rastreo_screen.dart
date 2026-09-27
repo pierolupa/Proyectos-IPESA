@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/filtros_rastreo.dart';
@@ -11,15 +10,9 @@ import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/escena_ruta.dart';
 import 'rastreo_resultados_screen.dart';
 
-final _fecha = DateFormat('dd/MM/yyyy');
-
-/// Rangos rápidos de fecha (además de elegir uno a mano en el calendario).
-enum _Rango { todas, hoy, semana, mes, personalizado }
-
 /// Inicio del equipo comercial: saludo, una tarjeta "Rastrea tus guías"
-/// con los filtros (N° de guía, cliente, pedido, entrega y fechas) y el
-/// paisaje animado con el camión IPESA al pie. "Buscar" abre los
-/// resultados.
+/// con los filtros (N° de guía, cliente, pedido y entrega) y el paisaje
+/// animado con el camión IPESA al pie. "Buscar" abre los resultados.
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
 
@@ -32,9 +25,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   final _cliente = TextEditingController();
   final _pedido = TextEditingController();
   final _entrega = TextEditingController();
-  CampoFecha _campoFecha = CampoFecha.salida;
-  _Rango _rango = _Rango.todas;
-  DateTimeRange? _personalizado;
+  String? _error;
   double _altoSinTeclado = 0;
   double _anchoMedido = 0;
 
@@ -53,80 +44,33 @@ class _RastreoScreenState extends State<RastreoScreen> {
     super.dispose();
   }
 
-  (DateTime?, DateTime?) _limites() {
-    final hoy = DateUtils.dateOnly(DateTime.now());
-    return switch (_rango) {
-      _Rango.todas => (null, null),
-      _Rango.hoy => (hoy, hoy),
-      _Rango.semana => (hoy.subtract(const Duration(days: 6)), hoy),
-      _Rango.mes => (DateTime(hoy.year, hoy.month), hoy),
-      _Rango.personalizado => (_personalizado?.start, _personalizado?.end),
-    };
-  }
-
-  FiltrosRastreo get _filtros {
-    final (desde, hasta) = _limites();
-    return FiltrosRastreo(
-      numeroGuia: _guia.text,
-      cliente: _cliente.text,
-      numeroEntrega: _entrega.text,
-      numeroPedido: _pedido.text,
-      campoFecha: _campoFecha,
-      desde: desde,
-      hasta: hasta,
-    );
-  }
-
-  bool get _hayFiltros =>
-      _campos.any((c) => c.text.trim().isNotEmpty) || _rango != _Rango.todas;
+  bool get _hayFiltros => _campos.any((c) => c.text.trim().isNotEmpty);
 
   void _limpiar() {
     for (final c in _campos) {
       c.clear();
     }
-    setState(() {
-      _rango = _Rango.todas;
-      _personalizado = null;
-    });
+    setState(() => _error = null);
   }
 
-  void _buscar({bool todas = false}) {
+  void _buscar() {
+    if (!_hayFiltros) {
+      setState(() => _error = 'Escribe al menos un dato para buscar.');
+      return;
+    }
     FocusScope.of(context).unfocus();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => RastreoResultadosScreen(
-          filtros: todas ? const FiltrosRastreo() : _filtros,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _elegirFechas() async {
-    final hoy = DateTime.now();
-    final elegido = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2024),
-      lastDate: DateTime(hoy.year + 1, 12, 31),
-      initialDateRange: _personalizado,
-      helpText: _campoFecha.etiqueta,
-      saveText: 'Aplicar',
-      // En computadora, una ventana del tamaño de un celular en vez de
-      // ocupar toda la pantalla.
-      builder: (context, child) => Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440, maxHeight: 680),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(Ipesa.radio),
-            child: child,
+          filtros: FiltrosRastreo(
+            numeroGuia: _guia.text,
+            cliente: _cliente.text,
+            numeroEntrega: _entrega.text,
+            numeroPedido: _pedido.text,
           ),
         ),
       ),
     );
-    if (elegido == null) return;
-    setState(() {
-      _personalizado = elegido;
-      _rango = _Rango.personalizado;
-    });
   }
 
   void _cerrarSesion() {
@@ -221,19 +165,11 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                   cliente: _cliente,
                                   pedido: _pedido,
                                   entrega: _entrega,
-                                  campoFecha: _campoFecha,
-                                  rango: _rango,
-                                  personalizado: _personalizado,
                                   hayFiltros: _hayFiltros,
-                                  onTexto: () => setState(() {}),
-                                  onCampoFecha: (c) =>
-                                      setState(() => _campoFecha = c),
-                                  onRango: (r) => r == _Rango.personalizado
-                                      ? _elegirFechas()
-                                      : setState(() => _rango = r),
+                                  error: _error,
+                                  onTexto: () => setState(() => _error = null),
                                   onLimpiar: _limpiar,
                                   onBuscar: _buscar,
-                                  onVerTodas: () => _buscar(todas: true),
                                 ),
                               ),
                             ),
@@ -326,32 +262,22 @@ class _TarjetaBusqueda extends StatelessWidget {
     required this.cliente,
     required this.pedido,
     required this.entrega,
-    required this.campoFecha,
-    required this.rango,
-    required this.personalizado,
     required this.hayFiltros,
+    required this.error,
     required this.onTexto,
-    required this.onCampoFecha,
-    required this.onRango,
     required this.onLimpiar,
     required this.onBuscar,
-    required this.onVerTodas,
   });
 
   final TextEditingController guia;
   final TextEditingController cliente;
   final TextEditingController pedido;
   final TextEditingController entrega;
-  final CampoFecha campoFecha;
-  final _Rango rango;
-  final DateTimeRange? personalizado;
   final bool hayFiltros;
+  final String? error;
   final VoidCallback onTexto;
-  final ValueChanged<CampoFecha> onCampoFecha;
-  final ValueChanged<_Rango> onRango;
   final VoidCallback onLimpiar;
   final VoidCallback onBuscar;
-  final VoidCallback onVerTodas;
 
   Widget _campo(TextEditingController c, String etiqueta, IconData icono) =>
       TextField(
@@ -367,18 +293,6 @@ class _TarjetaBusqueda extends StatelessWidget {
           contentPadding: const EdgeInsets.fromLTRB(0, 14, 10, 14),
         ),
       );
-
-  String _etiquetaRango(_Rango r) => switch (r) {
-    _Rango.todas => 'Todas',
-    _Rango.hoy => 'Hoy',
-    _Rango.semana => 'Últimos 7 días',
-    _Rango.mes => 'Este mes',
-    _Rango.personalizado =>
-      personalizado == null
-          ? 'Elegir fechas'
-          : '${_fecha.format(personalizado!.start)} – '
-                '${_fecha.format(personalizado!.end)}',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -444,61 +358,10 @@ class _TarjetaBusqueda extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Fechas',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-              ),
-              SegmentedButton<CampoFecha>(
-                segments: [
-                  for (final c in CampoFecha.values)
-                    ButtonSegment(
-                      value: c,
-                      label: Text(
-                        c == CampoFecha.salida ? 'Salida' : 'Entrega',
-                      ),
-                    ),
-                ],
-                selected: {campoFecha},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => onCampoFecha(s.first),
-                style: SegmentedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  selectedBackgroundColor: Ipesa.menta,
-                  selectedForegroundColor: Ipesa.petroleo,
-                  textStyle: const TextStyle(
-                    fontFamily: Ipesa.fuenteTexto,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // En una sola fila (se desliza de lado en celulares angostos).
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final r in _Rango.values)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _ChipRango(
-                      etiqueta: _etiquetaRango(r),
-                      icono: r == _Rango.personalizado
-                          ? Icons.date_range
-                          : null,
-                      seleccionado: rango == r,
-                      onTap: () => onRango(r),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(error!, style: const TextStyle(color: Color(0xFFB42318))),
+          ],
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: onBuscar,
@@ -510,48 +373,8 @@ class _TarjetaBusqueda extends StatelessWidget {
             icon: const Icon(Icons.search),
             label: const Text('Buscar'),
           ),
-          TextButton(
-            onPressed: onVerTodas,
-            style: TextButton.styleFrom(minimumSize: const Size(0, 42)),
-            child: const Text('Ver todas las guías'),
-          ),
+          const SizedBox(height: 10),
         ],
-      ),
-    );
-  }
-}
-
-class _ChipRango extends StatelessWidget {
-  const _ChipRango({
-    required this.etiqueta,
-    required this.seleccionado,
-    required this.onTap,
-    this.icono,
-  });
-
-  final String etiqueta;
-  final bool seleccionado;
-  final VoidCallback onTap;
-  final IconData? icono;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      avatar: icono == null
-          ? null
-          : Icon(icono, size: 16, color: Ipesa.petroleo),
-      label: Text(etiqueta),
-      selected: seleccionado,
-      showCheckmark: false,
-      onSelected: (_) => onTap(),
-      backgroundColor: Colors.white,
-      selectedColor: Ipesa.menta,
-      side: BorderSide(color: seleccionado ? Ipesa.petroleo : Ipesa.borde),
-      labelStyle: TextStyle(
-        fontFamily: Ipesa.fuenteTexto,
-        color: seleccionado ? Ipesa.petroleo : Ipesa.texto,
-        fontWeight: FontWeight.w600,
-        fontSize: 14,
       ),
     );
   }

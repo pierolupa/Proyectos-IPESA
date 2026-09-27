@@ -182,20 +182,29 @@ void main() {
     expect(find.text('Pendiente'), findsOneWidget);
   });
 
-  testWidgets('Ver todas lista todo y los chips filtran por estado', (
+  testWidgets('Sin datos no busca; los chips filtran por estado', (
     tester,
   ) async {
     await _abrirRastreo(tester);
 
-    await tester.ensureVisible(find.text('Ver todas las guías'));
-    await tester.tap(find.text('Ver todas las guías'));
+    expect(find.text('Ver todas las guías'), findsNothing);
+    expect(find.text('Fechas'), findsNothing);
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Escribe al menos un dato para buscar.'), findsOneWidget);
+    expect(find.text('Resultados'), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextField, 'N° pedido'), '0188');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Todas las guías'), findsOneWidget);
-    expect(find.text('3 guías'), findsOneWidget);
+    expect(find.text('2 guías'), findsOneWidget);
     await tester.tap(find.text('Entregado · 1'));
     await tester.pumpAndSettle();
-    expect(find.text('1 de 3 guías'), findsOneWidget);
+    expect(find.text('1 de 2 guías'), findsOneWidget);
     expect(find.text('T028-130133'), findsOneWidget);
     expect(find.text('T033-3455'), findsNothing);
   });
@@ -233,6 +242,8 @@ void main() {
     await _abrirRastreo(tester);
     expect(tester.takeException(), isNull);
 
+    await tester.enterText(find.widgetWithText(TextField, 'N° de guía'), 'T');
+    await tester.pump();
     await tester.ensureVisible(find.text('Buscar'));
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
