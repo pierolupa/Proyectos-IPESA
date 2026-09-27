@@ -1,90 +1,123 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../models/estado_guia.dart';
 import '../models/guia.dart';
-import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
+import '../state/app_state.dart';
 import '../theme.dart';
 
-/// Fotos guardadas de una guía (la de la asignación y la de la entrega),
-/// para el administrador. Tocar una la abre en grande con zoom.
-class FotosGuia extends StatelessWidget {
-  const FotosGuia({super.key, required this.guia});
+/// Foto de la entrega al cliente (la guía firmada), para el administrador.
+/// Tocarla la abre en grande con zoom. Si no hay foto, explica por qué.
+class FotoEntrega extends StatefulWidget {
+  const FotoEntrega({super.key, required this.guia});
 
   final Guia guia;
 
-  String get _etiquetaEntrega => switch (guia.tipoEntrega) {
-    TipoEntrega.clienteFinal => 'Guía firmada (entrega)',
-    TipoEntrega.agencia => 'Comprobante de agencia',
-    TipoEntrega.entreSucursales => 'Guía al iniciar el traslado',
-  };
+  @override
+  State<FotoEntrega> createState() => _FotoEntregaState();
+}
+
+class _FotoEntregaState extends State<FotoEntrega> {
+  Future<bool?>? _configurado;
+
+  @override
+  void initState() {
+    super.initState();
+    // Solo hace falta saberlo cuando una entrega cerrada no tiene foto.
+    if (!widget.guia.tieneFotoEntrega && widget.guia.estado.esFinal) {
+      _configurado = context.read<AppState>().almacenamientoFotosConfigurado();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fotos = [
-      if (guia.tieneFotoEntrega) (_etiquetaEntrega, TipoFoto.entrega),
-      if (guia.tieneFotoGuia) ('Foto al asignar la guía', TipoFoto.guia),
-    ];
-
+    final guia = widget.guia;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Fotos', style: Theme.of(context).textTheme.labelLarge),
+        Text(
+          'Foto de la entrega',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
         const SizedBox(height: 8),
-        if (fotos.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Ipesa.borde),
-              borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.no_photography_outlined, color: Ipesa.textoSuave),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Sin fotos guardadas. Las guías registradas antes de esta '
-                    'versión de la app no tienen foto.',
-                    style: TextStyle(color: Ipesa.textoSuave),
-                  ),
-                ),
-              ],
-            ),
+        if (guia.tieneFotoEntrega)
+          _Miniatura(
+            url: urlFotoEntrega(guia),
+            titulo: 'Entrega · ${guia.numeroGuia}',
+          )
+        else if (!guia.estado.esFinal)
+          const _Aviso(
+            icono: Icons.photo_camera_outlined,
+            texto:
+                'Se guardará cuando el transportista entregue la guía al '
+                'cliente.',
           )
         else
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final (etiqueta, tipo) in fotos)
-                _Miniatura(
-                  etiqueta: etiqueta,
-                  url: urlFoto(guia, tipo),
-                  titulo: '$etiqueta · ${guia.numeroGuia}',
-                ),
-            ],
+          FutureBuilder<bool?>(
+            future: _configurado,
+            builder: (context, snapshot) => snapshot.data == false
+                ? const _Aviso(
+                    icono: Icons.warning_amber_rounded,
+                    alerta: true,
+                    texto:
+                        'Las fotos NO se están guardando: falta conectar el '
+                        'almacenamiento en Vercel (proyecto proyectos-ipesa → '
+                        'Storage → Create → Blob, acceso Private, y luego '
+                        'Redeploy).',
+                  )
+                : const _Aviso(
+                    icono: Icons.no_photography_outlined,
+                    texto: 'Esta entrega no tiene foto guardada.',
+                  ),
           ),
       ],
     );
   }
 }
 
-class _Miniatura extends StatelessWidget {
-  const _Miniatura({
-    required this.etiqueta,
-    required this.url,
-    required this.titulo,
-  });
+class _Aviso extends StatelessWidget {
+  const _Aviso({required this.icono, required this.texto, this.alerta = false});
 
-  final String etiqueta;
+  final IconData icono;
+  final String texto;
+  final bool alerta;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = alerta ? const Color(0xFF8A4F00) : Ipesa.textoSuave;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: alerta ? const Color(0xFFFBF0DD) : Colors.white,
+        border: Border.all(
+          color: alerta ? const Color(0xFFE9C98F) : Ipesa.borde,
+        ),
+        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+      ),
+      child: Row(
+        children: [
+          Icon(icono, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(texto, style: TextStyle(color: color)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Miniatura extends StatelessWidget {
+  const _Miniatura({required this.url, required this.titulo});
+
   final String url;
   final String titulo;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: 260,
       child: Material(
         color: Colors.white,
         shape: RoundedRectangleBorder(
@@ -97,21 +130,21 @@ class _Miniatura extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(height: 160, child: _Imagen(url: url)),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              SizedBox(height: 200, child: _Imagen(url: url)),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 10, 12, 12),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        etiqueta,
-                        style: const TextStyle(
+                        'Ver foto completa',
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: Ipesa.texto,
                         ),
                       ),
                     ),
-                    const Icon(Icons.zoom_in, size: 20, color: Ipesa.turquesa),
+                    Icon(Icons.zoom_in, size: 20, color: Ipesa.turquesa),
                   ],
                 ),
               ),
@@ -180,6 +213,7 @@ class _Imagen extends StatelessWidget {
     return Image.network(
       url,
       fit: ajuste,
+      alignment: Alignment.topCenter,
       loadingBuilder: (context, child, progreso) => progreso == null
           ? child
           : const ColoredBox(

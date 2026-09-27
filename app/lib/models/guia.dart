@@ -26,9 +26,9 @@ class Guia {
   final double? cierreLng;
   final DateTime? fechaCierre;
 
-  /// Dónde quedó la foto en el almacenamiento privado (vacío si no hay).
-  /// La app no la abre directo: usa [urlFoto], que pasa por el backend.
-  final String fotoGuiaUrl;
+  /// Dónde quedó la foto de la entrega en el almacenamiento privado (vacío
+  /// si no hay). La app no la abre directo: usa `urlFotoEntrega`, que pasa
+  /// por el backend.
   final String fotoEntregaUrl;
 
   const Guia({
@@ -48,11 +48,9 @@ class Guia {
     this.cierreLat,
     this.cierreLng,
     this.fechaCierre,
-    this.fotoGuiaUrl = '',
     this.fotoEntregaUrl = '',
   });
 
-  bool get tieneFotoGuia => fotoGuiaUrl.isNotEmpty;
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
   bool get tieneUbicacionCierre => cierreLat != null && cierreLng != null;
@@ -82,7 +80,6 @@ class Guia {
       cierreLat: _coordenada(json['cierre_lat']),
       cierreLng: _coordenada(json['cierre_lng']),
       fechaCierre: DateTime.tryParse(json['fecha_cierre'] as String? ?? ''),
-      fotoGuiaUrl: json['foto_guia_url'] as String? ?? '',
       fotoEntregaUrl: json['foto_entrega_url'] as String? ?? '',
     );
   }
@@ -125,7 +122,6 @@ class Guia {
       cierreLat: cierreLat,
       cierreLng: cierreLng,
       fechaCierre: fechaCierre,
-      fotoGuiaUrl: fotoGuiaUrl,
       fotoEntregaUrl: fotoEntregaUrl,
     );
   }

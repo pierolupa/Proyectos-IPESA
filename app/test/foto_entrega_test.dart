@@ -29,11 +29,15 @@ Map<String, dynamic> _guiaJson(Map<String, dynamic> extra) => {
 
 Future<void> _abrirDetalle(
   WidgetTester tester,
-  Map<String, dynamic> guia,
-) async {
-  final client = MockClient(
-    (request) async => http.Response(jsonEncode([guia]), 200),
-  );
+  Map<String, dynamic> guia, {
+  bool almacenamiento = true,
+}) async {
+  final client = MockClient((request) async {
+    if (request.url.path.endsWith('/fotos/estado')) {
+      return http.Response(jsonEncode({'configurado': almacenamiento}), 200);
+    }
+    return http.Response(jsonEncode([guia]), 200);
+  });
   final appState = AppState(api: GuiasApi(client: client));
   await appState.cargarGuias();
   await tester.pumpWidget(
@@ -94,32 +98,56 @@ void main() {
       _guiaJson({'foto_entrega_url': 'https://blob/b.jpg'}),
     );
     expect(
-      urlFoto(a, TipoFoto.entrega),
-      startsWith('$apiBaseUrl/guias/T001-94609/foto/entrega?v='),
+      urlFotoEntrega(a),
+      startsWith('$apiBaseUrl/guias/T001-94609/foto?v='),
     );
-    expect(urlFoto(a, TipoFoto.entrega), isNot(urlFoto(b, TipoFoto.entrega)));
+    expect(urlFotoEntrega(a), isNot(urlFotoEntrega(b)));
   });
 
-  testWidgets('El admin ve las fotos de la guía', (tester) async {
+  testWidgets('El admin ve la foto de la entrega', (tester) async {
     await _abrirDetalle(
       tester,
       _guiaJson({
         'estado': 'entregado',
-        'foto_guia_url': 'https://blob/guia.jpg',
         'foto_entrega_url': 'https://blob/entrega.jpg',
       }),
     );
 
-    expect(find.text('Fotos'), findsOneWidget);
-    expect(find.text('Guía firmada (entrega)'), findsOneWidget);
-    expect(find.text('Foto al asignar la guía'), findsOneWidget);
-    expect(find.byType(Image), findsNWidgets(2));
+    expect(find.text('Foto de la entrega'), findsOneWidget);
+    expect(find.text('Ver foto completa'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
   });
 
-  testWidgets('Sin fotos, el admin ve un aviso claro', (tester) async {
+  testWidgets('Entregada sin foto y sin almacenamiento: avisa al admin', (
+    tester,
+  ) async {
+    await _abrirDetalle(
+      tester,
+      _guiaJson({'estado': 'entregado'}),
+      almacenamiento: false,
+    );
+    await tester.pump();
+
+    expect(find.textContaining('NO se están guardando'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+  });
+
+  testWidgets('Entregada sin foto con almacenamiento conectado', (
+    tester,
+  ) async {
+    await _abrirDetalle(
+      tester,
+      _guiaJson({'estado': 'entregado'}),
+      almacenamiento: true,
+    );
+    await tester.pump();
+
+    expect(find.text('Esta entrega no tiene foto guardada.'), findsOneWidget);
+  });
+
+  testWidgets('En ruta: la foto se guardará al entregar', (tester) async {
     await _abrirDetalle(tester, _guiaJson({}));
 
-    expect(find.textContaining('Sin fotos guardadas'), findsOneWidget);
-    expect(find.byType(Image), findsNothing);
+    expect(find.textContaining('Se guardará cuando'), findsOneWidget);
   });
 }

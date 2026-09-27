@@ -213,8 +213,7 @@ class AppState extends ChangeNotifier {
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) =>
       _api.leerGuiaConIA(fotoBytes);
 
-  /// Devuelve el aviso si la foto no se pudo guardar (null si todo bien).
-  Future<String?> asignarNuevaGuia({
+  Future<Guia> asignarNuevaGuia({
     required String numeroGuia,
     required TipoEntrega tipoEntrega,
     required String origen,
@@ -224,9 +223,8 @@ class AppState extends ChangeNotifier {
     required double lng,
     String? numeroPedido,
     String? numeroEntrega,
-    Uint8List? foto,
   }) async {
-    final (nueva, avisoFoto) = await _api.asignarNuevaGuia(
+    final nueva = await _api.asignarNuevaGuia(
       numeroGuia: numeroGuia,
       tipoEntrega: tipoEntrega,
       origen: origen,
@@ -237,11 +235,10 @@ class AppState extends ChangeNotifier {
       lng: lng,
       numeroPedido: numeroPedido,
       numeroEntrega: numeroEntrega,
-      foto: foto,
     );
     _guias.insert(0, nueva);
     notifyListeners();
-    return avisoFoto;
+    return nueva;
   }
 
   /// Devuelve el aviso si la foto no se pudo guardar (null si todo bien).
@@ -267,6 +264,15 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     return avisoFoto;
+  }
+
+  /// null mientras no se sabe (o si no se pudo consultar).
+  Future<bool?> almacenamientoFotosConfigurado() async {
+    try {
+      return await _api.almacenamientoFotosConfigurado();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> corregirNumeroGuia(

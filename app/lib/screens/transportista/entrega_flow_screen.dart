@@ -214,14 +214,14 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       }
       _lat = posicion.latitude;
       _lng = posicion.longitude;
-      // La foto se guarda junto con el cambio de estado para que el
-      // administrador la vea en el detalle de la guía.
+      // La foto de la entrega final se guarda junto con el cambio de estado
+      // para que el administrador la vea en el detalle de la guía.
       final avisoFoto = await appState.actualizarEstado(
         g.numeroGuia,
         nuevoEstado,
         lat: _lat,
         lng: _lng,
-        foto: _requiereFoto ? _fotoBytes : null,
+        foto: nuevoEstado.esFinal ? _fotoBytes : null,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

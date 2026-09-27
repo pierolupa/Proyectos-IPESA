@@ -106,7 +106,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       final archivo = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1600,
-        imageQuality: 80,
+        imageQuality: 90,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
@@ -165,7 +165,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
   Future<void> _confirmar(String numero) async {
     setState(() => _enviando = true);
     try {
-      final avisoFoto = await context.read<AppState>().asignarNuevaGuia(
+      await context.read<AppState>().asignarNuevaGuia(
         numeroGuia: numero,
         tipoEntrega: _tipoEntrega,
         origen: 'Almacén Callao',
@@ -177,14 +177,10 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         lng: _lng!,
         numeroPedido: _numeroPedidoController.text.trim(),
         numeroEntrega: _numeroEntregaController.text.trim(),
-        foto: _fotoBytes,
       );
       if (!mounted) return;
-      final mensaje = 'Guía $numero asignada · estado: en ruta';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(avisoFoto == null ? mensaje : '$mensaje\n$avisoFoto'),
-        ),
+        SnackBar(content: Text('Guía $numero asignada · estado: en ruta')),
       );
       Navigator.of(context).pop();
     } on ApiException catch (e) {

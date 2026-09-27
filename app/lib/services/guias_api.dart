@@ -14,25 +14,12 @@ import '../models/tipo_entrega.dart';
 /// API — la app nunca accede a Sheets directamente.
 const apiBaseUrl = 'https://proyectos-ipesa-phi.vercel.app/api';
 
-/// Qué foto de una guía: la tomada al asignarla o la de la entrega.
-enum TipoFoto {
-  guia('guia'),
-  entrega('entrega');
-
-  const TipoFoto(this.valorApi);
-  final String valorApi;
-}
-
-/// URL (del backend) para ver una foto guardada. Las fotos son privadas:
-/// siempre pasan por la API. `v` cambia si la foto se reemplaza, para que
-/// el navegador no muestre la anterior desde su caché.
-String urlFoto(Guia guia, TipoFoto tipo) {
-  final guardada = tipo == TipoFoto.guia
-      ? guia.fotoGuiaUrl
-      : guia.fotoEntregaUrl;
-  return '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}'
-      '/foto/${tipo.valorApi}?v=${guardada.hashCode.toUnsigned(32)}';
-}
+/// URL (del backend) para ver la foto de la entrega. Las fotos son
+/// privadas: siempre pasan por la API. `v` cambia si la foto se reemplaza,
+/// para que el navegador no muestre la anterior desde su caché.
+String urlFotoEntrega(Guia guia) =>
+    '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}/foto'
+    '?v=${guia.fotoEntregaUrl.hashCode.toUnsigned(32)}';
 
 /// Tipo MIME de la foto según sus primeros bytes (la cámara da JPEG, pero
 /// una imagen elegida de la galería puede ser PNG o WebP).
@@ -252,9 +239,7 @@ class GuiasApi {
     return DatosGuiaLeida.fromJson(_decodeBody(res));
   }
 
-  /// Devuelve la guía creada y, si la foto no se pudo guardar, el aviso
-  /// del backend (la guía se crea igual).
-  Future<(Guia, String?)> asignarNuevaGuia({
+  Future<Guia> asignarNuevaGuia({
     required String numeroGuia,
     required TipoEntrega tipoEntrega,
     required String origen,
@@ -265,7 +250,6 @@ class GuiasApi {
     required double lng,
     String? numeroPedido,
     String? numeroEntrega,
-    Uint8List? foto,
   }) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/guias'),
@@ -282,18 +266,16 @@ class GuiasApi {
           'numeroPedido': numeroPedido,
         if (numeroEntrega != null && numeroEntrega.isNotEmpty)
           'numeroEntrega': numeroEntrega,
-        if (foto != null) 'foto': _fotoJson(foto),
       }),
     );
     if (res.statusCode != 201) _lanzarError(res);
-    final aviso = _decodeBody(res)['aviso_foto'] as String?;
     // La API de creación devuelve solo {numeroGuia, estado}; recargamos el
     // objeto completo para tener todos los campos consistentes.
     final guia = await buscarGuiaExacta(numeroGuia);
     if (guia == null) {
       throw ApiException('La guía se creó pero no se pudo recargar.');
     }
-    return (guia, aviso);
+    return guia;
   }
 
   Future<Guia?> buscarGuiaExacta(String numeroGuia) async {
@@ -327,6 +309,13 @@ class GuiasApi {
     if (res.statusCode != 200) _lanzarError(res);
     final json = _decodeBody(res);
     return (Guia.fromJson(json), json['aviso_foto'] as String?);
+  }
+
+  /// Si el backend tiene conectado el almacenamiento de fotos.
+  Future<bool> almacenamientoFotosConfigurado() async {
+    final res = await _client.get(Uri.parse('$apiBaseUrl/fotos/estado'));
+    if (res.statusCode != 200) _lanzarError(res);
+    return _decodeBody(res)['configurado'] == true;
   }
 
   Future<Guia> corregirNumeroGuia(

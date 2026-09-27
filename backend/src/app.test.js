@@ -405,12 +405,11 @@ describe('Sucursales y geocerca', () => {
   });
 });
 
-describe('fotos de la guía', () => {
+describe('foto de la entrega', () => {
   const foto = { base64: Buffer.from('jpg').toString('base64'), mediaType: 'image/jpeg' };
 
-  it('guarda la foto de la guía al asignar', async () => {
+  it('no guarda ninguna foto al asignar la guía', async () => {
     repo.buscarPorNumero.mockResolvedValue(null);
-    fotos.guardarFoto.mockResolvedValue('https://blob/guias/X/guia.jpg');
     const res = await request(app).post('/guias').send({
       numeroGuia: 'IPE-1',
       tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
@@ -422,9 +421,15 @@ describe('fotos de la guía', () => {
       foto,
     });
     expect(res.status).toBe(201);
-    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-1', 'guia', foto);
-    expect(repo.crearGuia.mock.calls[0][0].foto_guia_url).toBe('https://blob/guias/X/guia.jpg');
-    expect(res.body.aviso_foto).toBeUndefined();
+    expect(fotos.guardarFoto).not.toHaveBeenCalled();
+  });
+
+  it('no guarda la foto en un paso intermedio (inicio de traslado)', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ tipo_entrega: TIPOS_ENTREGA.ENTRE_SUCURSALES }));
+    await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.EN_PROCESO_TRASBORDO, geo: { lat: -12.1, lng: -77.02 }, foto });
+    expect(fotos.guardarFoto).not.toHaveBeenCalled();
   });
 
   it('registra la entrega aunque la foto no se pueda guardar, y avisa', async () => {
@@ -439,27 +444,35 @@ describe('fotos de la guía', () => {
     expect(res.body.aviso_foto).toMatch(/sin almacenamiento/);
   });
 
-  it('guarda la foto de la entrega en la guía', async () => {
+  it('guarda la foto de la entrega al cliente en la guía', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia());
-    fotos.guardarFoto.mockResolvedValue('https://blob/guias/X/entrega.jpg');
+    fotos.guardarFoto.mockResolvedValue('https://blob/entregas/X.jpg');
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
       .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
-    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-2026-000123', 'entrega', foto);
-    expect(res.body.foto_entrega_url).toBe('https://blob/guias/X/entrega.jpg');
+    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-2026-000123', foto);
+    expect(res.body.foto_entrega_url).toBe('https://blob/entregas/X.jpg');
   });
 
   it('sirve la foto guardada y da 404 si la guía no tiene foto', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia({ foto_entrega_url: 'https://blob/e.jpg' }));
     fotos.enviarFoto.mockImplementation((_url, res) => res.type('image/jpeg').send('x'));
-    const ok = await request(app).get('/guias/IPE-2026-000123/foto/entrega');
+    const ok = await request(app).get('/guias/IPE-2026-000123/foto');
     expect(ok.status).toBe(200);
     expect(fotos.enviarFoto.mock.calls[0][0]).toBe('https://blob/e.jpg');
 
-    const sinFoto = await request(app).get('/guias/IPE-2026-000123/foto/guia');
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const sinFoto = await request(app).get('/guias/IPE-2026-000123/foto');
     expect(sinFoto.status).toBe(404);
+  });
 
-    const tipoMalo = await request(app).get('/guias/IPE-2026-000123/foto/otra');
-    expect(tipoMalo.status).toBe(400);
+  it('informa si el almacenamiento de fotos está conectado', async () => {
+    const antes = process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    expect((await request(app).get('/fotos/estado')).body).toEqual({ configurado: false });
+    process.env.BLOB_READ_WRITE_TOKEN = 'x';
+    expect((await request(app).get('/fotos/estado')).body).toEqual({ configurado: true });
+    if (antes === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+    else process.env.BLOB_READ_WRITE_TOKEN = antes;
   });
 });

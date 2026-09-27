@@ -9,7 +9,7 @@ import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../widgets/estado_badge.dart';
-import '../../widgets/fotos_guia.dart';
+import '../../widgets/foto_entrega.dart';
 import '../../widgets/mapa_ubicacion.dart';
 
 /// Corrección manual de datos (ARCHITECTURE.md, sección 6): el
@@ -159,7 +159,10 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             style: TextStyle(color: Colors.grey[700]),
           ),
           const SizedBox(height: 24),
-          FotosGuia(guia: guia),
+          FotoEntrega(
+            key: ValueKey('${guia.numeroGuia}|${guia.fotoEntregaUrl}'),
+            guia: guia,
+          ),
           const SizedBox(height: 24),
           _SeccionUbicacion(
             guia: guia,
