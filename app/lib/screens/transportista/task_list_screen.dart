@@ -43,7 +43,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final todas = appState.guiasDelTransportista(nombre);
     // Las entregadas desaparecen de "Pendientes"; las de hoy quedan a la
     // vista en la otra pestaña.
-    final pendientes = todas.where((g) => !g.estado.esFinal).toList();
+    final pendientes = todas.where((g) => !g.estado.esCerrada).toList();
     final entregadasHoy = todas
         .where((g) => g.estado.esFinal && _esHoy(g.fechaActualizacion))
         .toList();
@@ -296,6 +296,8 @@ class _TarjetaTarea extends StatelessWidget {
       EstadoGuia.enProcesoTrasbordo => 1,
       EstadoGuia.recepcionSucursal => 2,
       EstadoGuia.entregado || EstadoGuia.finalizado => pasos.length - 1,
+      // Una rechazada ya no aparece en la lista del transportista.
+      EstadoGuia.rechazado => 0,
     };
     final sucursal = esTraslado
         ? context.read<AppState>().sucursalPorNombre(guia.destino)

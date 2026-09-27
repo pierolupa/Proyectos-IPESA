@@ -156,6 +156,10 @@ class AppState extends ChangeNotifier {
         return '$quien entregó la guía $n.';
       case EstadoGuia.finalizado:
         return '$quien entregó la guía $n en agencia.';
+      case EstadoGuia.rechazado:
+        return ahora.motivoRechazo.isEmpty
+            ? '$quien rechazó la guía $n.'
+            : '$quien rechazó la guía $n: ${ahora.motivoRechazo}';
     }
   }
 
@@ -195,7 +199,9 @@ class AppState extends ChangeNotifier {
   /// cargada. La validación definitiva la hace el backend al confirmar
   /// (responde 409 si hay conflicto).
   bool esDuplicado(String numeroGuia) {
-    return _guias.any((g) => g.numeroGuia == numeroGuia && !g.estado.esFinal);
+    return _guias.any(
+      (g) => g.numeroGuia == numeroGuia && !g.estado.esCerrada,
+    );
   }
 
   /// Lee los datos de la foto de una guía con IA (ver
@@ -264,6 +270,23 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<void> rechazarGuia(
+    String numeroGuia,
+    String motivo, {
+    double? lat,
+    double? lng,
+  }) async {
+    final actualizada = await _api.rechazarGuia(
+      numeroGuia,
+      motivo,
+      lat: lat,
+      lng: lng,
+    );
+    final index = _guias.indexWhere((g) => g.numeroGuia == numeroGuia);
+    if (index != -1) _guias[index] = actualizada;
+    notifyListeners();
   }
 
   Future<void> corregirNumeroGuia(

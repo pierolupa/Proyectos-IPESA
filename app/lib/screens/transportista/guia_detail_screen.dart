@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../../models/estado_guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
+import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import 'entrega_flow_screen.dart';
+import 'rechazo_sheet.dart';
 
 class GuiaDetailScreen extends StatelessWidget {
   const GuiaDetailScreen({super.key, required this.numeroGuia});
@@ -13,7 +15,7 @@ class GuiaDetailScreen extends StatelessWidget {
   final String numeroGuia;
 
   String? _tituloSiguientePaso(EstadoGuia estado, TipoEntrega tipo) {
-    if (estado.esFinal) return null;
+    if (estado.esCerrada) return null;
     if (tipo == TipoEntrega.entreSucursales) {
       if (estado == EstadoGuia.enRuta) return 'Iniciar traslado';
       if (estado == EstadoGuia.enProcesoTrasbordo) {
@@ -68,7 +70,7 @@ class GuiaDetailScreen extends StatelessWidget {
             value: guia.fechaActualizacion.toString().substring(0, 16),
           ),
           const SizedBox(height: 24),
-          if (siguientePaso != null)
+          if (siguientePaso != null) ...[
             FilledButton.icon(
               icon: const Icon(Icons.arrow_forward),
               label: Text(siguientePaso),
@@ -79,7 +81,32 @@ class GuiaDetailScreen extends StatelessWidget {
                   ),
                 );
               },
-            )
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.block),
+              label: const Text('Rechazar tarea'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: EstadoGuia.rechazado.color,
+                side: BorderSide(color: EstadoGuia.rechazado.color),
+              ),
+              onPressed: () async {
+                final rechazada = await mostrarRechazo(context, guia);
+                if (!rechazada || !context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Guía ${guia.numeroGuia} rechazada. '
+                      'Se avisó al administrador.',
+                    ),
+                  ),
+                );
+                // Vuelve a "Mis tareas", donde ya no aparece.
+                Navigator.of(context).pop();
+              },
+            ),
+          ] else if (guia.estado == EstadoGuia.rechazado)
+            AvisoRechazo(guia: guia)
           else
             const Card(
               color: Color(0xFFE8F5E9),

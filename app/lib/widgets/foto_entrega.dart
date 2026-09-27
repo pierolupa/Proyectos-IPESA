@@ -46,6 +46,11 @@ class _FotoEntregaState extends State<FotoEntrega> {
             url: urlFotoEntrega(guia),
             titulo: 'Entrega · ${guia.numeroGuia}',
           )
+        else if (guia.estado == EstadoGuia.rechazado)
+          const _Aviso(
+            icono: Icons.no_photography_outlined,
+            texto: 'Tarea rechazada: no tiene foto de entrega.',
+          )
         else if (!guia.estado.esFinal)
           const _Aviso(
             icono: Icons.photo_camera_outlined,

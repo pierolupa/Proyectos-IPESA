@@ -1,11 +1,13 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..R.
+ * El orden de este arreglo es el orden real de las columnas A..S.
  * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
  * el transportista la cerró (entregado/finalizado), para el mapa del admin.
  * foto_entrega_url = dónde quedó la foto de la entrega en Vercel Blob
  * (privada; se ve con GET /guias/:numeroGuia/foto, ver fotos.js).
+ * motivo_rechazo = por qué el transportista rechazó la tarea (estado
+ * "rechazado", POST /guias/:numeroGuia/rechazo).
  */
 const COLUMNS = [
   'numero_guia',
@@ -26,6 +28,7 @@ const COLUMNS = [
   'cierre_lng',
   'fecha_cierre',
   'foto_entrega_url',
+  'motivo_rechazo',
 ];
 
 const SHEET_NAME = 'Guias';
@@ -38,9 +41,15 @@ const ESTADOS = Object.freeze({
   RECEPCION_SUCURSAL: 'recepcion_sucursal',
   ENTREGADO: 'entregado',
   FINALIZADO: 'finalizado',
+  // El transportista no pudo o no quiso hacer la tarea (con motivo).
+  RECHAZADO: 'rechazado',
 });
 
+// Entregada (cliente final o agencia). Rechazada NO cuenta como entregada.
 const ESTADOS_FINALES = new Set([ESTADOS.ENTREGADO, ESTADOS.FINALIZADO]);
+// Ya no está activa: entregada o rechazada. Su número de guía se puede
+// volver a registrar.
+const ESTADOS_CERRADOS = new Set([...ESTADOS_FINALES, ESTADOS.RECHAZADO]);
 
 const TIPOS_ENTREGA = Object.freeze({
   CLIENTE_FINAL: 'cliente_final',
@@ -85,6 +94,7 @@ module.exports = {
   HEADER_RANGE,
   ESTADOS,
   ESTADOS_FINALES,
+  ESTADOS_CERRADOS,
   TIPOS_ENTREGA,
   USUARIOS_COLUMNS,
   USUARIOS_SHEET_NAME,

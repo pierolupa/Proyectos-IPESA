@@ -283,6 +283,28 @@ class GuiasApi {
     return _decodeBody(res)['configurado'] == true;
   }
 
+  /// El transportista rechaza una tarea abierta con un motivo. El GPS va si
+  /// se pudo leer (no es obligatorio para rechazar).
+  Future<Guia> rechazarGuia(
+    String numeroGuia,
+    String motivo, {
+    double? lat,
+    double? lng,
+  }) async {
+    final res = await _client.post(
+      Uri.parse(
+        '$apiBaseUrl/guias/${Uri.encodeComponent(numeroGuia)}/rechazo',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'motivo': motivo,
+        if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
   Future<Guia> corregirNumeroGuia(
     String numeroAnterior,
     String numeroNuevo,

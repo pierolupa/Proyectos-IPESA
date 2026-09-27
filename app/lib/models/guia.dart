@@ -35,6 +35,9 @@ class Guia {
   /// por el backend.
   final String fotoEntregaUrl;
 
+  /// Por qué el transportista rechazó la tarea (vacío si no la rechazó).
+  final String motivoRechazo;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -54,6 +57,7 @@ class Guia {
     this.cierreLng,
     this.fechaCierre,
     this.fotoEntregaUrl = '',
+    this.motivoRechazo = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
@@ -87,6 +91,7 @@ class Guia {
       cierreLng: _coordenada(json['cierre_lng']),
       fechaCierre: DateTime.tryParse(json['fecha_cierre'] as String? ?? ''),
       fotoEntregaUrl: json['foto_entrega_url'] as String? ?? '',
+      motivoRechazo: json['motivo_rechazo'] as String? ?? '',
     );
   }
 
@@ -130,6 +135,7 @@ class Guia {
       cierreLng: cierreLng,
       fechaCierre: fechaCierre,
       fotoEntregaUrl: fotoEntregaUrl,
+      motivoRechazo: motivoRechazo,
     );
   }
 }

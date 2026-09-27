@@ -300,6 +300,8 @@ class _Fila extends StatelessWidget {
         '${contar(GrupoEstado.enRuta)} en ruta',
       if (contar(GrupoEstado.trasbordo) > 0)
         '${contar(GrupoEstado.trasbordo)} trasbordo',
+      if (contar(GrupoEstado.rechazado) > 0)
+        '${contar(GrupoEstado.rechazado)} rechazada${contar(GrupoEstado.rechazado) == 1 ? '' : 's'}',
     ].join(' · ');
 
     return Container(

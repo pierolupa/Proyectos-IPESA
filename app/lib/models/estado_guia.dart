@@ -7,6 +7,9 @@ enum EstadoGuia {
   recepcionSucursal,
   entregado,
   finalizado,
+
+  /// El transportista no pudo o no quiso hacer la tarea (con motivo).
+  rechazado,
 }
 
 extension EstadoGuiaX on EstadoGuia {
@@ -22,6 +25,8 @@ extension EstadoGuiaX on EstadoGuia {
         return 'Entregado';
       case EstadoGuia.finalizado:
         return 'Finalizado';
+      case EstadoGuia.rechazado:
+        return 'Rechazada';
     }
   }
 
@@ -35,6 +40,8 @@ extension EstadoGuiaX on EstadoGuia {
       case EstadoGuia.entregado:
       case EstadoGuia.finalizado:
         return const Color(0xFF1D6B41);
+      case EstadoGuia.rechazado:
+        return const Color(0xFFB42318);
     }
   }
 
@@ -48,6 +55,8 @@ extension EstadoGuiaX on EstadoGuia {
       case EstadoGuia.entregado:
       case EstadoGuia.finalizado:
         return const Color(0xFFE2F2E8);
+      case EstadoGuia.rechazado:
+        return const Color(0xFFFDECEA);
     }
   }
 
@@ -61,11 +70,17 @@ extension EstadoGuiaX on EstadoGuia {
       case EstadoGuia.entregado:
       case EstadoGuia.finalizado:
         return GrupoEstado.entregado;
+      case EstadoGuia.rechazado:
+        return GrupoEstado.rechazado;
     }
   }
 
+  /// Entregada (al cliente o en agencia). Una rechazada NO es final.
   bool get esFinal =>
       this == EstadoGuia.entregado || this == EstadoGuia.finalizado;
+
+  /// Ya no está activa: entregada o rechazada.
+  bool get esCerrada => esFinal || this == EstadoGuia.rechazado;
 
   /// Valor tal como lo espera/devuelve la API (backend/src/columns.js).
   String get valorApi {
@@ -80,13 +95,15 @@ extension EstadoGuiaX on EstadoGuia {
         return 'entregado';
       case EstadoGuia.finalizado:
         return 'finalizado';
+      case EstadoGuia.rechazado:
+        return 'rechazado';
     }
   }
 }
 
-/// Agrupación simplificada para el panel del administrador: los 5 estados
-/// internos se mantienen, pero el admin solo filtra por estos 3.
-enum GrupoEstado { enRuta, trasbordo, entregado }
+/// Agrupación simplificada para filtrar: los estados internos se mantienen,
+/// pero el admin y el comercial solo filtran por estos.
+enum GrupoEstado { enRuta, trasbordo, entregado, rechazado }
 
 extension GrupoEstadoX on GrupoEstado {
   String get etiqueta {
@@ -97,6 +114,8 @@ extension GrupoEstadoX on GrupoEstado {
         return 'Trasbordo';
       case GrupoEstado.entregado:
         return 'Entregado';
+      case GrupoEstado.rechazado:
+        return 'Rechazada';
     }
   }
 }

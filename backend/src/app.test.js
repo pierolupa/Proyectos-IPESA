@@ -471,3 +471,52 @@ describe('foto de la entrega', () => {
     else process.env.BLOB_READ_WRITE_TOKEN = antes;
   });
 });
+
+describe('POST /guias/:numeroGuia/rechazo', () => {
+  it('exige un motivo', async () => {
+    const res = await request(app).post('/guias/IPE-2026-000123/rechazo').send({ motivo: ' ' });
+    expect(res.status).toBe(400);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('rechaza la tarea y guarda el motivo', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/rechazo')
+      .send({ motivo: 'Cliente ausente', geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(ESTADOS.RECHAZADO);
+    expect(res.body.motivo_rechazo).toBe('Cliente ausente');
+    expect(res.body.geo_lat).toBe(-12.1);
+    expect(repo.actualizarGuia.mock.calls[0][1].estado).toBe(ESTADOS.RECHAZADO);
+  });
+
+  it('no se puede rechazar una guía ya entregada', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/rechazo')
+      .send({ motivo: 'Cliente ausente' });
+    expect(res.status).toBe(409);
+  });
+
+  it('el transportista no puede pasar a rechazado sin motivo por PATCH', async () => {
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.RECHAZADO, geo: { lat: -12, lng: -77 } });
+    expect(res.status).toBe(400);
+  });
+
+  it('un número de guía rechazado se puede volver a registrar', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.RECHAZADO }));
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'IPE-2026-000123',
+      tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen: 'Almacén Callao',
+      destino: 'Av. 1',
+      transportista: 'Juan Pérez',
+      destinatario: 'María',
+      geo: { lat: -12, lng: -77 },
+    });
+    expect(res.status).toBe(201);
+  });
+});

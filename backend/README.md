@@ -46,16 +46,16 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a R):
+y esta fila de encabezados (columnas A a S):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo
 ```
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
-`cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1) — las
-filas existentes quedan
+`cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
+`motivo_rechazo` en S1) — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
 `geo_lat`/`geo_lng` guardan la ubicación del último evento. `cierre_*` se
@@ -87,7 +87,10 @@ se guardan los perímetros que el administrador marca en el mapa. Las guías
 "entre sucursales" guardan en `destino` el nombre exacto de la sucursal.
 
 Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
-`recepcion_sucursal`, `entregado`, `finalizado`.
+`recepcion_sucursal`, `entregado`, `finalizado`, `rechazado`. `rechazado`
+lo pone el transportista con un motivo (`motivo_rechazo`, columna S) desde
+`POST /api/guias/:numeroGuia/rechazo`; no cuenta como entregada y el número
+de guía se puede volver a registrar.
 
 Valores válidos de `tipo_entrega`: `cliente_final`, `agencia`,
 `entre_sucursales`.
@@ -190,6 +193,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
+| `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |
 | `GET` | `/api/fotos/estado` | `{configurado}`: si el almacenamiento de fotos está conectado. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |

@@ -60,6 +60,7 @@ class SeccionUbicacion extends StatelessWidget {
     }
 
     final estaCerrada = guia.estado.esFinal;
+    final rechazada = guia.estado == EstadoGuia.rechazado;
     final tieneUltima = guia.ultimaLat != null && guia.ultimaLng != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,6 +68,8 @@ class SeccionUbicacion extends StatelessWidget {
         Text(
           estaCerrada
               ? 'Dónde se cerró la tarea'
+              : rechazada
+              ? 'Dónde se rechazó'
               : 'Última ubicación registrada',
           style: titulo,
         ),
@@ -75,6 +78,11 @@ class SeccionUbicacion extends StatelessWidget {
           estaCerrada
               ? 'Sin ubicación de cierre: la cerró un administrador a mano o '
                     'se cerró antes de que la app registrara el cierre.'
+              : rechazada
+              ? (tieneUltima
+                    ? 'Última ubicación del transportista · '
+                          '${_coordenadas(guia.ultimaLat!, guia.ultimaLng!)}'
+                    : 'Sin ubicación registrada.')
               : tieneUltima
               ? 'Aún no se cierra. Último registro del transportista · '
                     '${_coordenadas(guia.ultimaLat!, guia.ultimaLng!)}'

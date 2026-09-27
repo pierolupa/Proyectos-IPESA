@@ -537,6 +537,7 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
     GrupoEstado.enRuta => EstadoGuia.enRuta,
     GrupoEstado.trasbordo => EstadoGuia.enProcesoTrasbordo,
     GrupoEstado.entregado => EstadoGuia.entregado,
+    GrupoEstado.rechazado => EstadoGuia.rechazado,
   };
 }
 
@@ -616,6 +617,21 @@ class _TarjetaGuiaAdmin extends StatelessWidget {
                 '${guia.transportista} · $detalle',
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              if (guia.estado == EstadoGuia.rechazado &&
+                  guia.motivoRechazo.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Motivo: ${guia.motivoRechazo}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: EstadoGuia.rechazado.color,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

@@ -5,6 +5,7 @@ import '../../models/estado_guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
+import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/foto_entrega.dart';
 import '../../widgets/seccion_ubicacion.dart';
@@ -155,6 +156,10 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             '${guia.numeroEntrega.isNotEmpty ? '\nN° de entrega: ${guia.numeroEntrega}' : ''}',
             style: TextStyle(color: Colors.grey[700]),
           ),
+          if (guia.estado == EstadoGuia.rechazado) ...[
+            const SizedBox(height: 24),
+            AvisoRechazo(guia: guia),
+          ],
           const SizedBox(height: 24),
           FotoEntrega(
             key: ValueKey('${guia.numeroGuia}|${guia.fotoEntregaUrl}'),

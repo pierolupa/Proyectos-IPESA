@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { ESTADOS, ESTADOS_FINALES, TIPOS_ENTREGA, ROLES } = require('./columns');
+const { ESTADOS, ESTADOS_FINALES, ESTADOS_CERRADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
 const fotos = require('./fotos');
@@ -259,7 +259,7 @@ app.post('/guias', async (req, res, next) => {
     }
 
     const existente = await repo.buscarPorNumero(numeroGuia);
-    if (existente && !ESTADOS_FINALES.has(existente.estado)) {
+    if (existente && !ESTADOS_CERRADOS.has(existente.estado)) {
       return res.status(409).json({
         error: `La guía ${numeroGuia} ya está activa (estado: ${existente.estado}).`,
       });
@@ -301,6 +301,11 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 
     if (!ESTADOS_VALIDOS.has(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
+    }
+    if (!porAdmin && estado === ESTADOS.RECHAZADO) {
+      return res.status(400).json({
+        error: 'Para rechazar una tarea usa POST /guias/:numeroGuia/rechazo con el motivo.',
+      });
     }
     if (!porAdmin && (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number')) {
       return res.status(400).json({
@@ -361,6 +366,46 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
   }
 });
 
+// El transportista rechaza una tarea abierta; el motivo es obligatorio y
+// queda en la hoja (motivo_rechazo). El GPS se guarda si viene, pero no se
+// exige: el rechazo no debe bloquearse por no tener señal.
+app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const { motivo, geo } = req.body || {};
+    const motivoLimpio = String(motivo ?? '').trim();
+    if (motivoLimpio.length < 3) {
+      return res.status(400).json({ error: 'Indica el motivo del rechazo.' });
+    }
+    if (motivoLimpio.length > 300) {
+      return res.status(400).json({ error: 'El motivo es muy largo (máx. 300 caracteres).' });
+    }
+
+    const guia = await repo.buscarPorNumero(numeroGuia);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (ESTADOS_CERRADOS.has(guia.estado)) {
+      return res.status(409).json({
+        error: `La guía ${numeroGuia} ya está cerrada (${guia.estado}); no se puede rechazar.`,
+      });
+    }
+
+    guia.estado = ESTADOS.RECHAZADO;
+    guia.motivo_rechazo = motivoLimpio;
+    guia.fecha_actualizacion = new Date().toISOString();
+    if (geo && typeof geo.lat === 'number' && typeof geo.lng === 'number') {
+      guia.geo_lat = geo.lat;
+      guia.geo_lng = geo.lng;
+    }
+    await repo.actualizarGuia(guia._row, guia);
+
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ¿Se están guardando las fotos? El panel del admin avisa si no.
 app.get('/fotos/estado', (_req, res) => {
   res.json({ configurado: fotos.almacenamientoConfigurado() });
@@ -399,7 +444,7 @@ app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
     }
 
     const duplicado = await repo.buscarPorNumero(numeroNuevo);
-    if (duplicado && !ESTADOS_FINALES.has(duplicado.estado)) {
+    if (duplicado && !ESTADOS_CERRADOS.has(duplicado.estado)) {
       return res.status(409).json({ error: `Ya existe una guía activa con el número ${numeroNuevo}.` });
     }
 

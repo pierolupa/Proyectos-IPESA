@@ -6,6 +6,7 @@ import '../../models/estado_guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/foto_entrega.dart';
 import '../../widgets/seccion_ubicacion.dart';
@@ -56,12 +57,18 @@ class RastreoDetalleScreen extends StatelessWidget {
                   ('Salida', _fechaHora.format(guia.fechaCreacion.toLocal())),
                   (
                     'Entregada',
-                    entregada == null
-                        ? 'Pendiente'
-                        : _fechaHora.format(entregada.toLocal()),
+                    entregada != null
+                        ? _fechaHora.format(entregada.toLocal())
+                        : guia.estado == EstadoGuia.rechazado
+                        ? 'No (rechazada)'
+                        : 'Pendiente',
                   ),
                 ],
               ),
+              if (guia.estado == EstadoGuia.rechazado) ...[
+                const SizedBox(height: 16),
+                AvisoRechazo(guia: guia),
+              ],
               const SizedBox(height: 24),
               FotoEntrega(
                 key: ValueKey('${guia.numeroGuia}|${guia.fotoEntregaUrl}'),

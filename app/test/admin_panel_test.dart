@@ -84,7 +84,7 @@ Future<void> _abrirPanel(WidgetTester tester) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('El panel solo filtra por En ruta, Trasbordo y Entregado', (
+  testWidgets('El panel filtra por En ruta, Trasbordo, Entregado y Rechazada', (
     tester,
   ) async {
     await _abrirPanel(tester);
@@ -93,7 +93,8 @@ void main() {
     expect(find.text('En ruta · 1'), findsOneWidget);
     expect(find.text('Trasbordo · 2'), findsOneWidget);
     expect(find.text('Entregado · 2'), findsOneWidget);
-    expect(find.byType(ChoiceChip), findsNWidgets(4));
+    expect(find.text('Rechazada · 0'), findsOneWidget);
+    expect(find.byType(ChoiceChip), findsNWidgets(5));
 
     await tester.tap(find.text('Trasbordo · 2'));
     await tester.pumpAndSettle();
@@ -102,9 +103,7 @@ void main() {
     expect(find.text('T001-1'), findsNothing);
   });
 
-  testWidgets('El buscador filtra por cliente o transportista', (
-    tester,
-  ) async {
+  testWidgets('El buscador filtra por cliente o transportista', (tester) async {
     await _abrirPanel(tester);
 
     await tester.enterText(find.byType(TextField), 'ana');
