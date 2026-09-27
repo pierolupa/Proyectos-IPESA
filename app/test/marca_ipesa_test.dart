@@ -16,9 +16,7 @@ double _desplazamiento(WidgetTester tester) => tester
     .x;
 
 void main() {
-  testWidgets('La pantalla de carga muestra el logo de frente', (
-    tester,
-  ) async {
+  testWidgets('La pantalla de carga muestra el logo de frente', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SplashIpesa()));
     await tester.pump();
 
@@ -33,9 +31,18 @@ void main() {
 
     expect(find.bySemanticsLabel('IPESA'), findsOneWidget);
     expect(find.text('TRACKING DISTRIBUCIÓN'), findsOneWidget);
-    // Estática: nada que gire ni se anime.
+    // Logo y nombre fijos; solo la barra de progreso avanza.
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(tester.hasRunningAnimations, isFalse);
+    double avance() => tester
+        .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+        .value!;
+    final alInicio = avance();
+    await tester.pump(const Duration(seconds: 2));
+    expect(avance(), greaterThan(alInicio));
+    expect(avance(), lessThan(1));
+    // Termina de moverse sola (no traba a pumpAndSettle).
+    await tester.pumpAndSettle();
+    expect(avance(), lessThan(1));
   });
 
   testWidgets('El carrusel avanza solo y muestra todas las marcas', (
