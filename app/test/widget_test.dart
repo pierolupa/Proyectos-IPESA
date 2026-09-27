@@ -65,6 +65,8 @@ void main() {
   ) async {
     _pantallaCelular(tester);
     await tester.pumpWidget(const IpesaGuiasApp());
+    // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     expect(find.text('Ingresa a tu cuenta'), findsOneWidget);
@@ -97,6 +99,8 @@ void main() {
 
     _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
@@ -119,6 +123,8 @@ void main() {
 
     _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Nadie');
@@ -152,6 +158,8 @@ void main() {
 
     _pantallaCelular(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Crea tu cuenta'));
@@ -179,6 +187,8 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
         await tester.pumpWidget(const IpesaGuiasApp());
+        // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+        await tester.pump(const Duration(seconds: 3));
         await tester.pumpAndSettle();
 
         expect(_desplazamientoVertical(tester), 0);
@@ -225,6 +235,8 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(const IpesaGuiasApp());
+      // La pantalla de carga es estática: se avanza el reloj hasta que termina.
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
 
       final nombre = find.byType(TextField).first;

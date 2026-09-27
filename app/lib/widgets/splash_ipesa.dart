@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 /// la pantalla siguiente está lista.
 const colorSplash = Color(0xFF000000);
 
-/// Pantalla de carga: logo IPESA sobre negro, "CARGANDO DATOS" y un
-/// indicador. Aparece de frente, sin animación de entrada.
+/// Pantalla de carga estática: logo IPESA y el nombre de la app sobre
+/// negro. Nada se mueve; se queda fija mientras cargan los datos.
 class SplashIpesa extends StatelessWidget {
   const SplashIpesa({super.key});
 
@@ -25,23 +25,22 @@ class SplashIpesa extends StatelessWidget {
               width: anchoLogo,
               semanticLabel: 'IPESA',
             ),
-            const SizedBox(height: 36),
-            const Text(
-              'CARGANDO DATOS',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                letterSpacing: 2.4,
-                fontWeight: FontWeight.w600,
+            Container(
+              width: 44,
+              height: 3,
+              margin: const EdgeInsets.only(top: 26, bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E7A3A),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 40),
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Colors.white,
+            const Text(
+              'TRACKING DISTRIBUCIÓN',
+              style: TextStyle(
+                color: Color(0xFFC9CFCD),
+                fontSize: 14,
+                letterSpacing: 3.2,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],

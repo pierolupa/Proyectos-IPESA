@@ -32,7 +32,10 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('IPESA'), findsOneWidget);
-    expect(find.text('CARGANDO DATOS'), findsOneWidget);
+    expect(find.text('TRACKING DISTRIBUCIÓN'), findsOneWidget);
+    // Estática: nada que gire ni se anime.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(tester.hasRunningAnimations, isFalse);
   });
 
   testWidgets('El carrusel avanza solo y muestra todas las marcas', (
