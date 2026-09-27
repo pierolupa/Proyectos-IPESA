@@ -16,11 +16,20 @@ double _desplazamiento(WidgetTester tester) => tester
     .x;
 
 void main() {
-  testWidgets('La pantalla de inicio muestra el logo y "Cargando datos"', (
+  testWidgets('La pantalla de carga muestra el logo de frente', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SplashIpesa()));
-    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump();
+
+    // Sin animación de entrada: el logo está completo desde el primer cuadro.
+    expect(
+      find.ancestor(
+        of: find.bySemanticsLabel('IPESA'),
+        matching: find.byType(Opacity),
+      ),
+      findsNothing,
+    );
 
     expect(find.bySemanticsLabel('IPESA'), findsOneWidget);
     expect(find.text('CARGANDO DATOS'), findsOneWidget);
@@ -29,6 +38,8 @@ void main() {
   testWidgets('El carrusel avanza solo y muestra todas las marcas', (
     tester,
   ) async {
+    CarruselMarcas.animar = true;
+    addTearDown(() => CarruselMarcas.animar = false);
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(body: Center(child: CarruselMarcas())),

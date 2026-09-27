@@ -49,6 +49,11 @@ class CarruselMarcas extends StatefulWidget {
   final double pixelesPorSegundo;
   final Color bordeTarjeta;
 
+  /// Los tests lo apagan (test/flutter_test_config.dart): una animación
+  /// sin fin haría que `pumpAndSettle` no termine nunca.
+  @visibleForTesting
+  static bool animar = true;
+
   @override
   State<CarruselMarcas> createState() => _CarruselMarcasState();
 }
@@ -68,13 +73,15 @@ class _CarruselMarcasState extends State<CarruselMarcas>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final quieto = MediaQuery.of(context).disableAnimations;
-    if (quieto) {
+    if (_quieto(context)) {
       _avance.stop();
     } else if (!_avance.isAnimating) {
       _avance.repeat();
     }
   }
+
+  static bool _quieto(BuildContext context) =>
+      !CarruselMarcas.animar || MediaQuery.of(context).disableAnimations;
 
   @override
   void dispose() {
@@ -86,7 +93,10 @@ class _CarruselMarcasState extends State<CarruselMarcas>
     width: widget.ancho,
     height: widget.alto,
     margin: EdgeInsets.only(right: widget.separacion),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    padding: EdgeInsets.symmetric(
+      horizontal: widget.alto * 0.18,
+      vertical: widget.alto * 0.15,
+    ),
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
@@ -110,11 +120,8 @@ class _CarruselMarcasState extends State<CarruselMarcas>
     ];
 
     final Widget cinta;
-    if (MediaQuery.of(context).disableAnimations) {
-      cinta = ListView(
-        scrollDirection: Axis.horizontal,
-        children: tarjetas,
-      );
+    if (_quieto(context)) {
+      cinta = ListView(scrollDirection: Axis.horizontal, children: tarjetas);
     } else {
       cinta = LayoutBuilder(
         builder: (context, constraints) {
@@ -158,6 +165,40 @@ class _CarruselMarcasState extends State<CarruselMarcas>
           stops: [0, 0.08, 0.92, 1],
         ).createShader(rect),
         child: cinta,
+      ),
+    );
+  }
+}
+
+/// Franja fija de marcas al pie de las pantallas principales de la app
+/// (va en `Scaffold.bottomNavigationBar`, así el botón flotante queda
+/// encima de ella).
+class BandaMarcas extends StatelessWidget {
+  const BandaMarcas({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Ipesa.borde)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Semantics(
+              label: 'Marcas que representa IPESA',
+              child: const CarruselMarcas(
+                alto: 42,
+                ancho: 112,
+                separacion: 10,
+                pixelesPorSegundo: 28,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

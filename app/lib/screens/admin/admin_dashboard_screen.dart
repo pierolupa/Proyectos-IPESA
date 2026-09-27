@@ -9,6 +9,7 @@ import '../../services/notificador.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/actualizacion_automatica.dart';
+import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/mapa_ubicacion.dart';
 import 'admin_guia_edit_screen.dart';
@@ -145,21 +146,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               : null,
           bottomNavigationBar: ancha
               ? null
-              : NavigationBar(
-                  selectedIndex: _pestana,
-                  onDestinationSelected: (i) => setState(() => _pestana = i),
-                  destinations: const [
-                    NavigationDestination(
-                      icon: Icon(Icons.receipt_long_outlined),
-                      label: 'Guías',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.timeline),
-                      label: 'Recorrido',
-                    ),
-                    NavigationDestination(
-                      icon: Icon(Icons.storefront_outlined),
-                      label: 'Sucursales',
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const BandaMarcas(),
+                    NavigationBar(
+                      selectedIndex: _pestana,
+                      onDestinationSelected: (i) =>
+                          setState(() => _pestana = i),
+                      destinations: const [
+                        NavigationDestination(
+                          icon: Icon(Icons.receipt_long_outlined),
+                          label: 'Guías',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.timeline),
+                          label: 'Recorrido',
+                        ),
+                        NavigationDestination(
+                          icon: Icon(Icons.storefront_outlined),
+                          label: 'Sucursales',
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -172,7 +180,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onSeleccion: (i) => setState(() => _pestana = i),
                         onCerrarSesion: _cerrarSesion,
                       ),
-                      Expanded(child: contenido),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: contenido),
+                            const BandaMarcas(),
+                          ],
+                        ),
+                      ),
                     ],
                   )
                 : contenido,
@@ -260,12 +276,10 @@ class _Riel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
-          Text(
-            'IPESA',
-            style: Ipesa.titulo(
-              13,
-              color: Colors.white,
-            ).copyWith(letterSpacing: 2),
+          Image.asset(
+            'assets/brand/ipesa_blanco.png',
+            width: 56,
+            semanticLabel: 'IPESA',
           ),
           const SizedBox(height: 24),
           item(0, Icons.receipt_long_outlined, 'Guías'),

@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/carrusel_marcas.dart';
 import '../widgets/splash_ipesa.dart';
+import '../services/splash_html.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'comercial/rastreo_screen.dart';
 import 'transportista/task_list_screen.dart';
@@ -54,18 +55,48 @@ class _LoginScreenState extends State<LoginScreen> {
   /// recargar la página no obliga a volver a ingresar cada vez.
   Future<void> _verificarSesionGuardada() async {
     final appState = context.read<AppState>();
-    // El logo se ve al menos un momento, aunque la sesión cargue al toque.
+    // Mientras se ve la pantalla de carga: se restaura la sesión (con sus
+    // guías), se descargan los logos para que no aparezcan de a poco, y el
+    // logo IPESA se ve al menos 1,5 s desde que se abrió la página.
     await Future.wait([
       appState.restaurarSesion(),
-      Future<void>.delayed(const Duration(milliseconds: 1200)),
+      _precargarImagenes(),
+      Future<void>.delayed(
+        esperaMinimaSplash(const Duration(milliseconds: 1500)),
+      ),
     ]);
     if (!mounted) return;
     final rol = appState.rolActual;
     if (rol != null) {
-      final destino = _pantallaDeInicio(rol);
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => destino));
+      // Sin transición: la pantalla de carga la tapa y se desvanece encima.
+      Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          pageBuilder: (_, _, _) => _pantallaDeInicio(rol),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
+      );
     }
-    if (mounted) setState(() => _verificandoSesion = false);
+    setState(() => _verificandoSesion = false);
+    // Recién cuando la pantalla siguiente ya está dibujada se quita la de
+    // carga de la web: así no hay parpadeo entre una y otra.
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+    quitarSplashHtml();
+  }
+
+  Future<void> _precargarImagenes() async {
+    final rutas = [
+      'assets/brand/ipesa_blanco.png',
+      for (final (_, archivo) in marcasIpesa) 'assets/marcas/$archivo.png',
+    ];
+    try {
+      await Future.wait([
+        for (final ruta in rutas) precacheImage(AssetImage(ruta), context),
+      ]).timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Si un logo no carga (o tarda), igual se sigue: no bloquea la entrada.
+    }
   }
 
   Future<void> _enviar() async {
@@ -352,10 +383,7 @@ class _PanelMarca extends StatelessWidget {
               SizedBox(height: 20),
               Text(
                 'IPESA S.A.C. · Tracking Distribución',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Ipesa.suaveSobrePetroleo,
-                ),
+                style: TextStyle(fontSize: 14, color: Ipesa.suaveSobrePetroleo),
               ),
             ],
           ),

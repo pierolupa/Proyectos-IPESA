@@ -66,6 +66,11 @@ Future<void> _abrirPanel(WidgetTester tester) async {
       200,
     );
   });
+  // Pantalla alta, como un celular: con la franja de marcas abajo, en la
+  // de 800×600 por defecto no entran todas las guías.
+  tester.view.physicalSize = const Size(800, 1100);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final appState = AppState(api: GuiasApi(client: client));
   await appState.cargarGuias();
   await tester.pumpWidget(

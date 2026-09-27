@@ -32,15 +32,6 @@ MockClient _clienteConSesion({
   });
 }
 
-/// El carrusel de marcas del login se mueve sin fin; con "reducir
-/// animaciones" (como lo pediría el sistema) queda quieto y pumpAndSettle
-/// puede terminar.
-void _sinAnimaciones(WidgetTester tester) {
-  tester.platformDispatcher.accessibilityFeaturesTestValue =
-      const FakeAccessibilityFeatures(disableAnimations: true);
-  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
-}
-
 void main() {
   // AppState ahora guarda la sesión en SharedPreferences (ver
   // restaurarSesion/_establecerSesion) — sin este mock, getInstance()
@@ -54,7 +45,6 @@ void main() {
   testWidgets('Muestra el login como pantalla de inicio', (
     WidgetTester tester,
   ) async {
-    _sinAnimaciones(tester);
     await tester.pumpWidget(const IpesaGuiasApp());
     await tester.pumpAndSettle();
 
@@ -86,7 +76,6 @@ void main() {
     );
     final appState = AppState(api: GuiasApi(client: client));
 
-    _sinAnimaciones(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
@@ -107,7 +96,6 @@ void main() {
     );
     final appState = AppState(api: GuiasApi(client: client));
 
-    _sinAnimaciones(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
@@ -137,7 +125,6 @@ void main() {
     });
     final appState = AppState(api: GuiasApi(client: client));
 
-    _sinAnimaciones(tester);
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 

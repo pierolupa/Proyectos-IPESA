@@ -8,6 +8,7 @@ import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/actualizacion_automatica.dart';
+import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
 import 'capture_flow_screen.dart';
 import 'guia_detail_screen.dart';
@@ -49,6 +50,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final guias = _verEntregadas ? entregadasHoy : pendientes;
 
     return Scaffold(
+      bottomNavigationBar: const BandaMarcas(),
       floatingActionButton: FloatingActionButton.extended(
         icon: const Icon(Icons.photo_camera_outlined),
         label: const Text('Nueva guía'),
