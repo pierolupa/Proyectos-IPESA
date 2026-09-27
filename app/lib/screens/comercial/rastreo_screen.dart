@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -157,7 +159,13 @@ class _RastreoScreenState extends State<RastreoScreen> {
             } else if (alto > _altoSinTeclado) {
               _altoSinTeclado = alto;
             }
-            final altoEscena = ancho < 600 ? 190.0 : 240.0;
+            // En celulares bajitos el paisaje se achica para que todo
+            // entre en una sola vista.
+            final altoEscena = ancho >= 600
+                ? 240.0
+                : _altoSinTeclado < 720
+                ? 164.0
+                : 190.0;
             return SingleChildScrollView(
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: _altoSinTeclado),
@@ -172,7 +180,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
                     Padding(
                       // Solo se reserva el suelo del paisaje: la tarjeta puede
                       // tapar un poco de cielo.
-                      padding: EdgeInsets.only(bottom: altoEscena - 56),
+                      padding: EdgeInsets.only(
+                        bottom: math.max(altoEscena - 56, 112),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -186,9 +196,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                 child: Padding(
                                   padding: EdgeInsets.fromLTRB(
                                     20,
-                                    12,
-                                    12,
-                                    ancho < 600 ? 18 : 28,
+                                    8,
+                                    8,
+                                    ancho < 600 ? 14 : 28,
                                   ),
                                   child: _Cabecera(
                                     saludo: saludo,
@@ -261,14 +271,14 @@ class _Cabecera extends StatelessWidget {
         Row(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Image.asset(
                 'assets/brand/ipesa_blanco.png',
-                height: 20,
+                height: 18,
                 semanticLabel: 'IPESA',
               ),
             ),
@@ -299,12 +309,11 @@ class _Cabecera extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 18),
-        Text(saludo, style: Ipesa.titulo(30)),
-        const SizedBox(height: 2),
+        const SizedBox(height: 12),
+        Text(saludo, style: Ipesa.titulo(28)),
         const Text(
           'Sigue el recorrido de tus guías en tiempo real.',
-          style: TextStyle(fontSize: 16, color: Ipesa.textoSuave),
+          style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
         ),
       ],
     );
@@ -352,9 +361,10 @@ class _TarjetaBusqueda extends StatelessWidget {
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           labelText: etiqueta,
-          prefixIcon: Icon(icono, size: 20),
-          prefixIconConstraints: const BoxConstraints(minWidth: 42),
+          prefixIcon: Icon(icono, size: 18),
+          prefixIconConstraints: const BoxConstraints(minWidth: 38),
           isDense: true,
+          contentPadding: const EdgeInsets.fromLTRB(0, 14, 10, 14),
         ),
       );
 
@@ -372,9 +382,9 @@ class _TarjetaBusqueda extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const separacion = SizedBox(height: 10);
+    const separacion = SizedBox(width: 10, height: 10);
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(Ipesa.radio),
@@ -389,39 +399,42 @@ class _TarjetaBusqueda extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          SizedBox(
+            height: 36,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Rastrea tus guías', style: Ipesa.titulo(19)),
+                ),
+                if (hayFiltros)
+                  TextButton(
+                    onPressed: onLimpiar,
+                    child: const Text('Limpiar'),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Los cuatro campos en dos filas, para que todo entre en la
+          // pantalla del celular sin deslizar.
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Ipesa.menta,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.local_shipping_outlined,
-                  color: Ipesa.petroleo,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                child: Text('Rastrea tus guías', style: Ipesa.titulo(19)),
+                child: _campo(guia, 'N° de guía', Icons.receipt_long_outlined),
               ),
-              if (hayFiltros)
-                TextButton(onPressed: onLimpiar, child: const Text('Limpiar')),
+              separacion,
+              Expanded(
+                child: _campo(cliente, 'Cliente', Icons.business_outlined),
+              ),
             ],
           ),
-          const SizedBox(height: 14),
-          _campo(guia, 'N° de guía', Icons.receipt_long_outlined),
-          separacion,
-          _campo(cliente, 'Cliente', Icons.business_outlined),
           separacion,
           Row(
             children: [
               Expanded(
                 child: _campo(pedido, 'N° pedido', Icons.shopping_bag_outlined),
               ),
-              const SizedBox(width: 10),
+              separacion,
               Expanded(
                 child: _campo(
                   entrega,
@@ -431,7 +444,7 @@ class _TarjetaBusqueda extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -465,7 +478,7 @@ class _TarjetaBusqueda extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           // En una sola fila (se desliza de lado en celulares angostos).
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -486,16 +499,20 @@ class _TarjetaBusqueda extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: onBuscar,
-            style: FilledButton.styleFrom(backgroundColor: Ipesa.petroleo),
+            style: FilledButton.styleFrom(
+              backgroundColor: Ipesa.petroleo,
+              minimumSize: const Size(0, 48),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+            ),
             icon: const Icon(Icons.search),
             label: const Text('Buscar'),
           ),
-          const SizedBox(height: 4),
           TextButton(
             onPressed: onVerTodas,
+            style: TextButton.styleFrom(minimumSize: const Size(0, 42)),
             child: const Text('Ver todas las guías'),
           ),
         ],

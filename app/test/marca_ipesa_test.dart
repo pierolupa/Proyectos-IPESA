@@ -31,10 +31,11 @@ void main() {
 
     expect(find.bySemanticsLabel('IPESA'), findsOneWidget);
     expect(find.text('TRACKING DISTRIBUCIÓN'), findsOneWidget);
-    // Logo y nombre fijos; solo la barra de progreso avanza.
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    // Logo y nombre fijos; solo el anillo de progreso avanza.
     double avance() => tester
-        .widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator))
+        .widget<CircularProgressIndicator>(
+          find.byType(CircularProgressIndicator),
+        )
         .value!;
     final alInicio = avance();
     await tester.pump(const Duration(seconds: 2));

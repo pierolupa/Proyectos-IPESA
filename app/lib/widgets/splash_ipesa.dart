@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 const colorSplash = Color(0xFF000000);
 
 /// Pantalla de carga: logo IPESA y el nombre de la app fijos sobre negro,
-/// y debajo una barra de progreso que se va llenando mientras cargan los
+/// y debajo un anillo de progreso que se va llenando mientras cargan los
 /// datos (rápido al principio y cada vez más lento, sin llegar al final).
 class SplashIpesa extends StatelessWidget {
   const SplashIpesa({super.key});
@@ -36,17 +36,17 @@ class SplashIpesa extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: (ancho * 0.46).clamp(160.0, 220.0),
+            const SizedBox(height: 30),
+            SizedBox.square(
+              dimension: 42,
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 0.92),
                 duration: const Duration(seconds: 8),
                 curve: const Cubic(.12, .7, .25, 1),
-                builder: (context, avance, _) => LinearProgressIndicator(
+                builder: (context, avance, _) => CircularProgressIndicator(
                   value: avance,
-                  minHeight: 4,
-                  borderRadius: BorderRadius.circular(2),
+                  strokeWidth: 3.5,
+                  strokeCap: StrokeCap.round,
                   color: const Color(0xFF0E7A3A),
                   backgroundColor: const Color(0x24FFFFFF),
                   semanticsLabel: 'Cargando',

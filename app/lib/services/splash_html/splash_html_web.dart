@@ -10,7 +10,7 @@ Duration esperaMinimaSplash(Duration minimo) {
   return Duration(milliseconds: resta > 0 ? resta.round() : 0);
 }
 
-/// Completa la barra de progreso y luego desvanece y quita la pantalla de
+/// Completa el anillo de progreso y luego desvanece y quita la pantalla de
 /// carga de web/index.html. Se llama cuando la pantalla siguiente ya está
 /// pintada debajo, así no hay ningún parpadeo entre una y otra.
 void quitarSplashHtml() {

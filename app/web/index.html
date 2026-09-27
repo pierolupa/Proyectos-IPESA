@@ -36,10 +36,10 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* Pantalla de carga: logo y nombre FIJOS, y debajo una barra de
+    /* Pantalla de carga: logo y nombre FIJOS, y debajo un anillo de
        progreso que se va llenando mientras cargan los datos. Se pinta al
        instante (logo incrustado) y se queda hasta que la app ya dibujó la
-       pantalla siguiente debajo; recién ahí la app completa la barra y la
+       pantalla siguiente debajo; recién ahí la app completa el anillo y la
        desvanece (quitarSplashHtml en lib/services/splash_html). Así no
        parpadea. */
     html, body { margin: 0; height: 100%; background: #000; }
@@ -56,31 +56,27 @@
       margin: 26px 0 0; font-size: 14px; font-weight: 700;
       letter-spacing: 3.2px; color: #C9CFCD;
     }
-    #inicio .barra {
-      position: relative; overflow: hidden;
-      width: clamp(160px, 46vw, 220px); height: 4px; margin-top: 28px;
-      border-radius: 2px; background: rgba(255, 255, 255, .14);
+    /* Anillo de progreso: el arco verde se va llenando (rápido al principio
+       y cada vez más lento, sin cerrarse hasta que la app está lista)
+       mientras todo el anillo gira despacio. */
+    #inicio .anillo {
+      width: 46px; height: 46px; margin-top: 30px;
+      animation: girar 1.6s linear infinite;
     }
-    /* El avance: rápido al principio y cada vez más lento, sin llegar al
-       final hasta que la app está lista. */
-    #inicio .avance {
-      position: absolute; inset: 0 auto 0 0; width: 0; overflow: hidden;
-      border-radius: 2px; background: #0E7A3A;
-      animation: avanzar 8s cubic-bezier(.12, .7, .25, 1) forwards;
+    #inicio .anillo circle { fill: none; stroke-width: 3.5; }
+    #inicio .anillo .pista { stroke: rgba(255, 255, 255, .14); }
+    #inicio .anillo .arco {
+      stroke: #0E7A3A; stroke-linecap: round;
+      stroke-dasharray: 119.38; stroke-dashoffset: 119.38;
+      transform: rotate(-90deg); transform-origin: 50% 50%;
+      animation: llenar 8s cubic-bezier(.12, .7, .25, 1) forwards;
     }
-    /* Un brillo que recorre la barra para que se note que sigue viva. */
-    #inicio .avance::after {
-      content: ""; position: absolute; inset: 0;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent);
-      transform: translateX(-100%);
-      animation: brillo 1.3s ease-in-out infinite;
-    }
-    #inicio.listo .avance { width: 100%; animation: none; transition: width .25s ease-out; }
+    #inicio.listo .arco { stroke-dashoffset: 0; animation: none; transition: stroke-dashoffset .25s ease-out; }
     #inicio.fuera { opacity: 0; pointer-events: none; }
-    @keyframes avanzar { 0% { width: 0; } 20% { width: 55%; } 100% { width: 92%; } }
-    @keyframes brillo { to { transform: translateX(100%); } }
+    @keyframes llenar { 0% { stroke-dashoffset: 119.38; } 20% { stroke-dashoffset: 53.7; } 100% { stroke-dashoffset: 9.55; } }
+    @keyframes girar { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) {
-      #inicio .avance::after { animation: none; }
+      #inicio .anillo { animation: none; }
     }
   </style>
 </head>
@@ -88,7 +84,10 @@
   <div id="inicio" role="status" aria-live="polite">
     <img alt="IPESA" width="331" height="98" src="data:image/png;base64,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">
     <p>TRACKING DISTRIBUCIÓN</p>
-    <div class="barra" role="progressbar" aria-label="Cargando"><div class="avance"></div></div>
+    <svg class="anillo" viewBox="0 0 46 46" role="progressbar" aria-label="Cargando">
+      <circle class="pista" cx="23" cy="23" r="19"></circle>
+      <circle class="arco" cx="23" cy="23" r="19"></circle>
+    </svg>
   </div>
   <script>
     // Respaldo: si la app no llegara a arrancar, no dejar la pantalla de

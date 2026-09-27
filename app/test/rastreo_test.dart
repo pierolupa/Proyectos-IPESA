@@ -252,6 +252,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // La fuente de los tests es más grande que la real (en el navegador entra
+  // hasta en 360×640); por eso se prueba con celulares medianos.
+  for (final tamano in const [Size(390, 780), Size(412, 820)]) {
+    testWidgets('En un celular de $tamano todo entra sin deslizar', (
+      tester,
+    ) async {
+      tester.view.physicalSize = tamano;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _abrirRastreo(tester);
+
+      final vertical = tester
+          .stateList<ScrollableState>(find.byType(Scrollable))
+          .where((s) => s.position.axis == Axis.vertical);
+      for (final s in vertical) {
+        expect(s.position.maxScrollExtent, 0);
+      }
+      expect(find.byType(EscenaRuta), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('La vista del comercial entra en un celular sin desbordes', (
     tester,
   ) async {
