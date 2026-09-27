@@ -40,6 +40,16 @@ void _pantallaCelular(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+/// Cuánto se puede desplazar hacia abajo el login (0 = todo entra).
+double _desplazamientoVertical(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+      ),
+    )
+    .position
+    .maxScrollExtent;
+
 void main() {
   // AppState ahora guarda la sesión en SharedPreferences (ver
   // restaurarSesion/_establecerSesion) — sin este mock, getInstance()
@@ -171,7 +181,7 @@ void main() {
         await tester.pumpWidget(const IpesaGuiasApp());
         await tester.pumpAndSettle();
 
-        expect(find.byType(SingleChildScrollView), findsNothing);
+        expect(_desplazamientoVertical(tester), 0);
         for (final texto in [
           'Ingresa a tu cuenta',
           'Ingresar',
@@ -194,5 +204,44 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+  }
+
+  // Antes, al abrirse el teclado el login cambiaba de estructura, el campo
+  // perdía el foco y el teclado se cerraba solo.
+  for (final (caso, abrirTeclado) in <(String, void Function(WidgetTester))>[
+    (
+      'teclado como inset (app)',
+      (t) => t.view.viewInsets = const FakeViewPadding(bottom: 320),
+    ),
+    (
+      'ventana que se achica (navegador)',
+      (t) => t.view.physicalSize = const Size(390, 440),
+    ),
+  ]) {
+    testWidgets('Al abrir el teclado no se pierde el foco: $caso', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const IpesaGuiasApp());
+      await tester.pumpAndSettle();
+
+      final nombre = find.byType(TextField).first;
+      await tester.tap(nombre);
+      await tester.pump();
+      abrirTeclado(tester);
+      await tester.pumpAndSettle();
+
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: nombre, matching: find.byType(EditableText)),
+      );
+      expect(editable.focusNode.hasFocus, isTrue);
+      await tester.enterText(nombre, 'Carlos Ruiz');
+      await tester.pump();
+      expect(find.text('Carlos Ruiz'), findsOneWidget);
+      expect(editable.focusNode.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+    });
   }
 }

@@ -152,6 +152,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Celular: portada negra arriba, cinta verde de marcas cruzada y el
   /// formulario debajo, en blanco.
+  // Alto de la pantalla SIN el teclado. Al abrirse el teclado el alto
+  // disponible baja (en el navegador del celular hasta la ventana se
+  // achica); si el diseño se armara con ese alto cambiaría de estructura,
+  // el campo que se está escribiendo se volvería a crear y perdería el foco:
+  // el teclado se cerraba solo. Se recalcula si cambia el ancho (girar).
+  double _altoSinTeclado = 0;
+  double _anchoMedido = 0;
+
   Widget _movil(BuildContext context) {
     final relleno = MediaQuery.paddingOf(context);
     final formulario = Center(
@@ -165,30 +173,37 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Pantalla muy baja (celular acostado): ahí sí se desplaza, con la
-        // portada a un alto fijo.
-        if (constraints.maxHeight < 620) {
-          return SingleChildScrollView(
+        final alto =
+            constraints.maxHeight + MediaQuery.viewInsetsOf(context).bottom;
+        if (constraints.maxWidth != _anchoMedido) {
+          _anchoMedido = constraints.maxWidth;
+          _altoSinTeclado = alto;
+        } else if (alto > _altoSinTeclado) {
+          _altoSinTeclado = alto;
+        }
+        // Pantalla muy baja (celular acostado): la portada tiene alto fijo
+        // y se desplaza. Si no, todo entra sin bajar: el formulario mide lo
+        // que necesita y la portada toma el resto. Con el teclado abierto,
+        // el contenido se desplaza para dejar a la vista el campo activo.
+        final bajo = _altoSinTeclado < 620;
+        return SingleChildScrollView(
+          child: SizedBox(
+            height: bajo ? null : _altoSinTeclado,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: bajo ? MainAxisSize.min : MainAxisSize.max,
               children: [
-                SizedBox(
-                  height: 300 + relleno.top,
-                  child: _portadaConCinta(relleno.top),
-                ),
+                if (bajo)
+                  SizedBox(
+                    height: 300 + relleno.top,
+                    child: _portadaConCinta(relleno.top),
+                  )
+                else
+                  Expanded(child: _portadaConCinta(relleno.top)),
                 formulario,
               ],
             ),
-          );
-        }
-        // Todo entra sin bajar: el formulario mide lo que necesita y la
-        // portada se ajusta al espacio que queda.
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: _portadaConCinta(relleno.top)),
-            formulario,
-          ],
+          ),
         );
       },
     );
