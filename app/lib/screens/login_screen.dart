@@ -144,9 +144,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: LayoutBuilder(
-        builder: (context, constraints) => constraints.maxWidth < 900
-            ? _movil(context)
-            : _escritorio(context),
+        builder: (context, constraints) =>
+            constraints.maxWidth < 900 ? _movil(context) : _escritorio(context),
       ),
     );
   }
@@ -155,42 +154,62 @@ class _LoginScreenState extends State<LoginScreen> {
   /// formulario debajo, en blanco.
   Widget _movil(BuildContext context) {
     final relleno = MediaQuery.paddingOf(context);
-    final altoPortada = 392 + relleno.top;
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: altoPortada + 60,
-            child: Stack(
+    final formulario = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(28, 46, 28, 18 + relleno.bottom),
+          child: _formulario(context),
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Pantalla muy baja (celular acostado): ahí sí se desplaza, con la
+        // portada a un alto fijo.
+        if (constraints.maxHeight < 620) {
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  height: altoPortada,
-                  child: _Portada(margenSuperior: relleno.top + 52),
+                SizedBox(
+                  height: 300 + relleno.top,
+                  child: _portadaConCinta(relleno.top),
                 ),
-                Positioned(
-                  left: -40,
-                  right: -40,
-                  top: altoPortada - 34,
-                  child: const _CintaMarcas(),
-                ),
+                formulario,
               ],
             ),
-          ),
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(28, 14, 28, 28 + relleno.bottom),
-                child: _formulario(context),
-              ),
-            ),
-          ),
-        ],
-      ),
+          );
+        }
+        // Todo entra sin bajar: el formulario mide lo que necesita y la
+        // portada se ajusta al espacio que queda.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _portadaConCinta(relleno.top)),
+            formulario,
+          ],
+        );
+      },
+    );
+  }
+
+  /// La portada negra con la cinta verde montada sobre su borde inferior
+  /// (la mitad de la cinta cae sobre el blanco del formulario).
+  Widget _portadaConCinta(double arriba) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: _Portada(margenSuperior: arriba + 36, reservaInferior: 44),
+        ),
+        const Positioned(
+          left: -40,
+          right: -40,
+          bottom: -24,
+          child: _CintaMarcas(),
+        ),
+      ],
     );
   }
 
@@ -422,13 +441,49 @@ class _EtiquetaLinea extends StatelessWidget {
 /// Portada negra: "IPESA" gigante en contorno de fondo, el logo, y una
 /// línea que dice para qué es la app. [escala] la agranda en computadora.
 class _Portada extends StatelessWidget {
-  const _Portada({required this.margenSuperior, this.escala = 1});
+  const _Portada({
+    required this.margenSuperior,
+    this.escala = 1,
+    this.reservaInferior = 0,
+  });
 
   final double margenSuperior;
   final double escala;
 
+  /// Alto libre al pie (donde pasa la cinta verde): el contenido no lo usa.
+  final double reservaInferior;
+
+  // Alto (aprox.) de cada parte, para acomodar la portada al espacio.
+  static const _altoEtiqueta = 18.0;
+  static const _proporcionLogo = 98 / 331;
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          _dibujar(constraints.maxHeight - margenSuperior - reservaInferior),
+    );
+  }
+
+  Widget _dibujar(double disponible) {
+    final altoFrase = 2 * 17 * 1.45 * (escala > 1 ? 1.15 : 1);
+    var anchoLogo = 220 * escala;
+    var conFrase = true;
+    double resto() =>
+        _altoEtiqueta +
+        anchoLogo * _proporcionLogo +
+        (conFrase ? 18 + altoFrase : 0);
+    // Primero se achica el espacio entre la etiqueta y el logo; si igual
+    // no entra, se quita la frase y, en último caso, se achica el logo.
+    if (disponible - resto() < 12) conFrase = false;
+    if (disponible - resto() < 12) {
+      anchoLogo = ((disponible - _altoEtiqueta - 12) / _proporcionLogo).clamp(
+        120.0,
+        anchoLogo,
+      );
+    }
+    final espacio = (disponible - resto()).clamp(12.0, 62 * escala);
+
     return ColoredBox(
       color: Colors.black,
       child: ClipRect(
@@ -455,65 +510,73 @@ class _Portada extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                28 * escala,
-                margenSuperior,
-                28,
-                0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: _verdeIpesa,
-                          shape: BoxShape.circle,
+            // Anclado solo arriba: si en una pantalla muy baja no entrara,
+            // se recorta abajo (ClipRect) en vez de desbordarse.
+            Positioned(
+              left: 0,
+              top: 0,
+              right: 0,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  28 * escala,
+                  margenSuperior,
+                  28,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: _verdeIpesa,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Flexible(
+                        const SizedBox(width: 10),
+                        const Flexible(
+                          child: Text(
+                            'TRACKING DISTRIBUCIÓN',
+                            maxLines: 1,
+                            overflow: TextOverflow.fade,
+                            softWrap: false,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: espacio),
+                    Image.asset(
+                      'assets/brand/ipesa_blanco.png',
+                      width: anchoLogo,
+                      semanticLabel: 'IPESA',
+                    ),
+                    if (conFrase) const SizedBox(height: 18),
+                    if (conFrase)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 300 * escala),
                         child: Text(
-                          'TRACKING DISTRIBUCIÓN',
-                          maxLines: 1,
-                          overflow: TextOverflow.fade,
-                          softWrap: false,
+                          'Guías, entregas y rastreo para el equipo de '
+                          'distribución de IPESA.',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 3,
+                            fontSize: 17 * (escala > 1 ? 1.15 : 1),
+                            height: 1.45,
+                            color: const Color(0xFFC9CFCD),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 62 * escala),
-                  Image.asset(
-                    'assets/brand/ipesa_blanco.png',
-                    width: 220 * escala,
-                    semanticLabel: 'IPESA',
-                  ),
-                  const SizedBox(height: 18),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: 300 * escala),
-                    child: Text(
-                      'Guías, entregas y rastreo para el equipo de '
-                      'distribución de IPESA.',
-                      style: TextStyle(
-                        fontSize: 17 * (escala > 1 ? 1.15 : 1),
-                        height: 1.45,
-                        color: const Color(0xFFC9CFCD),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],

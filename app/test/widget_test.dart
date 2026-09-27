@@ -102,7 +102,8 @@ void main() {
     WidgetTester tester,
   ) async {
     final client = MockClient(
-      (request) async => _json({'error': 'Nombre o PIN incorrecto.'}, status: 401),
+      (request) async =>
+          _json({'error': 'Nombre o PIN incorrecto.'}, status: 401),
     );
     final appState = AppState(api: GuiasApi(client: client));
 
@@ -132,7 +133,10 @@ void main() {
       if (request.method == 'GET' && request.url.path.endsWith('/guias')) {
         return _json([]);
       }
-      return http.Response('No mockeado: ${request.method} ${request.url}', 404);
+      return http.Response(
+        'No mockeado: ${request.method} ${request.url}',
+        404,
+      );
     });
     final appState = AppState(api: GuiasApi(client: client));
 
@@ -151,4 +155,44 @@ void main() {
 
     expect(find.textContaining('Pendientes'), findsOneWidget);
   });
+
+  for (final (ancho, alto) in [
+    (390.0, 700.0),
+    (360.0, 640.0),
+    (412.0, 780.0),
+  ]) {
+    testWidgets(
+      'En un celular de ${ancho.toInt()}×${alto.toInt()} el login entra '
+      'sin bajar',
+      (tester) async {
+        tester.view.physicalSize = Size(ancho, alto);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(const IpesaGuiasApp());
+        await tester.pumpAndSettle();
+
+        expect(find.byType(SingleChildScrollView), findsNothing);
+        for (final texto in [
+          'Ingresa a tu cuenta',
+          'Ingresar',
+          'Crea tu cuenta',
+        ]) {
+          expect(
+            tester.getRect(find.text(texto)).bottom,
+            lessThanOrEqualTo(alto),
+          );
+        }
+        expect(tester.takeException(), isNull);
+
+        // En modo "crear cuenta" (título más largo y ayuda del PIN) tampoco.
+        await tester.tap(find.text('Crea tu cuenta'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(find.text('Ingresa')).bottom,
+          lessThanOrEqualTo(alto),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
