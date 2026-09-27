@@ -10,10 +10,13 @@ import '../../widgets/estado_badge.dart';
 /// exponen datos completos del destinatario ni del transportista — por eso
 /// llama directo a la API en vez de usar la lista completa de AppState.
 class PublicTrackingScreen extends StatefulWidget {
-  const PublicTrackingScreen({super.key, this.api});
+  const PublicTrackingScreen({super.key, this.api, this.ultimosCuatro});
 
   /// Inyectable para tests; en la app real usa el backend desplegado.
   final GuiasApi? api;
+
+  /// Si viene del login con los 4 dígitos ya escritos, busca de inmediato.
+  final String? ultimosCuatro;
 
   @override
   State<PublicTrackingScreen> createState() => _PublicTrackingScreenState();
@@ -21,10 +24,18 @@ class PublicTrackingScreen extends StatefulWidget {
 
 class _PublicTrackingScreenState extends State<PublicTrackingScreen> {
   late final GuiasApi _api = widget.api ?? GuiasApi();
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.ultimosCuatro);
   List<ResultadoRastreo>? _resultados;
   bool _buscando = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.ultimosCuatro?.length == 4) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _buscar());
+    }
+  }
 
   @override
   void dispose() {
@@ -111,9 +122,7 @@ class _PublicTrackingScreenState extends State<PublicTrackingScreen> {
             else if (_resultados != null)
               Expanded(
                 child: _resultados!.isEmpty
-                    ? const Center(
-                        child: Text('No se encontró ninguna guía.'),
-                      )
+                    ? const Center(child: Text('No se encontró ninguna guía.'))
                     : ListView.separated(
                         itemCount: _resultados!.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),

@@ -49,13 +49,10 @@ void main() {
     await tester.pumpWidget(const IpesaGuiasApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Iniciar sesión'), findsOneWidget);
+    expect(find.text('Bienvenido'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
-    expect(find.text('¿No tienes cuenta? Regístrate'), findsOneWidget);
-    expect(
-      find.text('¿Eres cliente? Rastrea tu envío aquí'),
-      findsOneWidget,
-    );
+    expect(find.text('Crear una cuenta'), findsOneWidget);
+    expect(find.text('¿Eres cliente? Rastrea tu envío'), findsOneWidget);
   });
 
   testWidgets('El transportista inicia sesión y ve sus tareas', (
@@ -84,11 +81,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
-    await tester.enterText(find.byType(TextField).last, '1234');
+    await tester.enterText(find.byType(TextField).at(1), '1234');
     await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Mis tareas'), findsOneWidget);
+    expect(find.textContaining('Pendientes · 1'), findsOneWidget);
     expect(find.text('IPE-2026-000123'), findsOneWidget);
   });
 
@@ -104,7 +101,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Nadie');
-    await tester.enterText(find.byType(TextField).last, '0000');
+    await tester.enterText(find.byType(TextField).at(1), '0000');
     await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
     await tester.pumpAndSettle();
 
@@ -132,16 +129,16 @@ void main() {
     await tester.pumpWidget(IpesaGuiasApp(appState: appState));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('¿No tienes cuenta? Regístrate'));
+    await tester.tap(find.text('Crear una cuenta'));
     await tester.pumpAndSettle();
     expect(find.text('Crear cuenta'), findsWidgets);
 
     await tester.enterText(find.byType(TextField).first, 'Chofer Nuevo');
-    await tester.enterText(find.byType(TextField).last, '9999');
+    await tester.enterText(find.byType(TextField).at(1), '9999');
     await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Mis tareas'), findsOneWidget);
+    expect(find.textContaining('Pendientes'), findsOneWidget);
   });
 
   testWidgets('Se puede rastrear un envío sin cuenta desde el login', (
@@ -150,7 +147,7 @@ void main() {
     await tester.pumpWidget(const IpesaGuiasApp());
     await tester.pumpAndSettle();
 
-    final rastrearFinder = find.text('¿Eres cliente? Rastrea tu envío aquí');
+    final rastrearFinder = find.widgetWithText(FilledButton, 'Buscar');
     await tester.ensureVisible(rastrearFinder);
     await tester.tap(rastrearFinder);
     await tester.pumpAndSettle();

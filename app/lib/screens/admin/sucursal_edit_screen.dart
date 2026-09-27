@@ -8,6 +8,7 @@ import '../../services/buscador_lugares.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../widgets/mapa_ubicacion.dart';
+import '../../theme.dart';
 
 const _centroLima = LatLng(-12.0464, -77.0428);
 
@@ -272,7 +273,7 @@ class _SucursalEditScreenState extends State<SucursalEditScreen> {
                         ),
                       ),
                     if (_centro != null)
-                      MarkerLayer(markers: [marcador(_centro!, Colors.purple)]),
+                      MarkerLayer(markers: [marcador(_centro!, Ipesa.petroleo)]),
                     atribucionMapa,
                   ],
                 ),

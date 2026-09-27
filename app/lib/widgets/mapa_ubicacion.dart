@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/sucursal.dart';
+import '../theme.dart';
 
 const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const _userAgent = 'pe.ipesa.tracking_distribucion';
@@ -22,8 +23,8 @@ CircleLayer capaPerimetro(Sucursal sucursal) => CircleLayer(
       point: LatLng(sucursal.lat, sucursal.lng),
       radius: sucursal.radioM,
       useRadiusInMeter: true,
-      color: Colors.purple.withValues(alpha: 0.15),
-      borderColor: Colors.purple,
+      color: Ipesa.turquesa.withValues(alpha: 0.15),
+      borderColor: Ipesa.turquesa,
       borderStrokeWidth: 2,
     ),
   ],
@@ -43,7 +44,7 @@ class MapaUbicacion extends StatelessWidget {
     super.key,
     required this.lat,
     required this.lng,
-    this.color = Colors.red,
+    this.color = const Color(0xFF1D6B41),
     this.perimetro,
     this.altura = 260,
   });

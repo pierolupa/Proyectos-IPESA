@@ -28,15 +28,26 @@ extension EstadoGuiaX on EstadoGuia {
   Color get color {
     switch (this) {
       case EstadoGuia.enRuta:
-        return Colors.blue;
+        return const Color(0xFF2459A8);
       case EstadoGuia.enProcesoTrasbordo:
-        return Colors.orange;
       case EstadoGuia.recepcionSucursal:
-        return Colors.purple;
+        return const Color(0xFF8A4F00);
       case EstadoGuia.entregado:
-        return Colors.green;
       case EstadoGuia.finalizado:
-        return Colors.grey;
+        return const Color(0xFF1D6B41);
+    }
+  }
+
+  Color get colorFondo {
+    switch (this) {
+      case EstadoGuia.enRuta:
+        return const Color(0xFFE8EFFA);
+      case EstadoGuia.enProcesoTrasbordo:
+      case EstadoGuia.recepcionSucursal:
+        return const Color(0xFFFBF0DD);
+      case EstadoGuia.entregado:
+      case EstadoGuia.finalizado:
+        return const Color(0xFFE2F2E8);
     }
   }
 

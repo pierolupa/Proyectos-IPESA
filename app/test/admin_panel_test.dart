@@ -11,25 +11,46 @@ import 'package:ipesa_guias/screens/admin/admin_dashboard_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
-Map<String, dynamic> _guia(String numero, String estado, String transportista) =>
-    {
-      'numero_guia': numero,
-      'estado': estado,
-      'tipo_entrega': 'cliente_final',
-      'origen': 'Almacén Callao',
-      'destino': 'Av. Principal 123',
-      'transportista': transportista,
-      'destinatario': 'Cliente $numero',
-      'fecha_actualizacion': '2026-09-01T15:30:00.000Z',
-      'corregido_por_admin': false,
-    };
+// Hoy a media mañana, para que las guías entren en la línea de tiempo.
+final _hoy10 = DateTime.now().copyWith(
+  hour: 10,
+  minute: 0,
+  second: 0,
+  millisecond: 0,
+  microsecond: 0,
+);
+
+Map<String, dynamic> _guia(
+  String numero,
+  String estado,
+  String transportista, {
+  int minutos = 0,
+}) => {
+  'numero_guia': numero,
+  'estado': estado,
+  'tipo_entrega': 'cliente_final',
+  'origen': 'Almacén Callao',
+  'destino': 'Av. Principal 123',
+  'transportista': transportista,
+  'destinatario': 'Cliente $numero',
+  'fecha_actualizacion': _hoy10
+      .add(Duration(minutes: minutos))
+      .toUtc()
+      .toIso8601String(),
+  'corregido_por_admin': false,
+};
 
 Future<void> _abrirPanel(WidgetTester tester) async {
   final client = MockClient((request) async {
     if (request.url.path.endsWith('/sucursales')) {
       return http.Response(
         jsonEncode([
-          {'nombre': 'Sucursal Arequipa', 'lat': -16.4, 'lng': -71.53, 'radio_m': 200},
+          {
+            'nombre': 'Sucursal Arequipa',
+            'lat': -16.4,
+            'lng': -71.53,
+            'radio_m': 200,
+          },
         ]),
         200,
       );
@@ -37,10 +58,10 @@ Future<void> _abrirPanel(WidgetTester tester) async {
     return http.Response(
       jsonEncode([
         _guia('T001-1', 'en_ruta', 'Juan Pérez'),
-        _guia('T001-2', 'en_proceso_trasbordo', 'Juan Pérez'),
-        _guia('T001-3', 'recepcion_sucursal', 'Ana Díaz'),
-        _guia('T001-4', 'entregado', 'Ana Díaz'),
-        _guia('T001-5', 'finalizado', 'Ana Díaz'),
+        _guia('T001-2', 'en_proceso_trasbordo', 'Juan Pérez', minutos: 180),
+        _guia('T001-3', 'recepcion_sucursal', 'Ana Díaz', minutos: 60),
+        _guia('T001-4', 'entregado', 'Ana Díaz', minutos: 120),
+        _guia('T001-5', 'finalizado', 'Ana Díaz', minutos: 240),
       ]),
       200,
     );
@@ -63,35 +84,46 @@ void main() {
   ) async {
     await _abrirPanel(tester);
 
-    expect(find.text('Todas (5)'), findsOneWidget);
-    expect(find.text('En ruta (1)'), findsOneWidget);
-    expect(find.text('Trasbordo (2)'), findsOneWidget);
-    expect(find.text('Entregado (2)'), findsOneWidget);
+    expect(find.text('Todas · 5'), findsOneWidget);
+    expect(find.text('En ruta · 1'), findsOneWidget);
+    expect(find.text('Trasbordo · 2'), findsOneWidget);
+    expect(find.text('Entregado · 2'), findsOneWidget);
     expect(find.byType(ChoiceChip), findsNWidgets(4));
 
-    await tester.tap(find.text('Trasbordo (2)'));
+    await tester.tap(find.text('Trasbordo · 2'));
     await tester.pumpAndSettle();
     expect(find.text('T001-2'), findsOneWidget);
     expect(find.text('T001-3'), findsOneWidget);
     expect(find.text('T001-1'), findsNothing);
   });
 
-  testWidgets('Tareas agrupa las guías por transportista', (tester) async {
+  testWidgets('El buscador filtra por cliente o transportista', (
+    tester,
+  ) async {
     await _abrirPanel(tester);
 
-    await tester.tap(find.text('Tareas'));
+    await tester.enterText(find.byType(TextField), 'ana');
+    await tester.pumpAndSettle();
+    expect(find.text('T001-3'), findsOneWidget);
+    expect(find.text('T001-1'), findsNothing);
+  });
+
+  testWidgets('Recorrido muestra a cada transportista en la línea de tiempo', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+
+    await tester.tap(find.text('Recorrido'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Recorrido de hoy'), findsOneWidget);
     expect(find.text('Juan Pérez'), findsOneWidget);
-    expect(
-      find.text('2 tareas · 1 en ruta · 1 trasbordo · 0 entregado'),
-      findsOneWidget,
-    );
+    expect(find.text('1 en ruta · 1 trasbordo'), findsOneWidget);
     expect(find.text('Ana Díaz'), findsOneWidget);
-    expect(
-      find.text('3 tareas · 0 en ruta · 1 trasbordo · 2 entregado'),
-      findsOneWidget,
-    );
+    expect(find.text('2 entregadas · 1 trasbordo'), findsOneWidget);
+    for (final n in ['T001-1', 'T001-2', 'T001-3', 'T001-4', 'T001-5']) {
+      expect(find.text(n), findsOneWidget);
+    }
   });
 
   testWidgets('Sucursales lista los perímetros marcados', (tester) async {

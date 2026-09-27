@@ -190,7 +190,7 @@ class _SeccionUbicacion extends StatelessWidget {
           )
         : Text(
             'Perímetro de ${perimetro!.nombre}: ${perimetro!.radioM.round()} m '
-            '(círculo morado).',
+            '(círculo turquesa).',
             style: gris,
           );
 
@@ -245,7 +245,7 @@ class _SeccionUbicacion extends StatelessWidget {
           MapaUbicacion(
             lat: guia.ultimaLat!,
             lng: guia.ultimaLng!,
-            color: Colors.blue,
+            color: guia.estado.color,
             perimetro: perimetro,
           ),
         ],

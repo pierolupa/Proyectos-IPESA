@@ -9,19 +9,24 @@ class EstadoBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: estado.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: estado.color.withValues(alpha: 0.4)),
-      ),
-      child: Text(
-        estado.etiqueta,
-        style: TextStyle(
-          color: estado.color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+    // Align evita que el badge se estire a todo el ancho dentro de listas.
+    return Align(
+      alignment: Alignment.centerLeft,
+      widthFactor: 1,
+      heightFactor: 1,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: estado.colorFondo,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          estado.etiqueta,
+          style: TextStyle(
+            color: estado.color,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
         ),
       ),
     );

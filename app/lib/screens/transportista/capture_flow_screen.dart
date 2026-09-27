@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
+import '../../theme.dart';
 
 /// Flujo de "Asignación" (ARCHITECTURE.md, sección 4.1): el transportista
 /// fotografía la guía antes de salir y valida duplicados. El GPS debe estar
@@ -218,7 +219,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            color: _gpsActivo ? Colors.green[50] : Colors.red[50],
+            color: _gpsActivo ? Ipesa.menta : Colors.red[50],
             child: SwitchListTile(
               value: _gpsActivo,
               onChanged: _cargandoGps

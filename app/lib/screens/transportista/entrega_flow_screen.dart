@@ -11,6 +11,7 @@ import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
+import '../../theme.dart';
 
 /// Flujo de "Entrega" y "Entrega entre sucursales" (ARCHITECTURE.md,
 /// sección 4.2 y 4.3). El paso concreto depende del tipo de entrega y del
@@ -256,7 +257,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            color: _gpsActivo ? Colors.green[50] : Colors.red[50],
+            color: _gpsActivo ? Ipesa.menta : Colors.red[50],
             child: SwitchListTile(
               value: _gpsActivo,
               onChanged: _cargandoGps
@@ -401,7 +402,7 @@ class _TarjetaPerimetro extends StatelessWidget {
       );
     }
     return Card(
-      color: dentro ? Colors.purple[50] : null,
+      color: dentro ? Ipesa.menta : null,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -409,7 +410,7 @@ class _TarjetaPerimetro extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.location_on, color: Colors.purple),
+                const Icon(Icons.location_on, color: Ipesa.petroleo),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

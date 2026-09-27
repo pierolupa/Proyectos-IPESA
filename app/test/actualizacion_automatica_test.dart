@@ -53,7 +53,7 @@ void main() {
         child: const MaterialApp(home: AdminDashboardScreen()),
       ),
     );
-    expect(find.text('En ruta (1)'), findsOneWidget);
+    expect(find.text('En ruta · 1'), findsOneWidget);
 
     servidor.guias = [
       _guia('T001-1', 'entregado'),
@@ -62,7 +62,7 @@ void main() {
     await tester.pump(const Duration(seconds: 15));
     await tester.pump();
 
-    expect(find.text('Entregado (1)'), findsOneWidget);
+    expect(find.text('Entregado · 1'), findsOneWidget);
     expect(find.textContaining('Juan Pérez entregó la guía T001-1.'), findsOneWidget);
     expect(find.textContaining('Juan Pérez registró la guía T001-2'), findsOneWidget);
   });
