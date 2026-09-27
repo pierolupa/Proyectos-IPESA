@@ -3,10 +3,12 @@ const cors = require('cors');
 const { ESTADOS, ESTADOS_FINALES, TIPOS_ENTREGA, ROLES } = require('./columns');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
+const fotos = require('./fotos');
 
 const app = express();
 app.use(cors({ origin: true }));
-// Límite alto: el body incluye la foto de la guía en base64 para /ocr/leer-guia.
+// Límite alto: el body incluye la foto de la guía en base64 (/ocr/leer-guia,
+// y la foto que se guarda al asignar y al entregar). Vercel corta en 4,5 MB.
 app.use(express.json({ limit: '8mb' }));
 
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
@@ -53,6 +55,20 @@ function buscarSucursal(sucursales, nombre) {
 function sinCamposInternos(guia) {
   const { _row, ...resto } = guia;
   return resto;
+}
+
+/**
+ * Guarda la foto si vino en el body. Nunca lanza: si falla, devuelve el
+ * aviso para la app y la guía se registra igual (ver fotos.js).
+ */
+async function intentarGuardarFoto(numeroGuia, tipo, foto) {
+  if (!fotos.esFotoValida(foto)) return { url: null, aviso: null };
+  try {
+    return { url: await fotos.guardarFoto(numeroGuia, tipo, foto), aviso: null };
+  } catch (err) {
+    console.error(err);
+    return { url: null, aviso: `La foto no se pudo guardar: ${err.message}` };
+  }
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -242,6 +258,7 @@ app.post('/guias', async (req, res, next) => {
       geo,
       numeroPedido,
       numeroEntrega,
+      foto,
     } = req.body || {};
 
     if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
@@ -274,6 +291,8 @@ app.post('/guias', async (req, res, next) => {
       });
     }
 
+    const fotoGuia = await intentarGuardarFoto(numeroGuia, fotos.TIPOS_FOTO.GUIA, foto);
+
     const ahora = new Date().toISOString();
     await repo.crearGuia({
       numero_guia: numeroGuia,
@@ -292,9 +311,14 @@ app.post('/guias', async (req, res, next) => {
       // opcionales porque el OCR no siempre los encuentra.
       numero_pedido: numeroPedido || '',
       numero_entrega: numeroEntrega || '',
+      foto_guia_url: fotoGuia.url || '',
     });
 
-    res.status(201).json({ numeroGuia, estado: ESTADOS.EN_RUTA });
+    res.status(201).json({
+      numeroGuia,
+      estado: ESTADOS.EN_RUTA,
+      ...(fotoGuia.aviso && { aviso_foto: fotoGuia.aviso }),
+    });
   } catch (err) {
     next(err);
   }
@@ -306,7 +330,7 @@ app.post('/guias', async (req, res, next) => {
 app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { estado, geo, porAdmin } = req.body || {};
+    const { estado, geo, porAdmin, foto } = req.body || {};
 
     if (!ESTADOS_VALIDOS.has(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
@@ -338,6 +362,13 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       }
     }
 
+    // La foto del paso (guía firmada, comprobante de agencia o guía al
+    // iniciar el traslado) reemplaza a la anterior de la misma guía.
+    const fotoEntrega = porAdmin
+      ? { url: null, aviso: null }
+      : await intentarGuardarFoto(guia.numero_guia, fotos.TIPOS_FOTO.ENTREGA, foto);
+    if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
+
     guia.estado = estado;
     guia.fecha_actualizacion = new Date().toISOString();
     if (geo) {
@@ -353,7 +384,31 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     }
     await repo.actualizarGuia(guia._row, guia);
 
-    res.json(sinCamposInternos(guia));
+    res.json({
+      ...sinCamposInternos(guia),
+      ...(fotoEntrega.aviso && { aviso_foto: fotoEntrega.aviso }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Foto guardada de una guía (tipo = "guia" | "entrega"). Las fotos son
+// privadas en Vercel Blob: solo se ven pasando por aquí.
+app.get('/guias/:numeroGuia/foto/:tipo', async (req, res, next) => {
+  try {
+    const columna = fotos.COLUMNA_POR_TIPO[req.params.tipo];
+    if (!columna) {
+      return res.status(400).json({ error: `Tipo de foto inválido: ${req.params.tipo}` });
+    }
+    const guia = await repo.buscarPorNumero(req.params.numeroGuia);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
+    }
+    if (!guia[columna]) {
+      return res.status(404).json({ error: 'Esta guía no tiene esa foto.' });
+    }
+    await fotos.enviarFoto(guia[columna], res);
   } catch (err) {
     next(err);
   }

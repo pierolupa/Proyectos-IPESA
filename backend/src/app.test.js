@@ -1,9 +1,15 @@
 jest.mock('./sheetsRepository');
 jest.mock('./ocrAgente');
+jest.mock('./fotos', () => ({
+  ...jest.requireActual('./fotos'),
+  guardarFoto: jest.fn(),
+  enviarFoto: jest.fn(),
+}));
 
 const request = require('supertest');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
+const fotos = require('./fotos');
 const { ESTADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
 
 const app = require('./app');
@@ -396,5 +402,64 @@ describe('Sucursales y geocerca', () => {
       .patch('/guias/IPE-2026-000123/estado')
       .send({ estado: ESTADOS.RECEPCION_SUCURSAL, geo: { lat: -13.5, lng: -71.9 } });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('fotos de la guía', () => {
+  const foto = { base64: Buffer.from('jpg').toString('base64'), mediaType: 'image/jpeg' };
+
+  it('guarda la foto de la guía al asignar', async () => {
+    repo.buscarPorNumero.mockResolvedValue(null);
+    fotos.guardarFoto.mockResolvedValue('https://blob/guias/X/guia.jpg');
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'IPE-1',
+      tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen: 'Almacén Callao',
+      destino: 'Av. 1',
+      transportista: 'Juan Pérez',
+      destinatario: 'María',
+      geo: { lat: -12, lng: -77 },
+      foto,
+    });
+    expect(res.status).toBe(201);
+    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-1', 'guia', foto);
+    expect(repo.crearGuia.mock.calls[0][0].foto_guia_url).toBe('https://blob/guias/X/guia.jpg');
+    expect(res.body.aviso_foto).toBeUndefined();
+  });
+
+  it('registra la entrega aunque la foto no se pueda guardar, y avisa', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockRejectedValue(new Error('sin almacenamiento'));
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
+    expect(res.status).toBe(200);
+    expect(repo.actualizarGuia).toHaveBeenCalled();
+    expect(res.body.estado).toBe(ESTADOS.ENTREGADO);
+    expect(res.body.aviso_foto).toMatch(/sin almacenamiento/);
+  });
+
+  it('guarda la foto de la entrega en la guía', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockResolvedValue('https://blob/guias/X/entrega.jpg');
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
+    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-2026-000123', 'entrega', foto);
+    expect(res.body.foto_entrega_url).toBe('https://blob/guias/X/entrega.jpg');
+  });
+
+  it('sirve la foto guardada y da 404 si la guía no tiene foto', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ foto_entrega_url: 'https://blob/e.jpg' }));
+    fotos.enviarFoto.mockImplementation((_url, res) => res.type('image/jpeg').send('x'));
+    const ok = await request(app).get('/guias/IPE-2026-000123/foto/entrega');
+    expect(ok.status).toBe(200);
+    expect(fotos.enviarFoto.mock.calls[0][0]).toBe('https://blob/e.jpg');
+
+    const sinFoto = await request(app).get('/guias/IPE-2026-000123/foto/guia');
+    expect(sinFoto.status).toBe(404);
+
+    const tipoMalo = await request(app).get('/guias/IPE-2026-000123/foto/otra');
+    expect(tipoMalo.status).toBe(400);
   });
 });

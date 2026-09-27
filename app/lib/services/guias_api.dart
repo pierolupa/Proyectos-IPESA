@@ -14,6 +14,45 @@ import '../models/tipo_entrega.dart';
 /// API — la app nunca accede a Sheets directamente.
 const apiBaseUrl = 'https://proyectos-ipesa-phi.vercel.app/api';
 
+/// Qué foto de una guía: la tomada al asignarla o la de la entrega.
+enum TipoFoto {
+  guia('guia'),
+  entrega('entrega');
+
+  const TipoFoto(this.valorApi);
+  final String valorApi;
+}
+
+/// URL (del backend) para ver una foto guardada. Las fotos son privadas:
+/// siempre pasan por la API. `v` cambia si la foto se reemplaza, para que
+/// el navegador no muestre la anterior desde su caché.
+String urlFoto(Guia guia, TipoFoto tipo) {
+  final guardada = tipo == TipoFoto.guia
+      ? guia.fotoGuiaUrl
+      : guia.fotoEntregaUrl;
+  return '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}'
+      '/foto/${tipo.valorApi}?v=${guardada.hashCode.toUnsigned(32)}';
+}
+
+/// Tipo MIME de la foto según sus primeros bytes (la cámara da JPEG, pero
+/// una imagen elegida de la galería puede ser PNG o WebP).
+String tipoImagen(Uint8List bytes) {
+  if (bytes.length > 3 && bytes[0] == 0x89 && bytes[1] == 0x50) {
+    return 'image/png';
+  }
+  if (bytes.length > 11 &&
+      String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+      String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
+    return 'image/webp';
+  }
+  return 'image/jpeg';
+}
+
+Map<String, String> _fotoJson(Uint8List foto) => {
+  'base64': base64Encode(foto),
+  'mediaType': tipoImagen(foto),
+};
+
 class ApiException implements Exception {
   ApiException(this.mensaje);
   final String mensaje;
@@ -206,14 +245,16 @@ class GuiasApi {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'imagenBase64': base64Encode(fotoBytes),
-        'mediaType': 'image/jpeg',
+        'mediaType': tipoImagen(fotoBytes),
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);
     return DatosGuiaLeida.fromJson(_decodeBody(res));
   }
 
-  Future<Guia> asignarNuevaGuia({
+  /// Devuelve la guía creada y, si la foto no se pudo guardar, el aviso
+  /// del backend (la guía se crea igual).
+  Future<(Guia, String?)> asignarNuevaGuia({
     required String numeroGuia,
     required TipoEntrega tipoEntrega,
     required String origen,
@@ -224,6 +265,7 @@ class GuiasApi {
     required double lng,
     String? numeroPedido,
     String? numeroEntrega,
+    Uint8List? foto,
   }) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/guias'),
@@ -240,16 +282,18 @@ class GuiasApi {
           'numeroPedido': numeroPedido,
         if (numeroEntrega != null && numeroEntrega.isNotEmpty)
           'numeroEntrega': numeroEntrega,
+        if (foto != null) 'foto': _fotoJson(foto),
       }),
     );
     if (res.statusCode != 201) _lanzarError(res);
+    final aviso = _decodeBody(res)['aviso_foto'] as String?;
     // La API de creación devuelve solo {numeroGuia, estado}; recargamos el
     // objeto completo para tener todos los campos consistentes.
     final guia = await buscarGuiaExacta(numeroGuia);
     if (guia == null) {
       throw ApiException('La guía se creó pero no se pudo recargar.');
     }
-    return guia;
+    return (guia, aviso);
   }
 
   Future<Guia?> buscarGuiaExacta(String numeroGuia) async {
@@ -260,12 +304,15 @@ class GuiasApi {
     return null;
   }
 
-  Future<Guia> actualizarEstado(
+  /// Devuelve la guía actualizada y, si la foto no se pudo guardar, el
+  /// aviso del backend (el estado cambia igual).
+  Future<(Guia, String?)> actualizarEstado(
     String numeroGuia,
     EstadoGuia nuevoEstado, {
     double? lat,
     double? lng,
     bool porAdmin = false,
+    Uint8List? foto,
   }) async {
     final res = await _client.patch(
       Uri.parse('$apiBaseUrl/guias/$numeroGuia/estado'),
@@ -274,10 +321,12 @@ class GuiasApi {
         'estado': nuevoEstado.valorApi,
         'porAdmin': porAdmin,
         if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
+        if (foto != null) 'foto': _fotoJson(foto),
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);
-    return Guia.fromJson(_decodeBody(res));
+    final json = _decodeBody(res);
+    return (Guia.fromJson(json), json['aviso_foto'] as String?);
   }
 
   Future<Guia> corregirNumeroGuia(

@@ -1,9 +1,11 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..Q.
+ * El orden de este arreglo es el orden real de las columnas A..S.
  * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
  * el transportista la cerró (entregado/finalizado), para el mapa del admin.
+ * foto_*_url = dónde quedó la foto en Vercel Blob (privada; se ve con
+ * GET /guias/:numeroGuia/foto/:tipo, ver fotos.js).
  */
 const COLUMNS = [
   'numero_guia',
@@ -23,6 +25,8 @@ const COLUMNS = [
   'cierre_lat',
   'cierre_lng',
   'fecha_cierre',
+  'foto_guia_url',
+  'foto_entrega_url',
 ];
 
 const SHEET_NAME = 'Guias';

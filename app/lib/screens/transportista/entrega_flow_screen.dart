@@ -126,7 +126,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       final archivo = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1600,
-        imageQuality: 85,
+        imageQuality: 80,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
@@ -214,16 +214,21 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       }
       _lat = posicion.latitude;
       _lng = posicion.longitude;
-      await appState.actualizarEstado(
+      // La foto se guarda junto con el cambio de estado para que el
+      // administrador la vea en el detalle de la guía.
+      final avisoFoto = await appState.actualizarEstado(
         g.numeroGuia,
         nuevoEstado,
         lat: _lat,
         lng: _lng,
+        foto: _requiereFoto ? _fotoBytes : null,
       );
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(mensaje)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(avisoFoto == null ? mensaje : '$mensaje\n$avisoFoto'),
+        ),
+      );
       // Entregada: vuelve directo a "Mis tareas" (cierra también el detalle),
       // donde la guía ya no aparece.
       final navigator = Navigator.of(context)..pop();
