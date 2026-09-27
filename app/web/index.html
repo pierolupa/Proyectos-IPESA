@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +18,73 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="IPESA · Tracking Distribución: guías, entregas y rastreo.">
+  <!-- Barra de estado del celular en el negro de IPESA, igual que el inicio. -->
+  <meta name="theme-color" content="#000000">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="ipesa_guias">
+  <meta name="apple-mobile-web-app-title" content="IPESA">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>ipesa_guias</title>
+  <title>IPESA · Tracking Distribución</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Pantalla de inicio mientras se descarga la app. Es igual a la de
+       Flutter (lib/widgets/splash_ipesa.dart), que la reemplaza sin salto. */
+    html, body { margin: 0; height: 100%; background: #000; }
+    #inicio {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #000; color: #fff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity .35s ease;
+    }
+    #inicio img {
+      width: clamp(160px, 52vw, 260px); height: auto;
+      animation: entrar .7s cubic-bezier(.22, .61, .36, 1) both;
+    }
+    #inicio p {
+      margin: 36px 0 40px; font-size: 16px; font-weight: 600;
+      letter-spacing: 2.4px;
+    }
+    #inicio .rueda {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2.5px solid rgba(255, 255, 255, .25);
+      border-top-color: #fff;
+      animation: girar .9s linear infinite;
+    }
+    #inicio.fuera { opacity: 0; pointer-events: none; }
+    @keyframes entrar { from { opacity: 0; transform: scale(.92); } }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #inicio img, #inicio .rueda { animation: none; }
+    }
+  </style>
 </head>
 <body>
+  <div id="inicio" role="status" aria-live="polite">
+    <img src="splash/ipesa_blanco.png" alt="IPESA">
+    <p>CARGANDO DATOS</p>
+    <div class="rueda"></div>
+  </div>
+  <script>
+    // Cuando Flutter pinta su primer cuadro (su propia pantalla de inicio,
+    // idéntica), esta se desvanece y se quita.
+    window.addEventListener('flutter-first-frame', function () {
+      var inicio = document.getElementById('inicio');
+      if (!inicio) return;
+      inicio.classList.add('fuera');
+      setTimeout(function () { inicio.remove(); }, 400);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

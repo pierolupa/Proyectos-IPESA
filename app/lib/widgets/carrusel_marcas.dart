@@ -1,0 +1,164 @@
+import 'package:flutter/material.dart';
+
+import '../theme.dart';
+
+/// Marcas que representa IPESA (logos en assets/marcas/, recortados de
+/// ipesa.com.pe). El orden es el de la web.
+const marcasIpesa = <(String, String)>[
+  ('John Deere', 'john_deere'),
+  ('Wirtgen', 'wirtgen'),
+  ('Vögele', 'vogele'),
+  ('Hamm', 'hamm'),
+  ('Kleemann', 'kleemann'),
+  ('Benninghoven', 'benninghoven'),
+  ('Ciber', 'ciber'),
+  ('Aksa', 'aksa'),
+  ('Fiori', 'fiori'),
+  ('Terramac', 'terramac'),
+  ('Romanelli', 'romanelli'),
+  ('Bergkamp', 'bergkamp'),
+  ('Simem', 'simem'),
+  ('NPK', 'npk'),
+  ('Socomec', 'socomec'),
+  ('Bia Baldan', 'bia_baldan'),
+  ('Bison', 'bison'),
+  ('GF Gordini', 'gf_gordini'),
+  ('Gama', 'gama'),
+  ('Fieldking', 'fieldking'),
+  ('JF', 'jf'),
+  ('Lavrale', 'lavrale'),
+  ('DAF', 'daf'),
+  ('Kenworth', 'kenworth'),
+];
+
+/// Cinta de logos que avanza sola, en bucle y sin saltos. Si el sistema
+/// pide reducir animaciones, queda quieta y se puede deslizar a mano.
+class CarruselMarcas extends StatefulWidget {
+  const CarruselMarcas({
+    super.key,
+    this.alto = 64,
+    this.ancho = 148,
+    this.separacion = 12,
+    this.pixelesPorSegundo = 36,
+    this.bordeTarjeta = Ipesa.borde,
+  });
+
+  final double alto;
+  final double ancho;
+  final double separacion;
+  final double pixelesPorSegundo;
+  final Color bordeTarjeta;
+
+  @override
+  State<CarruselMarcas> createState() => _CarruselMarcasState();
+}
+
+class _CarruselMarcasState extends State<CarruselMarcas>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _avance = AnimationController(
+    vsync: this,
+    duration: Duration(
+      milliseconds: (_anchoVuelta / widget.pixelesPorSegundo * 1000).round(),
+    ),
+  );
+
+  double get _paso => widget.ancho + widget.separacion;
+  double get _anchoVuelta => _paso * marcasIpesa.length;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final quieto = MediaQuery.of(context).disableAnimations;
+    if (quieto) {
+      _avance.stop();
+    } else if (!_avance.isAnimating) {
+      _avance.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _avance.dispose();
+    super.dispose();
+  }
+
+  Widget _tarjeta(String nombre, String archivo) => Container(
+    width: widget.ancho,
+    height: widget.alto,
+    margin: EdgeInsets.only(right: widget.separacion),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: widget.bordeTarjeta),
+    ),
+    child: Tooltip(
+      message: nombre,
+      child: Image.asset(
+        'assets/marcas/$archivo.png',
+        fit: BoxFit.contain,
+        semanticLabel: nombre,
+        filterQuality: FilterQuality.medium,
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final tarjetas = [
+      for (final (nombre, archivo) in marcasIpesa) _tarjeta(nombre, archivo),
+    ];
+
+    final Widget cinta;
+    if (MediaQuery.of(context).disableAnimations) {
+      cinta = ListView(
+        scrollDirection: Axis.horizontal,
+        children: tarjetas,
+      );
+    } else {
+      cinta = LayoutBuilder(
+        builder: (context, constraints) {
+          // Suficientes vueltas para cubrir el ancho visible y una más,
+          // así al reiniciar la animación no se nota el salto.
+          final vueltas = (constraints.maxWidth / _anchoVuelta).ceil() + 1;
+          return ClipRect(
+            child: OverflowBox(
+              alignment: Alignment.centerLeft,
+              minWidth: 0,
+              maxWidth: double.infinity,
+              child: AnimatedBuilder(
+                animation: _avance,
+                builder: (context, hijo) => Transform.translate(
+                  offset: Offset(-_avance.value * _anchoVuelta, 0),
+                  child: hijo,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [for (var i = 0; i < vueltas; i++) ...tarjetas],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    // Los extremos se desvanecen (máscara de opacidad) sobre cualquier fondo.
+    return SizedBox(
+      height: widget.alto,
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          colors: [
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0, 0.08, 0.92, 1],
+        ).createShader(rect),
+        child: cinta,
+      ),
+    );
+  }
+}

@@ -5,6 +5,8 @@ import '../models/rol_usuario.dart';
 import '../services/guias_api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/carrusel_marcas.dart';
+import '../widgets/splash_ipesa.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'comercial/rastreo_screen.dart';
 import 'tracking/public_tracking_screen.dart';
@@ -55,7 +57,11 @@ class _LoginScreenState extends State<LoginScreen> {
   /// recargar la página no obliga a volver a ingresar cada vez.
   Future<void> _verificarSesionGuardada() async {
     final appState = context.read<AppState>();
-    await appState.restaurarSesion();
+    // El logo se ve al menos un momento, aunque la sesión cargue al toque.
+    await Future.wait([
+      appState.restaurarSesion(),
+      Future<void>.delayed(const Duration(milliseconds: 1200)),
+    ]);
     if (!mounted) return;
     final rol = appState.rolActual;
     if (rol != null) {
@@ -115,12 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_verificandoSesion) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator(color: Ipesa.petroleo)),
-      );
-    }
+    if (_verificandoSesion) return const SplashIpesa();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -238,7 +239,33 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: _rastreoController,
           onBuscar: _enviando ? null : _irARastreo,
         ),
+        // En computadora las marcas van en el panel de la izquierda.
+        if (MediaQuery.sizeOf(context).width < 900) ...[
+          const SizedBox(height: 28),
+          const _TituloMarcas(color: Ipesa.textoSuave),
+          const SizedBox(height: 10),
+          const CarruselMarcas(),
+        ],
       ],
+    );
+  }
+}
+
+class _TituloMarcas extends StatelessWidget {
+  const _TituloMarcas({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      'MARCAS QUE REPRESENTAMOS',
+      style: TextStyle(
+        fontSize: 12,
+        letterSpacing: 1.6,
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
     );
   }
 }
@@ -251,19 +278,21 @@ class _Marca extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 10,
-          height: 10,
-          decoration: const BoxDecoration(
-            color: Ipesa.turquesa,
-            shape: BoxShape.circle,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: colorSplash,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Image.asset(
+            'assets/brand/ipesa_blanco.png',
+            height: 16,
+            semanticLabel: 'IPESA',
           ),
         ),
-        const SizedBox(width: 8),
-        Text('IPESA', style: Ipesa.titulo(18).copyWith(letterSpacing: 3)),
-        const SizedBox(width: 6),
+        const SizedBox(width: 10),
         const Flexible(
           child: Text(
-            '· Tracking Distribución',
+            'Tracking Distribución',
             style: TextStyle(fontSize: 14, color: Ipesa.textoSuave),
             overflow: TextOverflow.ellipsis,
           ),
@@ -372,12 +401,10 @@ class _PanelMarca extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'IPESA',
-            style: Ipesa.titulo(
-              22,
-              color: Colors.white,
-            ).copyWith(letterSpacing: 4),
+          Image.asset(
+            'assets/brand/ipesa_blanco.png',
+            height: 30,
+            semanticLabel: 'IPESA',
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -401,9 +428,21 @@ class _PanelMarca extends StatelessWidget {
               ),
             ],
           ),
-          const Text(
-            'IPESA S.A.C. · Tracking Distribución',
-            style: TextStyle(fontSize: 14, color: Ipesa.suaveSobrePetroleo),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _TituloMarcas(color: Ipesa.suaveSobrePetroleo),
+              SizedBox(height: 12),
+              CarruselMarcas(bordeTarjeta: Colors.transparent),
+              SizedBox(height: 20),
+              Text(
+                'IPESA S.A.C. · Tracking Distribución',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Ipesa.suaveSobrePetroleo,
+                ),
+              ),
+            ],
           ),
         ],
       ),
