@@ -151,7 +151,7 @@ void main() {
     expect(rolUsuarioDesdeApi('comercial'), RolUsuario.comercial);
   });
 
-  testWidgets('El comercial busca por cliente y abre el detalle', (
+  testWidgets('Una sola coincidencia abre la guía de frente, con su sello', (
     tester,
   ) async {
     await _abrirRastreo(tester);
@@ -168,18 +168,63 @@ void main() {
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Resultados'), findsOneWidget);
-    expect(find.text('Cliente: shougang'), findsOneWidget);
-    expect(find.text('1 guía'), findsOneWidget);
+    // Sin lista de resultados: directo a la guía.
+    expect(find.text('Resultados'), findsNothing);
+    expect(find.text('Tu guía'), findsOneWidget);
+    expect(find.text('GUÍA DE REMISIÓN'), findsOneWidget);
     expect(find.text('T033-3455'), findsOneWidget);
-    expect(find.text('T028-130133'), findsNothing);
+    expect(find.text('0188170001'), findsOneWidget);
+    expect(find.text('EN RUTA'), findsOneWidget);
+    // El camión sigue abajo.
+    expect(find.byType(EscenaRuta), findsOneWidget);
+    // En ruta no hay foto que ver todavía.
+    expect(find.text('Ver foto'), findsNothing);
+    expect(find.text('Ubicación'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
-    await tester.tap(find.text('T033-3455'));
+    await tester.tap(find.byTooltip('Nueva búsqueda'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rastrea tus guías'), findsOneWidget);
+  });
+
+  testWidgets('Una guía entregada lleva el sello ENTREGADO y su foto', (
+    tester,
+  ) async {
+    await _abrirRastreo(tester);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° de guía'),
+      '130133',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Guía T033-3455'), findsOneWidget);
-    expect(find.text('0188170001'), findsOneWidget);
-    expect(find.text('Pendiente'), findsOneWidget);
+    expect(find.text('ENTREGADO'), findsOneWidget);
+    expect(find.text('Ver foto'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Si nada coincide lo avisa sin salir de la búsqueda', (
+    tester,
+  ) async {
+    await _abrirRastreo(tester);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° de guía'),
+      'ZZZ-999',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No encontramos ninguna guía con esos datos.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tu guía'), findsNothing);
   });
 
   testWidgets('Sin datos no busca; los chips filtran por estado', (

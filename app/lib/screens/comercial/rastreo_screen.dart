@@ -8,11 +8,13 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/escena_ruta.dart';
+import 'rastreo_detalle_screen.dart';
 import 'rastreo_resultados_screen.dart';
 
 /// Inicio del equipo comercial: saludo, una tarjeta "Rastrea tus guías"
 /// con los filtros (N° de guía, cliente, pedido y entrega) y el paisaje
-/// animado con el camión IPESA al pie. "Buscar" abre los resultados.
+/// animado con el camión IPESA al pie. "Buscar" abre la guía encontrada
+/// (o la lista, si hay varias).
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key});
 
@@ -53,22 +55,32 @@ class _RastreoScreenState extends State<RastreoScreen> {
     setState(() => _error = null);
   }
 
+  /// Una sola guía coincide: se abre de frente. Varias: la lista para
+  /// elegir. Ninguna: se avisa aquí mismo.
   void _buscar() {
     if (!_hayFiltros) {
       setState(() => _error = 'Escribe al menos un dato para buscar.');
       return;
     }
+    final filtros = FiltrosRastreo(
+      numeroGuia: _guia.text,
+      cliente: _cliente.text,
+      numeroEntrega: _entrega.text,
+      numeroPedido: _pedido.text,
+    );
+    final appState = context.read<AppState>();
+    final sinDatos = appState.guias.isEmpty;
+    final encontradas = filtros.aplicar(appState.guias);
+    if (!sinDatos && encontradas.isEmpty) {
+      setState(() => _error = 'No encontramos ninguna guía con esos datos.');
+      return;
+    }
     FocusScope.of(context).unfocus();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RastreoResultadosScreen(
-          filtros: FiltrosRastreo(
-            numeroGuia: _guia.text,
-            cliente: _cliente.text,
-            numeroEntrega: _entrega.text,
-            numeroPedido: _pedido.text,
-          ),
-        ),
+        builder: (_) => !sinDatos && encontradas.length == 1
+            ? RastreoDetalleScreen(numeroGuia: encontradas.single.numeroGuia)
+            : RastreoResultadosScreen(filtros: filtros),
       ),
     );
   }
