@@ -77,14 +77,15 @@ void main() {
     await tester.pump();
 
     expect(find.text('Entregado · 1'), findsOneWidget);
-    expect(
-      find.textContaining('Juan Pérez entregó la guía T001-1.'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('Juan Pérez registró la guía T001-2'),
-      findsOneWidget,
-    );
+    // Un aviso por novedad, y la campana las cuenta.
+    expect(find.text('Guía entregada'), findsOneWidget);
+    expect(find.text('Nueva guía registrada'), findsOneWidget);
+    expect(find.byTooltip('2 novedades sin leer'), findsOneWidget);
+    // Los avisos se van solos; la campana los guarda.
+    await tester.pump(const Duration(seconds: 8));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Guía entregada'), findsNothing);
+    expect(find.byTooltip('2 novedades sin leer'), findsOneWidget);
   });
 
   testWidgets(

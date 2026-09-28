@@ -9,6 +9,7 @@ import '../../services/notificador.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/actualizacion_automatica.dart';
+import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/mapa_ubicacion.dart';
@@ -30,6 +31,13 @@ class AdminDashboardScreen extends StatefulWidget {
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _pestana = 0;
   bool _notificacionesActivas = Notificador.permitido;
+  final _novedades = CentroNovedades();
+
+  @override
+  void dispose() {
+    _novedades.dispose();
+    super.dispose();
+  }
 
   static const _titulos = [
     'Operación de hoy',
@@ -68,37 +76,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   void _avisarCambios(List<CambioGuia> cambios) {
-    final titulo = cambios.length == 1
-        ? 'IPESA · Novedad'
-        : 'IPESA · ${cambios.length} novedades';
-    final cuerpo = cambios.map((c) => c.mensaje).join('\n');
-    if (Notificador.paginaOculta) Notificador.mostrar(titulo, cuerpo);
+    _novedades.agregar(cambios);
+    if (!Notificador.paginaOculta) return;
+    // Con la pestaña en segundo plano, también el aviso del sistema.
+    if (cambios.length == 1) {
+      final c = cambios.first;
+      Notificador.mostrar(
+        '${c.titulo} · ${c.guia.numeroGuia}',
+        c.detalle,
+        tag: 'ipesa-${c.guia.numeroGuia}',
+      );
+      return;
+    }
+    final lineas = [
+      for (final c in cambios.take(4)) '${c.titulo} · ${c.guia.numeroGuia}',
+      if (cambios.length > 4) 'y ${cambios.length - 4} más',
+    ];
+    Notificador.mostrar(
+      'IPESA · ${cambios.length} novedades',
+      lineas.join('\n'),
+    );
+  }
 
-    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 8),
-        content: Row(
-          children: [
-            const Icon(Icons.notifications_active, color: Ipesa.menta),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                cambios.length == 1
-                    ? cambios.first.mensaje
-                    : '${cambios.length} novedades:\n$cuerpo',
-              ),
-            ),
-          ],
-        ),
-        action: cambios.length == 1
-            ? SnackBarAction(
-                label: 'Ver',
-                textColor: Ipesa.menta,
-                onPressed: () => abrirGuiaAdmin(context, cambios.first.guia),
-              )
-            : null,
-      ),
+  void _abrirNovedades() {
+    mostrarPanelNovedades(
+      context,
+      centro: _novedades,
+      onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
+      avisosDelNavegador: _notificacionesActivas || !Notificador.soportado,
+      onActivarNavegador: _activarNotificaciones,
     );
   }
 
@@ -130,8 +136,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             children: [
               _Cabecera(
                 titulo: _titulos[_pestana],
-                notificacionesActivas: _notificacionesActivas,
-                onActivarNotificaciones: _activarNotificaciones,
+                novedades: _novedades,
+                onNovedades: _abrirNovedades,
                 onRastrear: ancha ? null : _abrirRastreo,
                 onCerrarSesion: ancha ? null : _cerrarSesion,
               ),
@@ -147,71 +153,76 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         );
 
-        return Scaffold(
-          floatingActionButton: _pestana == 3
-              ? FloatingActionButton.extended(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SucursalEditScreen(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_location_alt_outlined),
-                  label: const Text('Nueva sucursal'),
-                )
-              : null,
-          bottomNavigationBar: ancha
-              ? null
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const BandaMarcas(),
-                    NavigationBar(
-                      selectedIndex: _pestana,
-                      onDestinationSelected: (i) =>
-                          setState(() => _pestana = i),
-                      destinations: const [
-                        NavigationDestination(
-                          icon: Icon(Icons.receipt_long_outlined),
-                          label: 'Guías',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.local_shipping_outlined),
-                          label: 'Transportistas',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.timeline),
-                          label: 'Recorrido',
-                        ),
-                        NavigationDestination(
-                          icon: Icon(Icons.storefront_outlined),
-                          label: 'Sucursales',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-          body: SafeArea(
-            child: ancha
-                ? Row(
-                    children: [
-                      _Riel(
-                        seleccionado: _pestana,
-                        onSeleccion: (i) => setState(() => _pestana = i),
-                        onRastrear: _abrirRastreo,
-                        onCerrarSesion: _cerrarSesion,
+        return CapaAvisos(
+          centro: _novedades,
+          onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
+          onVerTodas: _abrirNovedades,
+          child: Scaffold(
+            floatingActionButton: _pestana == 3
+                ? FloatingActionButton.extended(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SucursalEditScreen(),
                       ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(child: contenido),
-                            const BandaMarcas(),
-                          ],
-                        ),
+                    ),
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: const Text('Nueva sucursal'),
+                  )
+                : null,
+            bottomNavigationBar: ancha
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const BandaMarcas(),
+                      NavigationBar(
+                        selectedIndex: _pestana,
+                        onDestinationSelected: (i) =>
+                            setState(() => _pestana = i),
+                        destinations: const [
+                          NavigationDestination(
+                            icon: Icon(Icons.receipt_long_outlined),
+                            label: 'Guías',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.local_shipping_outlined),
+                            label: 'Transportistas',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.timeline),
+                            label: 'Recorrido',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.storefront_outlined),
+                            label: 'Sucursales',
+                          ),
+                        ],
                       ),
                     ],
-                  )
-                : contenido,
+                  ),
+            body: SafeArea(
+              child: ancha
+                  ? Row(
+                      children: [
+                        _Riel(
+                          seleccionado: _pestana,
+                          onSeleccion: (i) => setState(() => _pestana = i),
+                          onRastrear: _abrirRastreo,
+                          onCerrarSesion: _cerrarSesion,
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: contenido),
+                              const BandaMarcas(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : contenido,
+            ),
           ),
         );
       },
@@ -333,15 +344,15 @@ class _Riel extends StatelessWidget {
 class _Cabecera extends StatelessWidget {
   const _Cabecera({
     required this.titulo,
-    required this.notificacionesActivas,
-    required this.onActivarNotificaciones,
+    required this.novedades,
+    required this.onNovedades,
     required this.onRastrear,
     required this.onCerrarSesion,
   });
 
   final String titulo;
-  final bool notificacionesActivas;
-  final VoidCallback onActivarNotificaciones;
+  final CentroNovedades novedades;
+  final VoidCallback onNovedades;
   final VoidCallback? onRastrear;
   final VoidCallback? onCerrarSesion;
 
@@ -392,14 +403,13 @@ class _Cabecera extends StatelessWidget {
               ],
             ),
           ),
-          boton(
-            notificacionesActivas
-                ? 'Notificaciones activadas'
-                : 'Activar notificaciones',
-            notificacionesActivas
-                ? Icons.notifications_active
-                : Icons.notifications_none,
-            notificacionesActivas ? null : onActivarNotificaciones,
+          Padding(
+            padding: EdgeInsets.only(left: angosta ? 6 : 8),
+            child: BotonNovedades(
+              centro: novedades,
+              onPressed: onNovedades,
+              tamano: angosta ? 40 : 44,
+            ),
           ),
           boton(
             'Actualizar',

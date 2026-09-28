@@ -207,6 +207,36 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 : _altoSinTeclado < 720
                 ? 164.0
                 : 190.0;
+            final suelo = math.max(altoEscena - 56, 112.0);
+            final centrar = ancho >= 600;
+            Widget cabecera({bool conBarra = true, bool conSaludo = true}) =>
+                _Cabecera(
+                  saludo: saludo,
+                  conBarra: conBarra,
+                  conSaludo: conSaludo,
+                  onVolver: widget.desdeAdmin
+                      ? () => Navigator.of(context).pop()
+                      : null,
+                  onActualizar: appState.cargarGuias,
+                  onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
+                );
+            final tarjeta = _TarjetaBusqueda(
+              guia: _guia,
+              cliente: _cliente,
+              pedido: _pedido,
+              entrega: _entrega,
+              hayFiltros: _hayFiltros,
+              error: _error,
+              fechaInicio: _fecha.format(_desde),
+              fechaFin: _fecha.format(_hasta),
+              buscando: _buscando,
+              onFechaInicio: () => _elegirFecha(inicio: true),
+              onFechaFin: () => _elegirFecha(inicio: false),
+              onHoy: _esHoy ? null : () => _cambiarRango(_hoy(), _hoy()),
+              onTexto: () => setState(() => _error = null),
+              onLimpiar: _limpiar,
+              onBuscar: _buscar,
+            );
             return SingleChildScrollView(
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: _altoSinTeclado),
@@ -221,9 +251,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
                     Padding(
                       // Solo se reserva el suelo del paisaje: la tarjeta puede
                       // tapar un poco de cielo.
-                      padding: EdgeInsets.only(
-                        bottom: math.max(altoEscena - 56, 112),
-                      ),
+                      padding: EdgeInsets.only(bottom: suelo),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -239,50 +267,65 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                     20,
                                     8,
                                     8,
-                                    ancho < 600 ? 14 : 28,
+                                    centrar ? 0 : (ancho < 600 ? 14 : 28),
                                   ),
-                                  child: _Cabecera(
-                                    saludo: saludo,
-                                    onVolver: widget.desdeAdmin
-                                        ? () => Navigator.of(context).pop()
-                                        : null,
-                                    onActualizar: appState.cargarGuias,
-                                    onCerrarSesion: widget.desdeAdmin
-                                        ? null
-                                        : _cerrarSesion,
-                                  ),
+                                  child: cabecera(conSaludo: !centrar),
                                 ),
                               ),
                             ),
                           ),
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 560),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
+                          // En computadora, el saludo y la tarjeta quedan al
+                          // centro del cielo, entre la barra y el paisaje.
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minHeight: centrar
+                                  ? math.max(
+                                      0,
+                                      _altoSinTeclado -
+                                          suelo -
+                                          _altoBarra -
+                                          MediaQuery.paddingOf(context).top,
+                                    )
+                                  : 0,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (centrar)
+                                  Center(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 560,
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          20,
+                                          0,
+                                          20,
+                                          24,
+                                        ),
+                                        child: cabecera(conBarra: false),
+                                      ),
+                                    ),
+                                  ),
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 560,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: tarjeta,
+                                    ),
+                                  ),
                                 ),
-                                child: _TarjetaBusqueda(
-                                  guia: _guia,
-                                  cliente: _cliente,
-                                  pedido: _pedido,
-                                  entrega: _entrega,
-                                  hayFiltros: _hayFiltros,
-                                  error: _error,
-                                  fechaInicio: _fecha.format(_desde),
-                                  fechaFin: _fecha.format(_hasta),
-                                  buscando: _buscando,
-                                  onFechaInicio: () =>
-                                      _elegirFecha(inicio: true),
-                                  onFechaFin: () => _elegirFecha(inicio: false),
-                                  onHoy: _esHoy
-                                      ? null
-                                      : () => _cambiarRango(_hoy(), _hoy()),
-                                  onTexto: () => setState(() => _error = null),
-                                  onLimpiar: _limpiar,
-                                  onBuscar: _buscar,
-                                ),
-                              ),
+                                // Un poco más arriba que el centro exacto.
+                                if (centrar) const SizedBox(height: 48),
+                              ],
                             ),
                           ),
                         ],
@@ -299,15 +342,22 @@ class _RastreoScreenState extends State<RastreoScreen> {
   }
 }
 
+/// Alto aproximado de la barra (logo y menú) con su margen de arriba.
+const _altoBarra = 56.0;
+
 class _Cabecera extends StatelessWidget {
   const _Cabecera({
     required this.saludo,
+    this.conBarra = true,
+    this.conSaludo = true,
     required this.onVolver,
     required this.onActualizar,
     required this.onCerrarSesion,
   });
 
   final String saludo;
+  final bool conBarra;
+  final bool conSaludo;
   final VoidCallback? onVolver;
   final VoidCallback onActualizar;
   final VoidCallback? onCerrarSesion;
@@ -317,62 +367,71 @@ class _Cabecera extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            if (onVolver != null) ...[
-              IconButton(
-                tooltip: 'Volver al panel',
-                onPressed: onVolver,
-                icon: const Icon(Icons.arrow_back, color: Ipesa.petroleo),
-              ),
-              const SizedBox(width: 4),
-            ],
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Image.asset(
-                'assets/brand/ipesa_blanco.png',
-                height: 18,
-                semanticLabel: 'IPESA',
-              ),
-            ),
-            const Spacer(),
-            PopupMenuButton<VoidCallback>(
-              tooltip: 'Opciones',
-              icon: const Icon(Icons.more_vert, color: Ipesa.petroleo),
-              color: Colors.white,
-              onSelected: (accion) => accion(),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: onActualizar,
-                  child: const ListTile(
-                    leading: Icon(Icons.refresh),
-                    title: Text('Actualizar'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+        // Ocupa todo el ancho aunque no lleve la barra, para que el saludo
+        // quede alineado con la tarjeta.
+        const SizedBox(width: double.infinity),
+        if (conBarra)
+          Row(
+            children: [
+              if (onVolver != null) ...[
+                IconButton(
+                  tooltip: 'Volver al panel',
+                  onPressed: onVolver,
+                  icon: const Icon(Icons.arrow_back, color: Ipesa.petroleo),
                 ),
-                if (onCerrarSesion != null)
+                const SizedBox(width: 4),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(
+                  'assets/brand/ipesa_blanco.png',
+                  height: 18,
+                  semanticLabel: 'IPESA',
+                ),
+              ),
+              const Spacer(),
+              PopupMenuButton<VoidCallback>(
+                tooltip: 'Opciones',
+                icon: const Icon(Icons.more_vert, color: Ipesa.petroleo),
+                color: Colors.white,
+                onSelected: (accion) => accion(),
+                itemBuilder: (_) => [
                   PopupMenuItem(
-                    value: onCerrarSesion,
+                    value: onActualizar,
                     child: const ListTile(
-                      leading: Icon(Icons.logout),
-                      title: Text('Cerrar sesión'),
+                      leading: Icon(Icons.refresh),
+                      title: Text('Actualizar'),
                       contentPadding: EdgeInsets.zero,
                     ),
                   ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(saludo, style: Ipesa.titulo(28)),
-        const Text(
-          'Sigue el recorrido de tus guías en tiempo real.',
-          style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
-        ),
+                  if (onCerrarSesion != null)
+                    PopupMenuItem(
+                      value: onCerrarSesion,
+                      child: const ListTile(
+                        leading: Icon(Icons.logout),
+                        title: Text('Cerrar sesión'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        if (conBarra && conSaludo) const SizedBox(height: 12),
+        if (conSaludo) ...[
+          Text(saludo, style: Ipesa.titulo(28)),
+          const Text(
+            'Sigue el recorrido de tus guías en tiempo real.',
+            style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+          ),
+        ],
       ],
     );
   }

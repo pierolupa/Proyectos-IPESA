@@ -35,12 +35,16 @@ class Notificador {
 
   /// Android Chrome no permite `new Notification()`: exige mostrarla desde
   /// un service worker. En escritorio funcionan ambas vías.
-  static Future<void> mostrar(String titulo, String cuerpo) async {
+  static Future<void> mostrar(
+    String titulo,
+    String cuerpo, {
+    String tag = 'ipesa-novedades',
+  }) async {
     if (!permitido) return;
     final opciones = web.NotificationOptions(
       body: cuerpo,
       icon: 'icons/Icon-192.png',
-      tag: 'ipesa-novedades',
+      tag: tag,
       renotify: true,
     );
     final registro = await _registrarServiceWorker();

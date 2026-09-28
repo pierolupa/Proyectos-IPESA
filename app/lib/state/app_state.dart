@@ -12,9 +12,16 @@ const _prefNombre = 'sesion_nombre';
 
 /// Novedad detectada al actualizar en segundo plano (para notificar al admin).
 class CambioGuia {
-  const CambioGuia(this.guia, this.mensaje);
+  CambioGuia(this.guia, this.mensaje, {this.anterior, DateTime? momento})
+    : momento = momento ?? DateTime.now();
   final Guia guia;
   final String mensaje;
+
+  /// Estado que tenía antes; null si la guía es nueva.
+  final EstadoGuia? anterior;
+  final DateTime momento;
+
+  bool get nueva => anterior == null;
 }
 
 const _prefRol = 'sesion_rol';
@@ -184,7 +191,7 @@ class AppState extends ChangeNotifier {
     final cambios = <CambioGuia>[
       for (final g in nuevas)
         if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
-          CambioGuia(g, mensaje),
+          CambioGuia(g, mensaje, anterior: anteriores[g.clave]?.estado),
     ];
     _guias = nuevas;
     error = null;
