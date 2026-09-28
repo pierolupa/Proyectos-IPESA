@@ -124,6 +124,17 @@ lo pone el transportista con un motivo (`motivo_rechazo`, columna S) desde
 `POST /api/guias/:numeroGuia/rechazo`; no cuenta como entregada y el número
 de guía se puede volver a registrar.
 
+**Mismo número de guía:** se puede registrar más de una vez (otro viaje de
+la misma guía), pero no dentro de las 2 horas siguientes a su último
+registro (así no entra dos veces la misma foto); si ese registro fue
+rechazado, se puede volver a registrar al momento. Las rutas que usan el
+número (cambiar estado, rechazar, foto) actúan sobre el registro más
+reciente.
+
+**Caché:** el backend guarda la lista de guías 10 segundos en memoria para
+no pasar el límite de lecturas de Google Sheets (~60 por minuto); cualquier
+escritura la borra, y las rutas que escriben siempre leen la hoja fresca.
+
 Valores válidos de `tipo_entrega`: `cliente_final`, `agencia`,
 `entre_sucursales`.
 
@@ -223,7 +234,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
-| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta`. Requiere GPS. Rechaza duplicados activos. |
+| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. Un mismo número solo se puede volver a registrar 2 horas después de su último registro. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
 | `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |
@@ -232,6 +243,6 @@ Al terminar, Vercel te da una URL pública (algo como
 | `GET` | `/api/sucursales` | Sucursales con su perímetro (centro + radio en metros). |
 | `PUT` | `/api/sucursales/:nombre` | Crea o actualiza el perímetro de una sucursal (`lat`, `lng`, `radioM` entre 20 y 5000). |
 | `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
-| `GET` | `/api/guias?estado=en_ruta` | Lista completa, con filtro opcional (administrador). |
+| `GET` | `/api/guias?estado=en_ruta&desde=…&hasta=…` | Lista de guías; filtros opcionales por estado y por fecha de la tarea (`fecha_creacion`, ISO, `desde` incluido y `hasta` excluido). |
 | `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
 | `GET` | `/api/health` | Chequeo de salud. |

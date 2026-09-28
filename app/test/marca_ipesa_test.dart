@@ -16,9 +16,7 @@ double _desplazamiento(WidgetTester tester) => tester
     .x;
 
 void main() {
-  testWidgets('La pantalla de carga muestra el logo de frente', (
-    tester,
-  ) async {
+  testWidgets('La pantalla de carga muestra el logo de frente', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: SplashIpesa()));
     await tester.pump();
 
@@ -32,10 +30,8 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('IPESA'), findsOneWidget);
-    expect(find.text('TRACKING DISTRIBUCIÓN'), findsOneWidget);
-    // Estática: nada que gire ni se anime.
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(tester.hasRunningAnimations, isFalse);
+    expect(find.text('CARGANDO DATOS'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
   testWidgets('El carrusel avanza solo y muestra todas las marcas', (
@@ -72,5 +68,16 @@ void main() {
 
     expect(find.byType(ListView), findsOneWidget);
     expect(find.bySemanticsLabel('John Deere'), findsOneWidget);
+  });
+
+  testWidgets('En web, la de Flutter queda solo en negro (una sola vista)', (
+    tester,
+  ) async {
+    SplashIpesa.soloFondo = true;
+    addTearDown(() => SplashIpesa.soloFondo = false);
+    await tester.pumpWidget(const MaterialApp(home: SplashIpesa()));
+
+    expect(find.bySemanticsLabel('IPESA'), findsNothing);
+    expect(find.text('CARGANDO DATOS'), findsNothing);
   });
 }

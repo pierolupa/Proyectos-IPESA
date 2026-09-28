@@ -81,8 +81,8 @@ function guiaToRow(guia) {
   });
 }
 
-/** Lee todas las guías de la hoja. */
-async function listarGuias() {
+/** Lee todas las guías directamente de la hoja (sin caché). */
+async function leerGuiasDeHoja() {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
   const res = await sheets.spreadsheets.values.get({
@@ -94,9 +94,67 @@ async function listarGuias() {
   return rows.map((row, i) => rowToGuia(row, i + 2));
 }
 
-async function buscarPorNumero(numeroGuia) {
-  const guias = await listarGuias();
-  return guias.find((g) => g.numero_guia === numeroGuia) || null;
+/*
+ * Caché corta de la hoja de guías. Cada celular pide la lista cada 15-60 s
+ * y Google Sheets permite ~60 lecturas por minuto a la cuenta de servicio:
+ * sin caché, cada pedido era una lectura. Con ella, la hoja se lee como
+ * mucho una vez cada TTL_CACHE_MS por instancia del servidor, y los pedidos
+ * que llegan juntos comparten la misma lectura. Cualquier escritura desde
+ * esta instancia la borra. Las rutas que escriben (asignar, cambiar estado,
+ * rechazar, corregir) leen con { fresco: true }: nunca deciden ni
+ * sobrescriben una fila con datos de hace unos segundos.
+ */
+const TTL_CACHE_MS = 10000;
+let cacheGuias = null; // { guias, vence }
+let lecturaEnCurso = null;
+
+// Copias: quien llama puede modificar la guía antes de guardarla.
+function copiar(guias) {
+  return guias.map((g) => ({ ...g }));
+}
+
+/** Lee todas las guías (de la caché si es reciente, salvo `fresco`). */
+async function listarGuias({ fresco = false } = {}) {
+  if (!fresco && cacheGuias && Date.now() < cacheGuias.vence) {
+    return copiar(cacheGuias.guias);
+  }
+  if (!fresco && lecturaEnCurso) return copiar(await lecturaEnCurso);
+  const lectura = leerGuiasDeHoja();
+  if (!fresco) lecturaEnCurso = lectura;
+  try {
+    const guias = await lectura;
+    cacheGuias = { guias, vence: Date.now() + TTL_CACHE_MS };
+    return copiar(guias);
+  } finally {
+    if (lecturaEnCurso === lectura) lecturaEnCurso = null;
+  }
+}
+
+function invalidarCacheGuias() {
+  cacheGuias = null;
+}
+
+function momentoDeRegistro(guia) {
+  const t = Date.parse(guia.fecha_creacion || guia.fecha_actualizacion);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/**
+ * La guía con ese número. Un mismo número puede registrarse más de una
+ * vez (con 2 horas de diferencia, ver app.js): se devuelve el registro
+ * más reciente.
+ */
+async function buscarPorNumero(numeroGuia, opciones) {
+  const guias = (await listarGuias(opciones)).filter(
+    (g) => g.numero_guia === numeroGuia,
+  );
+  if (guias.length === 0) return null;
+  return guias.reduce((a, b) =>
+    momentoDeRegistro(b) > momentoDeRegistro(a) ||
+    (momentoDeRegistro(b) === momentoDeRegistro(a) && b._row > a._row)
+      ? b
+      : a,
+  );
 }
 
 /** Agrega una nueva fila (nueva guía). */
@@ -109,7 +167,7 @@ async function crearGuia(guia) {
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [guiaToRow(guia)] },
-  });
+  }).finally(invalidarCacheGuias);
 }
 
 /** Sobrescribe la fila completa de una guía existente. */
@@ -121,7 +179,7 @@ async function actualizarGuia(rowNumber, guia) {
     range: `${SHEET_NAME}!A${rowNumber}:${String.fromCharCode(64 + COLUMNS.length)}${rowNumber}`,
     valueInputOption: 'RAW',
     requestBody: { values: [guiaToRow(guia)] },
-  });
+  }).finally(invalidarCacheGuias);
 }
 
 function rowToUsuario(row) {
@@ -272,6 +330,7 @@ module.exports = {
   eliminarSucursal,
   rowToSucursal,
   listarGuias,
+  invalidarCacheGuias,
   buscarPorNumero,
   crearGuia,
   actualizarGuia,

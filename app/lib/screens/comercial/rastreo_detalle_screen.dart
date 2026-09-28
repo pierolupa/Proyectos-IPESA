@@ -9,7 +9,6 @@ import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
-import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/escena_ruta.dart';
 import '../../widgets/foto_entrega.dart';
 import '../../widgets/seccion_ubicacion.dart';
@@ -33,54 +32,46 @@ class RastreoDetalleScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: cieloEscena,
-      body: ActualizacionAutomatica(
-        intervalo: const Duration(seconds: 60),
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: EscenaRuta(alto: altoEscena),
+      body: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: EscenaRuta(alto: altoEscena),
+                ),
+                Padding(
+                  // Solo se reserva el suelo del paisaje: el camión
+                  // queda siempre a la vista, debajo de la guía.
+                  padding: EdgeInsets.only(
+                    bottom: math.max(altoEscena - 56, 112),
                   ),
-                  Padding(
-                    // Solo se reserva el suelo del paisaje: el camión
-                    // queda siempre a la vista, debajo de la guía.
-                    padding: EdgeInsets.only(
-                      bottom: math.max(altoEscena - 56, 112),
-                    ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const _BarraSuperior(),
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 440),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  4,
-                                  20,
-                                  16,
-                                ),
-                                child: guia == null
-                                    ? const _NoEncontrada()
-                                    : _Boleto(guia: guia),
-                              ),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _BarraSuperior(),
+                        Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 440),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                              child: guia == null
+                                  ? const _NoEncontrada()
+                                  : _Boleto(guia: guia),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

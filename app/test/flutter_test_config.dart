@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ipesa_guias/widgets/carrusel_marcas.dart';
 import 'package:ipesa_guias/widgets/escena_ruta.dart';
+import 'package:ipesa_guias/widgets/splash_ipesa.dart';
 
 /// Configuración común de todos los tests: el carrusel de marcas y el
 /// paisaje del comercial se quedan quietos (sus animaciones no terminan
@@ -10,5 +11,6 @@ import 'package:ipesa_guias/widgets/escena_ruta.dart';
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   CarruselMarcas.animar = false;
   EscenaRuta.animar = false;
+  SplashIpesa.animar = false;
   await testMain();
 }

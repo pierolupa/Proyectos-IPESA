@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,147 +9,222 @@ import '../../models/filtros_rastreo.dart';
 import '../../models/guia.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
-import '../../widgets/actualizacion_automatica.dart';
-import '../../widgets/estado_badge.dart';
+import '../../widgets/escena_ruta.dart';
 import 'rastreo_detalle_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
-/// Resultados de una búsqueda del comercial: las guías que cumplen los
-/// filtros, con chips para acotar por estado. Se actualiza sola.
-class RastreoResultadosScreen extends StatefulWidget {
+/// Resultados de una búsqueda del comercial cuando coincide más de una
+/// guía: tarjetas flotantes sobre el mismo paisaje del buscador (con el
+/// camión abajo); el estado va como texto de color, sin fondo. Tocar una
+/// abre la guía. Se actualiza con la pantalla de búsqueda de abajo.
+class RastreoResultadosScreen extends StatelessWidget {
   const RastreoResultadosScreen({super.key, required this.filtros});
 
   final FiltrosRastreo filtros;
 
-  @override
-  State<RastreoResultadosScreen> createState() =>
-      _RastreoResultadosScreenState();
-}
-
-class _RastreoResultadosScreenState extends State<RastreoResultadosScreen> {
-  late GrupoEstado? _grupo = widget.filtros.grupo;
-
   /// Qué se buscó, en palabras, para mostrarlo arriba de la lista.
-  List<String> get _resumen {
-    final f = widget.filtros;
+  String get _resumen {
+    final f = filtros;
+    String rango() {
+      if (DateUtils.isSameDay(f.desde, f.hasta)) {
+        return DateUtils.isSameDay(f.desde, DateTime.now())
+            ? 'hoy'
+            : _fecha.format(f.desde!);
+      }
+      return '${_fecha.format(f.desde!)} – ${_fecha.format(f.hasta!)}';
+    }
+
     return [
       if (f.numeroGuia.trim().isNotEmpty) 'Guía: ${f.numeroGuia.trim()}',
       if (f.cliente.trim().isNotEmpty) 'Cliente: ${f.cliente.trim()}',
       if (f.numeroPedido.trim().isNotEmpty) 'Pedido: ${f.numeroPedido.trim()}',
       if (f.numeroEntrega.trim().isNotEmpty)
         'Entrega: ${f.numeroEntrega.trim()}',
-      if (f.tieneRango)
-        '${f.campoFecha == CampoFecha.salida ? 'Salida' : 'Entrega'}: '
-            '${_fecha.format(f.desde!)} – ${_fecha.format(f.hasta!)}',
-    ];
+      if (f.tieneRango) 'Tareas de ${rango()}',
+    ].join(' · ');
   }
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final filtros = widget.filtros.conGrupo(_grupo);
-    final guias = filtros.aplicar(appState.guias);
-    final base = widget.filtros.conGrupo(null).aplicar(appState.guias);
-    final ancha = MediaQuery.sizeOf(context).width >= 1000;
-    final resumen = _resumen;
+    final guias = filtros.conGrupo(null).aplicar(appState.guias);
+    final ancho = MediaQuery.sizeOf(context).width;
+    final altoEscena = ancho < 600 ? 170.0 : 220.0;
+    final n = guias.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Resultados')),
-      body: ActualizacionAutomatica(
-        intervalo: const Duration(seconds: 60),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final r
-                      in resumen.isEmpty ? ['Todas las guías'] : resumen)
-                    Chip(
-                      avatar: const Icon(
-                        Icons.search,
-                        size: 16,
-                        color: Ipesa.petroleo,
-                      ),
-                      label: Text(r),
-                      backgroundColor: Ipesa.menta,
-                      side: BorderSide.none,
-                    ),
-                ],
-              ),
-            ),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Row(
-                children: [
-                  _ChipEstado(
-                    etiqueta: 'Todos · ${base.length}',
-                    seleccionado: _grupo == null,
-                    onTap: () => setState(() => _grupo = null),
+      backgroundColor: cieloEscena,
+      body: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: EscenaRuta(alto: altoEscena),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            // La lista termina sobre el suelo: el camión queda a la vista.
+            bottom: math.max(altoEscena - 56, 112),
+            child: SafeArea(
+              bottom: false,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: ancho >= 1000 ? 1200 : 560,
                   ),
-                  for (final g in GrupoEstado.values)
-                    _ChipEstado(
-                      etiqueta:
-                          '${g.etiqueta} · '
-                          '${base.where((x) => x.estado.grupo == g).length}',
-                      seleccionado: _grupo == g,
-                      onTap: () => setState(() => _grupo = g),
-                    ),
-                ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                        child: Row(
+                          children: [
+                            IconButton.filled(
+                              tooltip: 'Nueva búsqueda',
+                              onPressed: () => Navigator.of(context).maybePop(),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: Ipesa.petroleo,
+                                fixedSize: const Size(44, 44),
+                                elevation: 2,
+                                shadowColor: const Color(0x330F4C5C),
+                              ),
+                              icon: const Icon(Icons.chevron_left, size: 26),
+                            ),
+                            Expanded(
+                              child: Text(
+                                'Resultados',
+                                textAlign: TextAlign.center,
+                                style: Ipesa.titulo(17),
+                              ),
+                            ),
+                            const SizedBox(width: 44),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              n == 1
+                                  ? '1 guía encontrada'
+                                  : '$n guías encontradas',
+                              style: Ipesa.titulo(24),
+                            ),
+                            if (_resumen.isNotEmpty)
+                              Text(
+                                _resumen,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  color: Ipesa.textoSuave,
+                                ),
+                              ),
+                            const SizedBox(height: 4),
+                            _Conteos(guias: guias),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: _Resultados(
+                          guias: guias,
+                          total: guias.length,
+                          cargando: appState.cargando && appState.guias.isEmpty,
+                          error: appState.error,
+                          tabla: ancho >= 1000,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            Expanded(
-              child: _Resultados(
-                guias: guias,
-                total: base.length,
-                cargando: appState.cargando && appState.guias.isEmpty,
-                error: appState.error,
-                tabla: ancha,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ChipEstado extends StatelessWidget {
-  const _ChipEstado({
-    required this.etiqueta,
-    required this.seleccionado,
-    required this.onTap,
-  });
+String _conteo(GrupoEstado grupo, int n) => switch (grupo) {
+  GrupoEstado.enRuta => '$n en ruta',
+  GrupoEstado.trasbordo => '$n en trasbordo',
+  GrupoEstado.entregado => n == 1 ? '1 entregada' : '$n entregadas',
+  GrupoEstado.rechazado => n == 1 ? '1 rechazada' : '$n rechazadas',
+};
 
-  final String etiqueta;
-  final bool seleccionado;
-  final VoidCallback onTap;
+EstadoGuia _estadoDe(GrupoEstado g) => switch (g) {
+  GrupoEstado.enRuta => EstadoGuia.enRuta,
+  GrupoEstado.trasbordo => EstadoGuia.enProcesoTrasbordo,
+  GrupoEstado.entregado => EstadoGuia.entregado,
+  GrupoEstado.rechazado => EstadoGuia.rechazado,
+};
+
+/// "2 en ruta · 1 entregada", cada parte en el color de su estado; solo
+/// los estados que tienen guías.
+class _Conteos extends StatelessWidget {
+  const _Conteos({required this.guias});
+
+  final List<Guia> guias;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(etiqueta),
-        selected: seleccionado,
-        showCheckmark: false,
-        onSelected: (_) => onTap(),
-        backgroundColor: Colors.white,
-        selectedColor: Ipesa.menta,
-        side: BorderSide(color: seleccionado ? Ipesa.petroleo : Ipesa.borde),
-        labelStyle: TextStyle(
-          fontFamily: Ipesa.fuenteTexto,
-          color: seleccionado ? Ipesa.petroleo : Ipesa.texto,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+    return Wrap(
+      spacing: 12,
+      runSpacing: 2,
+      children: [
+        for (final g in GrupoEstado.values)
+          if (guias.where((x) => x.estado.grupo == g).length case final n
+              when n > 0)
+            Text(
+              _conteo(g, n),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _estadoDe(g).color,
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+/// El estado como texto de color con un punto, sin fondo.
+class _EstadoTexto extends StatelessWidget {
+  const _EstadoTexto({required this.estado});
+
+  final EstadoGuia estado;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: estado.color,
+            shape: BoxShape.circle,
+          ),
         ),
-      ),
+        const SizedBox(width: 6),
+        Text(
+          estado.etiqueta,
+          style: TextStyle(
+            fontFamily: Ipesa.fuenteTitulos,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: estado.color,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -190,24 +267,10 @@ class _Resultados extends StatelessWidget {
       );
     }
 
-    final resumen = Padding(
-      padding: EdgeInsets.fromLTRB(tabla ? 16 : 20, 8, 20, 10),
-      child: Text(
-        guias.length == total
-            ? '$total ${total == 1 ? 'guía' : 'guías'}'
-            : '${guias.length} de $total ${total == 1 ? 'guía' : 'guías'}',
-        style: const TextStyle(
-          fontWeight: FontWeight.w600,
-          color: Ipesa.textoSuave,
-        ),
-      ),
-    );
-
     if (guias.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          resumen,
           const Expanded(
             child: Center(
               child: Padding(
@@ -234,10 +297,9 @@ class _Resultados extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          resumen,
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               itemCount: guias.length,
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) => _Tarjeta(
@@ -251,17 +313,22 @@ class _Resultados extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 24, 24),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          resumen,
           Expanded(
             child: Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(Ipesa.radio),
-                border: Border.all(color: Ipesa.borde),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x1A0F4C5C),
+                    blurRadius: 24,
+                    offset: Offset(0, 10),
+                  ),
+                ],
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
@@ -354,7 +421,15 @@ class _FilaTabla extends StatelessWidget {
                 texto(3, g.numeroEntrega),
                 texto(4, _fechaHora.format(g.fechaCreacion.toLocal())),
                 texto(5, _fechaEntrega(g)),
-                celda(6, EstadoBadge(estado: g.estado)),
+                celda(
+                  6,
+                  // "En proceso de trasbordo" es largo: se achica para caber.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: _EstadoTexto(estado: g.estado),
+                  ),
+                ),
               ],
       ),
     );
@@ -378,9 +453,11 @@ class _Tarjeta extends StatelessWidget {
     ].join(' · ');
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      elevation: 3,
+      shadowColor: const Color(0x330F4C5C),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -392,7 +469,8 @@ class _Tarjeta extends StatelessWidget {
                   Expanded(
                     child: Text(guia.numeroGuia, style: Ipesa.titulo(15)),
                   ),
-                  EstadoBadge(estado: guia.estado),
+                  const SizedBox(width: 12),
+                  _EstadoTexto(estado: guia.estado),
                 ],
               ),
               const SizedBox(height: 4),

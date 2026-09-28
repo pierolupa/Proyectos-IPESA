@@ -30,12 +30,29 @@ class _Servidor {
   List<Map<String, dynamic>> guias;
   _Servidor(this.guias);
 
+  /// Cuántas veces se pidió la lista de guías.
+  int pedidos = 0;
+
   MockClient get client => MockClient((request) async {
     if (request.url.path.endsWith('/sucursales')) {
       return http.Response('[]', 200);
     }
+    pedidos++;
     return http.Response(jsonEncode(guias), 200);
   });
+}
+
+Future<void> _ocultar(WidgetTester tester) async {
+  // Como el navegador al pasar a otra pestaña: inactiva, luego oculta.
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+  await tester.pump();
+}
+
+Future<void> _mostrar(WidgetTester tester) async {
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+  tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  await tester.pump();
 }
 
 void main() {
@@ -55,29 +72,62 @@ void main() {
     );
     expect(find.text('En ruta · 1'), findsOneWidget);
 
-    servidor.guias = [
-      _guia('T001-1', 'entregado'),
-      _guia('T001-2', 'en_ruta'),
-    ];
+    servidor.guias = [_guia('T001-1', 'entregado'), _guia('T001-2', 'en_ruta')];
     await tester.pump(const Duration(seconds: 15));
     await tester.pump();
 
     expect(find.text('Entregado · 1'), findsOneWidget);
-    expect(find.textContaining('Juan Pérez entregó la guía T001-1.'), findsOneWidget);
-    expect(find.textContaining('Juan Pérez registró la guía T001-2'), findsOneWidget);
+    expect(
+      find.textContaining('Juan Pérez entregó la guía T001-1.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Juan Pérez registró la guía T001-2'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('Las tareas entregadas desaparecen de la lista del transportista', (
+  testWidgets(
+    'Las tareas entregadas desaparecen de la lista del transportista',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'sesion_nombre': 'Juan Pérez',
+        'sesion_rol': 'transportista',
+      });
+      final servidor = _Servidor([
+        _guia('T001-1', 'en_ruta'),
+        _guia('T001-2', 'en_ruta'),
+      ]);
+      final appState = AppState(api: GuiasApi(client: servidor.client));
+      await appState.restaurarSesion();
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: appState,
+          child: const MaterialApp(home: TaskListScreen()),
+        ),
+      );
+      expect(find.text('T001-1'), findsOneWidget);
+
+      servidor.guias = [
+        _guia('T001-1', 'entregado'),
+        _guia('T001-2', 'en_ruta'),
+      ];
+      await tester.pump(const Duration(seconds: 60));
+      await tester.pump();
+
+      expect(find.text('T001-1'), findsNothing);
+      expect(find.text('T001-2'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Con la app oculta el transportista no consulta; al volver, sí', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
       'sesion_nombre': 'Juan Pérez',
       'sesion_rol': 'transportista',
     });
-    final servidor = _Servidor([
-      _guia('T001-1', 'en_ruta'),
-      _guia('T001-2', 'en_ruta'),
-    ]);
+    final servidor = _Servidor([_guia('T001-1', 'en_ruta')]);
     final appState = AppState(api: GuiasApi(client: servidor.client));
     await appState.restaurarSesion();
     await tester.pumpWidget(
@@ -86,16 +136,47 @@ void main() {
         child: const MaterialApp(home: TaskListScreen()),
       ),
     );
-    expect(find.text('T001-1'), findsOneWidget);
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    final alAbrir = servidor.pedidos;
 
-    servidor.guias = [
-      _guia('T001-1', 'entregado'),
-      _guia('T001-2', 'en_ruta'),
-    ];
-    await tester.pump(const Duration(seconds: 60));
+    await _ocultar(tester);
+    await tester.pump(const Duration(minutes: 5));
+    expect(servidor.pedidos, alAbrir);
+
+    servidor.guias = [_guia('T001-1', 'entregado')];
+    await _mostrar(tester);
     await tester.pump();
-
+    expect(servidor.pedidos, alAbrir + 1);
     expect(find.text('T001-1'), findsNothing);
-    expect(find.text('T001-2'), findsOneWidget);
+  });
+
+  testWidgets('Con la pestaña oculta el admin consulta cada 60 s, no cada 15', (
+    tester,
+  ) async {
+    final servidor = _Servidor([_guia('T001-1', 'en_ruta')]);
+    final appState = AppState(api: GuiasApi(client: servidor.client));
+    await appState.cargarGuias();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: const MaterialApp(home: AdminDashboardScreen()),
+      ),
+    );
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    final alAbrir = servidor.pedidos;
+
+    await _ocultar(tester);
+    await tester.pump(const Duration(seconds: 45));
+    expect(servidor.pedidos, alAbrir);
+    await tester.pump(const Duration(seconds: 15));
+    expect(servidor.pedidos, alAbrir + 1);
   });
 }

@@ -5,7 +5,6 @@ import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
-import '../../widgets/actualizacion_automatica.dart';
 import 'admin_dashboard_screen.dart';
 
 /// Qué guías cuentan en el resumen. Las que siguen pendientes (en ruta o
@@ -477,18 +476,15 @@ class _TransportistaDetalleScreenState
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.nombre)),
-      body: ActualizacionAutomatica(
-        intervalo: const Duration(seconds: 15),
-        child: RefreshIndicator(
-          onRefresh: () => context.read<AppState>().cargarGuias(),
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-                children: contenido,
-              ),
+      body: RefreshIndicator(
+        onRefresh: () => context.read<AppState>().cargarGuias(),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+              children: contenido,
             ),
           ),
         ),

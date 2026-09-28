@@ -106,7 +106,9 @@ class GuiasApi {
   Never _lanzarError(http.Response res) {
     try {
       final body = _decodeBody(res);
-      throw ApiException(body['error'] as String? ?? 'Error inesperado del servidor.');
+      throw ApiException(
+        body['error'] as String? ?? 'Error inesperado del servidor.',
+      );
     } on ApiException {
       rethrow;
     } catch (_) {
@@ -167,10 +169,21 @@ class GuiasApi {
     if (res.statusCode != 204) _lanzarError(res);
   }
 
-  Future<List<Guia>> listarGuias({EstadoGuia? estado}) async {
+  /// [desde]/[hasta]: solo las tareas creadas en ese lapso (desde
+  /// incluido, hasta excluido).
+  Future<List<Guia>> listarGuias({
+    EstadoGuia? estado,
+    DateTime? desde,
+    DateTime? hasta,
+  }) async {
+    final consulta = {
+      if (estado != null) 'estado': estado.valorApi,
+      if (desde != null) 'desde': desde.toUtc().toIso8601String(),
+      if (hasta != null) 'hasta': hasta.toUtc().toIso8601String(),
+    };
     final uri = Uri.parse(apiBaseUrl).replace(
       path: '${Uri.parse(apiBaseUrl).path}/guias',
-      queryParameters: estado != null ? {'estado': estado.valorApi} : null,
+      queryParameters: consulta.isEmpty ? null : consulta,
     );
     final res = await _client.get(uri);
     if (res.statusCode != 200) _lanzarError(res);
@@ -180,7 +193,9 @@ class GuiasApi {
 
   Future<List<Guia>> guiasDelTransportista(String nombre) async {
     final res = await _client.get(
-      Uri.parse('$apiBaseUrl/guias/transportista/${Uri.encodeComponent(nombre)}'),
+      Uri.parse(
+        '$apiBaseUrl/guias/transportista/${Uri.encodeComponent(nombre)}',
+      ),
     );
     if (res.statusCode != 200) _lanzarError(res);
     final lista = jsonDecode(res.body) as List<dynamic>;
@@ -234,8 +249,12 @@ class GuiasApi {
       }),
     );
     if (res.statusCode != 201) _lanzarError(res);
-    // La API de creación devuelve solo {numeroGuia, estado}; recargamos el
-    // objeto completo para tener todos los campos consistentes.
+    // El backend devuelve la guía completa; si es uno antiguo que solo
+    // manda {numeroGuia, estado}, se recarga la lista para obtenerla.
+    final cuerpo = jsonDecode(res.body);
+    if (cuerpo is Map<String, dynamic> && cuerpo['numero_guia'] is String) {
+      return Guia.fromJson(cuerpo);
+    }
     final guia = await buscarGuiaExacta(numeroGuia);
     if (guia == null) {
       throw ApiException('La guía se creó pero no se pudo recargar.');
@@ -243,12 +262,17 @@ class GuiasApi {
     return guia;
   }
 
+  /// El registro más reciente con ese número.
   Future<Guia?> buscarGuiaExacta(String numeroGuia) async {
-    final guias = await listarGuias();
-    for (final g in guias) {
-      if (g.numeroGuia == numeroGuia) return g;
+    Guia? encontrada;
+    for (final g in await listarGuias()) {
+      if (g.numeroGuia == numeroGuia &&
+          (encontrada == null ||
+              !g.fechaCreacion.isBefore(encontrada.fechaCreacion))) {
+        encontrada = g;
+      }
     }
-    return null;
+    return encontrada;
   }
 
   /// Devuelve la guía actualizada y, si la foto no se pudo guardar, el
@@ -292,9 +316,7 @@ class GuiasApi {
     double? lng,
   }) async {
     final res = await _client.post(
-      Uri.parse(
-        '$apiBaseUrl/guias/${Uri.encodeComponent(numeroGuia)}/rechazo',
-      ),
+      Uri.parse('$apiBaseUrl/guias/${Uri.encodeComponent(numeroGuia)}/rechazo'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'motivo': motivo,

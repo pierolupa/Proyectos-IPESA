@@ -121,6 +121,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         final ancha = constraints.maxWidth >= _anchoEscritorio;
         final contenido = ActualizacionAutomatica(
           intervalo: const Duration(seconds: 15),
+          // Con la pestaña oculta sigue, más espaciado, para las
+          // notificaciones del navegador.
+          intervaloOculta: const Duration(seconds: 60),
           onCambios: _avisarCambios,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

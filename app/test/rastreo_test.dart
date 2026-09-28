@@ -72,11 +72,29 @@ List<String> _numeros(List<Guia> guias) => [
   for (final g in guias) g.numeroGuia,
 ];
 
-Future<void> _abrirRastreo(WidgetTester tester) async {
+/// Las mismas guías, pero creadas hoy (la búsqueda empieza en "hoy").
+List<Map<String, dynamic>> get _datosDeHoy {
+  final hoy = DateUtils.dateOnly(DateTime.now());
+  return [
+    for (final (i, j) in _datos.indexed)
+      {
+        ...j,
+        'fecha_creacion': hoy
+            .add(Duration(hours: 1, minutes: i))
+            .toUtc()
+            .toIso8601String(),
+      },
+  ];
+}
+
+Future<void> _abrirRastreo(
+  WidgetTester tester, {
+  List<Map<String, dynamic>>? datos,
+}) async {
   final client = MockClient(
     (request) async => request.url.path.endsWith('/sucursales')
         ? http.Response('[]', 200)
-        : http.Response(jsonEncode(_datos), 200),
+        : http.Response(jsonEncode(datos ?? _datosDeHoy), 200),
   );
   final appState = AppState(api: GuiasApi(client: client));
   await appState.cargarGuias();
@@ -221,13 +239,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('No encontramos ninguna guía con esos datos.'),
+      find.textContaining('No encontramos ninguna guía de hoy con esos datos'),
       findsOneWidget,
     );
     expect(find.text('Tu guía'), findsNothing);
   });
 
-  testWidgets('Sin datos no busca; los chips filtran por estado', (
+  testWidgets('Sin datos no busca; varias guías se listan sobre el paisaje', (
     tester,
   ) async {
     await _abrirRastreo(tester);
@@ -246,12 +264,16 @@ void main() {
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('2 guías'), findsOneWidget);
-    await tester.tap(find.text('Entregado · 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('1 de 2 guías'), findsOneWidget);
+    expect(find.text('2 guías encontradas'), findsOneWidget);
+    // Sin fila de chips por estado: solo cuántas hay de cada uno.
+    expect(find.byType(ChoiceChip), findsNothing);
+    expect(find.text('1 en ruta'), findsOneWidget);
+    expect(find.text('1 entregada'), findsOneWidget);
     expect(find.text('T028-130133'), findsOneWidget);
-    expect(find.text('T033-3455'), findsNothing);
+    expect(find.text('T033-3455'), findsOneWidget);
+    // El paisaje con el camión también está en los resultados.
+    expect(find.byType(EscenaRuta), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('El teclado no le quita el foco al campo de búsqueda', (
@@ -338,5 +360,62 @@ void main() {
     addTearDown(tester.view.reset);
     await _abrirRastreo(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Busca solo en la fecha de tarea: hoy, salvo que se cambie', (
+    tester,
+  ) async {
+    // Guías de otros días: con "Hoy" no aparecen.
+    await _abrirRastreo(tester, datos: _datos);
+
+    expect(find.textContaining('Hoy · '), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° de guía'),
+      'T033-3455',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('No encontramos ninguna guía de hoy'),
+      findsOneWidget,
+    );
+    expect(find.text('Tu guía'), findsNothing);
+  });
+
+  testWidgets('Al comercial el servidor le manda solo las guías del rango', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'sesion_nombre': 'Lucía Ramos',
+      'sesion_rol': 'comercial',
+    });
+    final consultas = <Map<String, String>>[];
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/sucursales')) {
+        return http.Response('[]', 200);
+      }
+      consultas.add(request.url.queryParameters);
+      return http.Response(jsonEncode(_datosDeHoy), 200);
+    });
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.restaurarSesion();
+
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    expect(consultas.single['desde'], hoy.toUtc().toIso8601String());
+    expect(
+      consultas.single['hasta'],
+      hoy.add(const Duration(days: 1)).toUtc().toIso8601String(),
+    );
+
+    // Otro rango: se vuelve a pedir; el mismo rango, no.
+    final ayer = hoy.subtract(const Duration(days: 1));
+    await appState.asegurarRangoTareas(ayer, ayer);
+    expect(consultas, hasLength(2));
+    expect(consultas.last['desde'], ayer.toUtc().toIso8601String());
+    await appState.asegurarRangoTareas(ayer, ayer);
+    expect(consultas, hasLength(2));
   });
 }

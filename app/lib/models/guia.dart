@@ -62,6 +62,10 @@ class Guia {
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
+  /// Identifica este registro aunque el mismo número de guía se haya
+  /// registrado más de una vez (otro viaje, con 2 horas de diferencia).
+  String get clave => '$numeroGuia|${fechaCreacion.toUtc().toIso8601String()}';
+
   bool get tieneUbicacionCierre => cierreLat != null && cierreLng != null;
 
   String get ultimosCuatroDigitos {

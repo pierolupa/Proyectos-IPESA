@@ -56,16 +56,24 @@ describe('POST /guias (asignación)', () => {
     expect(repo.crearGuia).not.toHaveBeenCalled();
   });
 
-  it('rechaza un número de guía duplicado y activo', async () => {
-    repo.buscarPorNumero.mockResolvedValue(guia({ numero_guia: payload.numeroGuia }));
+  it('no deja registrar la misma guía dentro de las 2 horas', async () => {
+    const haceMedia = new Date(Date.now() - 30 * 60000).toISOString();
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMedia }),
+    );
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/hace 30 min/);
+    expect(res.body.error).toMatch(/desde las \d{2}:\d{2}/);
     expect(repo.crearGuia).not.toHaveBeenCalled();
+    // La comprobación lee la hoja sin caché.
+    expect(repo.buscarPorNumero).toHaveBeenCalledWith(payload.numeroGuia, { fresco: true });
   });
 
-  it('permite reasignar un número de guía ya finalizado', async () => {
+  it('la misma guía se puede registrar otra vez pasadas 2 horas, aunque siga activa', async () => {
+    const haceTres = new Date(Date.now() - 3 * 3600000).toISOString();
     repo.buscarPorNumero.mockResolvedValue(
-      guia({ numero_guia: payload.numeroGuia, estado: ESTADOS.FINALIZADO }),
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceTres }),
     );
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(201);
@@ -77,6 +85,13 @@ describe('POST /guias (asignación)', () => {
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(201);
     expect(res.body.estado).toBe(ESTADOS.EN_RUTA);
+    // Devuelve la guía completa para que la app no recargue todo.
+    expect(res.body).toMatchObject({
+      numero_guia: payload.numeroGuia,
+      destinatario: payload.destinatario,
+      transportista: payload.transportista,
+    });
+    expect(res.body.fecha_creacion).toBeTruthy();
     expect(repo.crearGuia).toHaveBeenCalledWith(
       expect.objectContaining({ numero_guia: payload.numeroGuia, estado: ESTADOS.EN_RUTA }),
     );
@@ -506,8 +521,10 @@ describe('POST /guias/:numeroGuia/rechazo', () => {
     expect(res.status).toBe(400);
   });
 
-  it('un número de guía rechazado se puede volver a registrar', async () => {
-    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.RECHAZADO }));
+  it('un número de guía rechazado se puede volver a registrar al momento', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ estado: ESTADOS.RECHAZADO, fecha_creacion: new Date().toISOString() }),
+    );
     const res = await request(app).post('/guias').send({
       numeroGuia: 'IPE-2026-000123',
       tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
@@ -518,5 +535,26 @@ describe('POST /guias/:numeroGuia/rechazo', () => {
       geo: { lat: -12, lng: -77 },
     });
     expect(res.status).toBe(201);
+  });
+});
+
+describe('GET /guias con rango de fechas', () => {
+  it('devuelve solo las tareas creadas en el rango (desde incluido, hasta excluido)', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'A', fecha_creacion: '2026-09-27T23:59:00.000Z' }),
+      guia({ numero_guia: 'B', fecha_creacion: '2026-09-28T05:00:00.000Z' }),
+      guia({ numero_guia: 'C', fecha_creacion: '2026-09-29T05:00:00.000Z' }),
+    ]);
+    const res = await request(app)
+      .get('/guias')
+      .query({ desde: '2026-09-28T05:00:00.000Z', hasta: '2026-09-29T05:00:00.000Z' });
+    expect(res.status).toBe(200);
+    expect(res.body.map((g) => g.numero_guia)).toEqual(['B']);
+  });
+
+  it('rechaza fechas inválidas', async () => {
+    repo.listarGuias.mockResolvedValue([]);
+    const res = await request(app).get('/guias').query({ desde: 'ayer' });
+    expect(res.status).toBe(400);
   });
 });

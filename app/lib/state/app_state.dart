@@ -19,6 +19,12 @@ class CambioGuia {
 
 const _prefRol = 'sesion_rol';
 
+/// Un mismo número de guía se puede volver a registrar pasado este tiempo
+/// desde su último registro (lo mismo valida el backend).
+const esperaMismaGuia = Duration(hours: 2);
+
+DateTime _inicioDelDia(DateTime f) => DateTime(f.year, f.month, f.day);
+
 /// Estado de la app respaldado por la API real (ver ../services/guias_api.dart).
 /// Mantiene una copia en memoria de las guías para que las pantallas no
 /// tengan que repetir la llamada de red en cada rebuild.
@@ -33,6 +39,37 @@ class AppState extends ChangeNotifier {
   String? error;
   RolUsuario? _rolActual;
   String? _nombreUsuario;
+
+  /// Solo para el equipo comercial: días de la fecha de tarea que se piden
+  /// al servidor (así no se descarga toda la hoja). Por defecto, hoy.
+  DateTime _desdeTareas = _inicioDelDia(DateTime.now());
+  DateTime _hastaTareas = _inicioDelDia(DateTime.now());
+  Future<void>? _cargaEnCurso;
+  (DateTime, DateTime)? _rangoCargado;
+
+  (DateTime, DateTime) get rangoTareas => (_desdeTareas, _hastaTareas);
+
+  bool get _pideRango => _rolActual == RolUsuario.comercial;
+
+  Future<List<Guia>> _pedirGuias() {
+    if (!_pideRango) return _api.listarGuias();
+    return _api.listarGuias(
+      desde: _desdeTareas,
+      hasta: _hastaTareas.add(const Duration(days: 1)),
+    );
+  }
+
+  /// El comercial busca en otro rango de fechas: se piden al servidor solo
+  /// esas guías (si no son las que ya están cargadas). Para los demás
+  /// roles no hace nada: ya tienen todas.
+  Future<void> asegurarRangoTareas(DateTime desde, DateTime hasta) async {
+    _desdeTareas = _inicioDelDia(desde);
+    _hastaTareas = _inicioDelDia(hasta);
+    if (!_pideRango) return;
+    if (_cargaEnCurso case final carga?) await carga;
+    if (_rangoCargado == (_desdeTareas, _hastaTareas) && error == null) return;
+    await cargarGuias();
+  }
 
   List<Guia> get guias => List.unmodifiable(_guias);
   List<Sucursal> get sucursales => List.unmodifiable(_sucursales);
@@ -55,9 +92,15 @@ class AppState extends ChangeNotifier {
     await _establecerSesion(await _api.registrar(nombre, pin));
   }
 
+  void _rangoDeHoy() {
+    _desdeTareas = _hastaTareas = _inicioDelDia(DateTime.now());
+    _rangoCargado = null;
+  }
+
   Future<void> _establecerSesion(SesionUsuario sesion) async {
     _nombreUsuario = sesion.nombre;
     _rolActual = sesion.rol;
+    _rangoDeHoy();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefNombre, sesion.nombre);
@@ -80,6 +123,7 @@ class AppState extends ChangeNotifier {
 
     _nombreUsuario = nombre;
     _rolActual = rol;
+    _rangoDeHoy();
     notifyListeners();
     await cargarGuias();
   }
@@ -96,12 +140,22 @@ class AppState extends ChangeNotifier {
     await prefs.remove(_prefRol);
   }
 
-  Future<void> cargarGuias() async {
+  Future<void> cargarGuias() {
+    final carga = _cargar();
+    _cargaEnCurso = carga;
+    return carga.whenComplete(() {
+      if (identical(_cargaEnCurso, carga)) _cargaEnCurso = null;
+    });
+  }
+
+  Future<void> _cargar() async {
     cargando = true;
     error = null;
     notifyListeners();
     try {
-      _guias = await _api.listarGuias();
+      final rango = (_desdeTareas, _hastaTareas);
+      _guias = await _pedirGuias();
+      _rangoCargado = _pideRango ? rango : null;
     } catch (e) {
       error = e.toString();
     }
@@ -122,14 +176,14 @@ class AppState extends ChangeNotifier {
     if (cargando) return const [];
     final List<Guia> nuevas;
     try {
-      nuevas = await _api.listarGuias();
+      nuevas = await _pedirGuias();
     } catch (_) {
       return const [];
     }
-    final anteriores = {for (final g in _guias) g.numeroGuia: g};
+    final anteriores = {for (final g in _guias) g.clave: g};
     final cambios = <CambioGuia>[
       for (final g in nuevas)
-        if (_describirCambio(anteriores[g.numeroGuia], g) case final mensaje?)
+        if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
           CambioGuia(g, mensaje),
     ];
     _guias = nuevas;
@@ -188,21 +242,39 @@ class AppState extends ChangeNotifier {
       ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));
   }
 
-  Guia? buscarPorNumero(String numeroGuia) {
-    for (final g in _guias) {
-      if (g.numeroGuia == numeroGuia) return g;
+  /// Posición del registro más reciente con ese número (-1 si no hay).
+  int _indiceDe(String numeroGuia) {
+    var indice = -1;
+    for (var i = 0; i < _guias.length; i++) {
+      final g = _guias[i];
+      if (g.numeroGuia != numeroGuia) continue;
+      if (indice == -1 ||
+          !g.fechaCreacion.isBefore(_guias[indice].fechaCreacion)) {
+        indice = i;
+      }
     }
-    return null;
+    return indice;
   }
 
-  /// Validación local rápida (sin llamada de red) contra la última lista
-  /// cargada. La validación definitiva la hace el backend al confirmar
-  /// (responde 409 si hay conflicto).
-  bool esDuplicado(String numeroGuia) {
-    return _guias.any(
-      (g) => g.numeroGuia == numeroGuia && !g.estado.esCerrada,
-    );
+  /// El registro más reciente con ese número de guía.
+  Guia? buscarPorNumero(String numeroGuia) {
+    final i = _indiceDe(numeroGuia);
+    return i == -1 ? null : _guias[i];
   }
+
+  /// Si ese número se registró hace menos de [esperaMismaGuia], desde
+  /// cuándo se podrá registrar otra vez; si no, null. Un registro
+  /// rechazado no bloquea. Validación local rápida contra la última lista
+  /// cargada; la definitiva la hace el backend al confirmar (409).
+  DateTime? registroBloqueadoHasta(String numeroGuia, {DateTime? ahora}) {
+    final ultima = buscarPorNumero(numeroGuia);
+    if (ultima == null || ultima.estado == EstadoGuia.rechazado) return null;
+    final libre = ultima.fechaCreacion.add(esperaMismaGuia);
+    return (ahora ?? DateTime.now()).isBefore(libre) ? libre : null;
+  }
+
+  bool esDuplicado(String numeroGuia) =>
+      registroBloqueadoHasta(numeroGuia) != null;
 
   /// Lee los datos de la foto de una guía con IA (ver
   /// ../services/guias_api.dart). No toca `_guias`/no notifica — es solo
@@ -255,7 +327,7 @@ class AppState extends ChangeNotifier {
       porAdmin: porAdmin,
       foto: foto,
     );
-    final index = _guias.indexWhere((g) => g.numeroGuia == numeroGuia);
+    final index = _indiceDe(numeroGuia);
     if (index != -1) {
       _guias[index] = actualizada;
     }
@@ -284,7 +356,7 @@ class AppState extends ChangeNotifier {
       lat: lat,
       lng: lng,
     );
-    final index = _guias.indexWhere((g) => g.numeroGuia == numeroGuia);
+    final index = _indiceDe(numeroGuia);
     if (index != -1) _guias[index] = actualizada;
     notifyListeners();
   }
@@ -297,7 +369,7 @@ class AppState extends ChangeNotifier {
       numeroAnterior,
       numeroNuevo,
     );
-    final index = _guias.indexWhere((g) => g.numeroGuia == numeroAnterior);
+    final index = _indiceDe(numeroAnterior);
     if (index != -1) {
       _guias[index] = actualizada;
     }

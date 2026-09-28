@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/filtros_rastreo.dart';
@@ -11,10 +12,17 @@ import '../../widgets/escena_ruta.dart';
 import 'rastreo_detalle_screen.dart';
 import 'rastreo_resultados_screen.dart';
 
+final _fecha = DateFormat('dd/MM/yyyy');
+final _diaMes = DateFormat('dd/MM');
+
+DateTime _hoy() => DateUtils.dateOnly(DateTime.now());
+
 /// Inicio del equipo comercial: saludo, una tarjeta "Rastrea tus guías"
-/// con los filtros (N° de guía, cliente, pedido y entrega) y el paisaje
-/// animado con el camión IPESA al pie. "Buscar" abre la guía encontrada
-/// (o la lista, si hay varias).
+/// con los filtros (N° de guía, cliente, pedido y entrega) y la fecha de la
+/// tarea (hoy, salvo que se elija otro rango), y el paisaje animado con el
+/// camión IPESA al pie. Solo se busca dentro de esas fechas: al comercial
+/// el servidor le manda solo las guías de ese rango. "Buscar" abre la guía
+/// encontrada (o la lista, si hay varias).
 class RastreoScreen extends StatefulWidget {
   const RastreoScreen({super.key, this.desdeAdmin = false});
 
@@ -32,6 +40,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
   final _pedido = TextEditingController();
   final _entrega = TextEditingController();
   String? _error;
+  DateTime _desde = _hoy();
+  DateTime _hasta = _hoy();
+  bool _buscando = false;
   double _altoSinTeclado = 0;
   double _anchoMedido = 0;
 
@@ -59,9 +70,66 @@ class _RastreoScreenState extends State<RastreoScreen> {
     setState(() => _error = null);
   }
 
+  @override
+  void initState() {
+    super.initState();
+    // Siempre empieza en hoy. Para el comercial, pide al servidor solo
+    // las guías de hoy (si no son las que ya tiene).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AppState>().asegurarRangoTareas(_desde, _hasta);
+      }
+    });
+  }
+
+  bool get _esHoy => _desde == _hoy() && _hasta == _hoy();
+
+  String get _textoRango {
+    if (_desde == _hasta) {
+      return _esHoy ? 'Hoy · ${_fecha.format(_desde)}' : _fecha.format(_desde);
+    }
+    return '${_diaMes.format(_desde)} – ${_fecha.format(_hasta)}';
+  }
+
+  void _cambiarRango(DateTime desde, DateTime hasta) {
+    setState(() {
+      _desde = DateUtils.dateOnly(desde);
+      _hasta = DateUtils.dateOnly(hasta);
+      _error = null;
+    });
+    // Se adelanta la carga; "Buscar" la espera si aún no terminó.
+    context.read<AppState>().asegurarRangoTareas(_desde, _hasta);
+  }
+
+  Future<void> _elegirFechas() async {
+    final elegido = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: _hoy(),
+      initialDateRange: DateTimeRange(start: _desde, end: _hasta),
+      helpText: 'Fecha de la tarea',
+      saveText: 'Aplicar',
+      // En computadora, una ventana del tamaño de un celular en vez de
+      // ocupar toda la pantalla.
+      builder: (context, child) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440, maxHeight: 680),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(Ipesa.radio),
+            child: child,
+          ),
+        ),
+      ),
+    );
+    if (elegido == null || !mounted) return;
+    _cambiarRango(elegido.start, elegido.end);
+  }
+
   /// Una sola guía coincide: se abre de frente. Varias: la lista para
-  /// elegir. Ninguna: se avisa aquí mismo.
-  void _buscar() {
+  /// elegir. Ninguna: se avisa aquí mismo. Solo cuentan las tareas
+  /// creadas en las fechas elegidas.
+  Future<void> _buscar() async {
+    if (_buscando) return;
     if (!_hayFiltros) {
       setState(() => _error = 'Escribe al menos un dato para buscar.');
       return;
@@ -71,15 +139,30 @@ class _RastreoScreenState extends State<RastreoScreen> {
       cliente: _cliente.text,
       numeroEntrega: _entrega.text,
       numeroPedido: _pedido.text,
+      campoFecha: CampoFecha.salida,
+      desde: _desde,
+      hasta: _hasta,
     );
+    FocusScope.of(context).unfocus();
     final appState = context.read<AppState>();
-    final sinDatos = appState.guias.isEmpty;
+    setState(() => _buscando = true);
+    try {
+      await appState.asegurarRangoTareas(_desde, _hasta);
+    } finally {
+      if (mounted) setState(() => _buscando = false);
+    }
+    if (!mounted) return;
+    final sinDatos = appState.guias.isEmpty && appState.error != null;
     final encontradas = filtros.aplicar(appState.guias);
     if (!sinDatos && encontradas.isEmpty) {
-      setState(() => _error = 'No encontramos ninguna guía con esos datos.');
+      setState(
+        () => _error = _esHoy
+            ? 'No encontramos ninguna guía de hoy con esos datos. Si es de '
+                  'otro día, cambia la fecha.'
+            : 'No encontramos ninguna guía con esos datos en esas fechas.',
+      );
       return;
     }
-    FocusScope.of(context).unfocus();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => !sinDatos && encontradas.length == 1
@@ -107,6 +190,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
       backgroundColor: cieloEscena,
       body: ActualizacionAutomatica(
         intervalo: const Duration(seconds: 60),
+        // Abierta desde el panel del administrador, el panel de abajo ya
+        // actualiza.
+        activa: !widget.desdeAdmin,
         child: LayoutBuilder(
           builder: (context, constraints) {
             // Alto de la pantalla sin teclado: el paisaje se queda donde
@@ -188,6 +274,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                   entrega: _entrega,
                                   hayFiltros: _hayFiltros,
                                   error: _error,
+                                  textoRango: _textoRango,
+                                  buscando: _buscando,
+                                  onElegirFechas: _elegirFechas,
+                                  onHoy: _esHoy
+                                      ? null
+                                      : () => _cambiarRango(_hoy(), _hoy()),
                                   onTexto: () => setState(() => _error = null),
                                   onLimpiar: _limpiar,
                                   onBuscar: _buscar,
@@ -296,6 +388,10 @@ class _TarjetaBusqueda extends StatelessWidget {
     required this.entrega,
     required this.hayFiltros,
     required this.error,
+    required this.textoRango,
+    required this.buscando,
+    required this.onElegirFechas,
+    required this.onHoy,
     required this.onTexto,
     required this.onLimpiar,
     required this.onBuscar,
@@ -307,6 +403,12 @@ class _TarjetaBusqueda extends StatelessWidget {
   final TextEditingController entrega;
   final bool hayFiltros;
   final String? error;
+  final String textoRango;
+  final bool buscando;
+  final VoidCallback onElegirFechas;
+
+  /// Volver a hoy (null si ya es hoy).
+  final VoidCallback? onHoy;
   final VoidCallback onTexto;
   final VoidCallback onLimpiar;
   final VoidCallback onBuscar;
@@ -390,20 +492,55 @@ class _TarjetaBusqueda extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
+                'Fecha de tarea',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: onElegirFechas,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      foregroundColor: Ipesa.petroleo,
+                    ),
+                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                    label: Text(textoRango, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ),
+              if (onHoy != null)
+                TextButton(onPressed: onHoy, child: const Text('Hoy')),
+            ],
+          ),
           if (error != null) ...[
             const SizedBox(height: 8),
             Text(error!, style: const TextStyle(color: Color(0xFFB42318))),
           ],
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: onBuscar,
+            onPressed: buscando ? null : onBuscar,
             style: FilledButton.styleFrom(
               backgroundColor: Ipesa.petroleo,
               minimumSize: const Size(0, 48),
               padding: const EdgeInsets.symmetric(horizontal: 24),
             ),
-            icon: const Icon(Icons.search),
-            label: const Text('Buscar'),
+            icon: buscando
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.search),
+            label: Text(buscando ? 'Buscando…' : 'Buscar'),
           ),
           const SizedBox(height: 10),
         ],

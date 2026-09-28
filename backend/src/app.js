@@ -15,6 +15,19 @@ const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 const TIPOS_VALIDOS = new Set(Object.values(TIPOS_ENTREGA));
 const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
+// Tiempo mínimo entre dos registros del mismo número de guía.
+const ESPERA_MISMA_GUIA_MS = 2 * 60 * 60 * 1000;
+
+/** "14:35" en hora de Perú (el servidor corre en UTC). */
+function horaPeru(ms) {
+  return new Date(ms).toLocaleTimeString('es-PE', {
+    timeZone: 'America/Lima',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 /**
  * NOTA DE SEGURIDAD: el login de /auth/login es deliberadamente simple
  * (nombre + PIN comparados en texto plano contra la hoja "Usuarios") y
@@ -191,16 +204,30 @@ app.delete('/sucursales/:nombre', async (req, res, next) => {
   }
 });
 
-// Administrador: lista completa, con filtro opcional por estado.
+// Lista de guías, con filtros opcionales: estado, y desde/hasta (fechas
+// ISO) sobre la fecha de la tarea (fecha_creacion): desde <= f < hasta.
+// El equipo comercial pide solo el rango que está buscando.
 app.get('/guias', async (req, res, next) => {
   try {
-    const { estado } = req.query;
+    const { estado, desde, hasta } = req.query;
     let guias = await repo.listarGuias();
     if (estado) {
       if (!ESTADOS_VALIDOS.has(estado)) {
         return res.status(400).json({ error: `Estado inválido: ${estado}` });
       }
       guias = guias.filter((g) => g.estado === estado);
+    }
+    const inicio = desde ? Date.parse(desde) : null;
+    const fin = hasta ? Date.parse(hasta) : null;
+    if (Number.isNaN(inicio) || Number.isNaN(fin)) {
+      return res.status(400).json({ error: 'Fechas inválidas (usa formato ISO).' });
+    }
+    if (inicio !== null || fin !== null) {
+      guias = guias.filter((g) => {
+        const t = Date.parse(g.fecha_creacion || g.fecha_actualizacion);
+        if (Number.isNaN(t)) return false;
+        return (inicio === null || t >= inicio) && (fin === null || t < fin);
+      });
     }
     res.json(guias.map(sinCamposInternos));
   } catch (err) {
@@ -258,15 +285,27 @@ app.post('/guias', async (req, res, next) => {
       destinoFinal = sucursal.nombre;
     }
 
-    const existente = await repo.buscarPorNumero(numeroGuia);
-    if (existente && !ESTADOS_CERRADOS.has(existente.estado)) {
-      return res.status(409).json({
-        error: `La guía ${numeroGuia} ya está activa (estado: ${existente.estado}).`,
-      });
+    // Un mismo número de guía se puede volver a registrar (otro viaje de
+    // la misma guía), pero no dentro de las 2 horas siguientes al último
+    // registro: eso casi siempre es la misma foto enviada dos veces. Si el
+    // último fue rechazado, la tarea nunca se hizo: se puede volver a
+    // registrar al momento.
+    const existente = await repo.buscarPorNumero(numeroGuia, { fresco: true });
+    if (existente && existente.estado !== ESTADOS.RECHAZADO) {
+      const registrada = Date.parse(existente.fecha_creacion || existente.fecha_actualizacion);
+      const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
+      if (!Number.isNaN(registrada) && Date.now() < libreDesde) {
+        const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
+        return res.status(409).json({
+          error:
+            `La guía ${numeroGuia} ya se registró hace ${minutos} min. `
+            + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
+        });
+      }
     }
 
     const ahora = new Date().toISOString();
-    await repo.crearGuia({
+    const nueva = {
       numero_guia: numeroGuia,
       estado: ESTADOS.EN_RUTA,
       tipo_entrega: tipoEntrega,
@@ -283,9 +322,12 @@ app.post('/guias', async (req, res, next) => {
       // opcionales porque el OCR no siempre los encuentra.
       numero_pedido: numeroPedido || '',
       numero_entrega: numeroEntrega || '',
-    });
+    };
+    await repo.crearGuia(nueva);
 
-    res.status(201).json({ numeroGuia, estado: ESTADOS.EN_RUTA });
+    // La guía completa: la app la agrega a su lista sin volver a pedirlas
+    // todas.
+    res.status(201).json({ ...nueva, numeroGuia, estado: ESTADOS.EN_RUTA });
   } catch (err) {
     next(err);
   }
@@ -313,7 +355,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia);
+    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
@@ -381,7 +423,7 @@ app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
       return res.status(400).json({ error: 'El motivo es muy largo (máx. 300 caracteres).' });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia);
+    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
@@ -438,12 +480,12 @@ app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
       return res.status(400).json({ error: 'Falta numeroNuevo.' });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia);
+    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
 
-    const duplicado = await repo.buscarPorNumero(numeroNuevo);
+    const duplicado = await repo.buscarPorNumero(numeroNuevo, { fresco: true });
     if (duplicado && !ESTADOS_CERRADOS.has(duplicado.estado)) {
       return res.status(409).json({ error: `Ya existe una guía activa con el número ${numeroNuevo}.` });
     }
