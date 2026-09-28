@@ -14,6 +14,11 @@ import 'package:ipesa_guias/screens/admin/admin_guia_edit_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
+// PNG de 1×1 válido: la "foto" que devuelve el backend en los tests.
+final _png = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+);
+
 Map<String, dynamic> _guiaJson(Map<String, dynamic> extra) => {
   'numero_guia': 'T001-94609',
   'estado': 'en_ruta',
@@ -35,6 +40,13 @@ Future<void> _abrirDetalle(
   final client = MockClient((request) async {
     if (request.url.path.endsWith('/fotos/estado')) {
       return http.Response(jsonEncode({'configurado': almacenamiento}), 200);
+    }
+    if (request.url.path.endsWith('/foto')) {
+      return http.Response.bytes(
+        _png,
+        200,
+        headers: {'content-type': 'image/png'},
+      );
     }
     return http.Response(jsonEncode([guia]), 200);
   });
@@ -105,6 +117,9 @@ void main() {
   });
 
   testWidgets('El admin ve la foto de la entrega', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await _abrirDetalle(
       tester,
       _guiaJson({
@@ -113,9 +128,30 @@ void main() {
       }),
     );
 
+    await tester.pumpAndSettle();
+
     expect(find.text('Foto de la entrega'), findsOneWidget);
     expect(find.text('Ver foto completa'), findsOneWidget);
-    expect(find.byType(Image), findsOneWidget);
+    expect(find.bySemanticsLabel('Foto de la entrega'), findsOneWidget);
+    // Se puede descargar y copiar (compartir, solo donde el dispositivo
+    // lo permite: aquí no).
+    expect(find.text('Descargar'), findsOneWidget);
+    expect(find.text('Copiar'), findsOneWidget);
+    expect(find.text('Compartir'), findsNothing);
+
+    // Aquí no hay navegador: avisa junto a los botones, a la vista.
+    await tester.tap(find.text('Descargar'));
+    await tester.pump();
+    expect(find.text('No se pudo descargar la foto.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    expect(find.text('No se pudo descargar la foto.'), findsNothing);
+
+    // En grande también están los botones.
+    await tester.ensureVisible(find.text('Ver foto completa'));
+    await tester.tap(find.text('Ver foto completa'));
+    await tester.pumpAndSettle();
+    expect(find.text('Entrega · T001-94609'), findsOneWidget);
+    expect(find.text('Descargar'), findsNWidgets(2));
   });
 
   testWidgets('Entregada sin foto y sin almacenamiento: avisa al admin', (

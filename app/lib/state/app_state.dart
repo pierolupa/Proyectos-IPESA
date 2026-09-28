@@ -335,6 +335,8 @@ class AppState extends ChangeNotifier {
     return avisoFoto;
   }
 
+  Future<Uint8List> fotoEntrega(Guia guia) => _api.fotoEntrega(guia);
+
   /// null mientras no se sabe (o si no se pudo consultar).
   Future<bool?> almacenamientoFotosConfigurado() async {
     try {

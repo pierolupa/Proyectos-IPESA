@@ -206,6 +206,14 @@ class GuiasApi {
   /// backend/src/ocrAgente.js) para leer los datos de la guía. Reemplaza el
   /// OCR anterior en el navegador (Tesseract.js), que no leía de forma
   /// confiable un formulario denso con tablas.
+  /// Los bytes de la foto de la entrega (para verla, descargarla,
+  /// copiarla o compartirla sin bajarla dos veces).
+  Future<Uint8List> fotoEntrega(Guia guia) async {
+    final res = await _client.get(Uri.parse(urlFotoEntrega(guia)));
+    if (res.statusCode != 200) _lanzarError(res);
+    return res.bodyBytes;
+  }
+
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/ocr/leer-guia'),
