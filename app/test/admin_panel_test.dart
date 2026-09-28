@@ -155,12 +155,12 @@ void main() {
     expect(find.text('Ana Díaz'), findsOneWidget);
     expect(find.text('1 en ruta'), findsOneWidget);
     expect(find.text('2 entregadas'), findsOneWidget);
-    // Las entregadas van en su propio panel; las demás, como casillas en
-    // curso. Juan no entregó ninguna todavía.
-    expect(find.text('Entregadas'), findsNWidgets(2));
-    expect(find.text('Aún no entrega ninguna.'), findsOneWidget);
+    // Las finalizadas (entregadas o rechazadas) van en su propio panel;
+    // las demás, como casillas en curso. Juan no finalizó ninguna todavía.
+    expect(find.text('Finalizadas'), findsNWidgets(2));
+    expect(find.text('Aún no finaliza ninguna.'), findsOneWidget);
     final paneles = find.byWidgetPredicate(
-      (w) => w.runtimeType.toString() == '_PanelEntregadas',
+      (w) => w.runtimeType.toString() == '_PanelFinalizadas',
     );
     for (final numero in ['T001-4', 'T001-5']) {
       expect(

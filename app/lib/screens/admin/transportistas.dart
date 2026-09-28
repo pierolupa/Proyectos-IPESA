@@ -303,12 +303,9 @@ class _TarjetaTransportista extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = resumen;
     final sinNombre = r.nombre == 'Sin transportista';
-    final entregadas = r.de([GrupoEstado.entregado]);
-    final enCurso = r.de([
-      GrupoEstado.enRuta,
-      GrupoEstado.trasbordo,
-      GrupoEstado.rechazado,
-    ]);
+    // Finalizadas: entregadas o rechazadas; ya no están en curso.
+    final finalizadas = r.de([GrupoEstado.entregado, GrupoEstado.rechazado]);
+    final enCurso = r.de([GrupoEstado.enRuta, GrupoEstado.trasbordo]);
     final conteos = Wrap(
       spacing: 18,
       runSpacing: 4,
@@ -371,7 +368,7 @@ class _TarjetaTransportista extends StatelessWidget {
               Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(text: '${entregadas.length}'),
+                    TextSpan(text: '${finalizadas.length}'),
                     TextSpan(
                       text: '/${r.guias.length}',
                       style: const TextStyle(color: Ipesa.textoSuave),
@@ -403,8 +400,8 @@ class _TarjetaTransportista extends StatelessWidget {
       vacio: 'No tiene guías en curso.',
       onVerMas: onAbrir,
     );
-    final panelEntregadas = _PanelEntregadas(
-      guias: entregadas,
+    final panelFinalizadas = _PanelFinalizadas(
+      guias: finalizadas,
       onVerMas: onAbrir,
     );
 
@@ -429,8 +426,8 @@ class _TarjetaTransportista extends StatelessWidget {
                       Expanded(child: casillasEnCurso),
                       const SizedBox(width: 20),
                       SizedBox(
-                        width: _PanelEntregadas.ancho,
-                        child: panelEntregadas,
+                        width: _PanelFinalizadas.ancho,
+                        child: panelFinalizadas,
                       ),
                     ],
                   )
@@ -439,7 +436,7 @@ class _TarjetaTransportista extends StatelessWidget {
                     children: [
                       casillasEnCurso,
                       const SizedBox(height: 14),
-                      panelEntregadas,
+                      panelFinalizadas,
                     ],
                   ),
           ),
@@ -540,9 +537,10 @@ class _Seccion extends StatelessWidget {
   }
 }
 
-/// Ventana aparte con las guías que el transportista ya entregó.
-class _PanelEntregadas extends StatelessWidget {
-  const _PanelEntregadas({required this.guias, required this.onVerMas});
+/// Ventana aparte con las guías que ya terminaron: entregadas o
+/// rechazadas.
+class _PanelFinalizadas extends StatelessWidget {
+  const _PanelFinalizadas({required this.guias, required this.onVerMas});
 
   /// Dos casillas por fila.
   static const ancho = _Casilla.ancho * 2 + 10 + 16 * 2 + 2;
@@ -552,7 +550,6 @@ class _PanelEntregadas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const verde = Color(0xFF1D6B41);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -561,22 +558,25 @@ class _PanelEntregadas extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: _Seccion(
-        titulo: 'Entregadas',
+        titulo: 'Finalizadas',
         guias: guias,
         maximo: 8,
-        vacio: 'Aún no entrega ninguna.',
+        vacio: 'Aún no finaliza ninguna.',
         onVerMas: onVerMas,
         cabecera: Row(
           children: [
-            const Icon(Icons.task_alt, size: 18, color: verde),
+            const Icon(Icons.task_alt, size: 18, color: Ipesa.petroleo),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Entregadas',
+                'Finalizadas',
                 style: Ipesa.titulo(15, color: Ipesa.texto),
               ),
             ),
-            Text('${guias.length}', style: Ipesa.titulo(15, color: verde)),
+            Text(
+              '${guias.length}',
+              style: Ipesa.titulo(15, color: Ipesa.petroleo),
+            ),
           ],
         ),
       ),
