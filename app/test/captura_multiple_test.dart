@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ipesa_guias/screens/transportista/capture_flow_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
+import 'package:ipesa_guias/services/ubicacion.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
 // PNG de 1×1 válido (la tarjeta muestra la miniatura).
@@ -42,10 +43,12 @@ void main() {
     });
     leidas = ['T200', 'T201', 'T100'];
     registradas = [];
-    CaptureFlowScreen.leerUbicacion = () async => Position(
+    Ubicacion.olvidarUltima();
+    Ubicacion.permisoConcedido = () async => false;
+    Ubicacion.leer = () async => Position(
       latitude: -12.05,
       longitude: -77.04,
-      timestamp: DateTime(2026),
+      timestamp: DateTime.now(),
       accuracy: 5,
       altitude: 0,
       altitudeAccuracy: 0,
@@ -169,5 +172,55 @@ void main() {
     );
     expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
     expect(appState.registroBloqueadoHasta('T9', ahora: ahora), isNull);
+  });
+
+  testWidgets('El GPS se activa solo si el celular ya dio permiso', (
+    tester,
+  ) async {
+    Ubicacion.permisoConcedido = () async => true;
+    await abrir(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isTrue,
+    );
+    // Sin tocar el interruptor ya se puede elegir fotos.
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    expect(find.text('T200'), findsOneWidget);
+  });
+
+  testWidgets('Encendido una vez, queda encendido la próxima vez', (
+    tester,
+  ) async {
+    await abrir(tester);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isFalse,
+    );
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+
+    // Vuelve a entrar: ya no hay que activarlo.
+    await tester.pumpWidget(const SizedBox());
+    await abrir(tester);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isTrue,
+    );
+
+    // Si lo apaga, se respeta y no se prende solo.
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    await abrir(tester);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      isFalse,
+    );
   });
 }

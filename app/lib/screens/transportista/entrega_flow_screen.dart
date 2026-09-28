@@ -10,25 +10,46 @@ import '../../models/guia.dart';
 import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
+import '../../services/ubicacion.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/gps_transportista.dart';
 
 /// Flujo de "Entrega" y "Entrega entre sucursales" (ARCHITECTURE.md,
 /// sección 4.2 y 4.3). El paso concreto depende del tipo de entrega y del
-/// estado actual de la guía; el GPS sigue siendo obligatorio. La cámara y
-/// el GPS son reales (piden permiso al dispositivo).
+/// estado actual de la guía; el GPS sigue siendo obligatorio (se activa
+/// solo si ya estaba encendido, ver [GpsTransportista]). La foto se toma
+/// con la cámara o se elige de la galería.
 class EntregaFlowScreen extends StatefulWidget {
   const EntregaFlowScreen({super.key, required this.guia});
 
   final Guia guia;
 
+  /// Los tests los reemplazan (no hay cámara ni galería ahí).
+  @visibleForTesting
+  static Future<Uint8List?> Function() tomarFoto = () =>
+      _abrirFoto(ImageSource.camera);
+  @visibleForTesting
+  static Future<Uint8List?> Function() elegirFoto = () =>
+      _abrirFoto(ImageSource.gallery);
+
   @override
   State<EntregaFlowScreen> createState() => _EntregaFlowScreenState();
 }
 
-class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
-  bool _gpsActivo = false;
-  bool _cargandoGps = false;
+final _picker = ImagePicker();
+
+Future<Uint8List?> _abrirFoto(ImageSource origen) async {
+  final archivo = await _picker.pickImage(
+    source: origen,
+    maxWidth: 1600,
+    imageQuality: 80,
+  );
+  return archivo?.readAsBytes();
+}
+
+class _EntregaFlowScreenState extends State<EntregaFlowScreen>
+    with GpsTransportista {
   bool _tomandoFoto = false;
   Uint8List? _fotoBytes;
   bool _firmaCapturada = false;
@@ -37,53 +58,13 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
   bool _verificandoPerimetro = false;
   String? _resultadoPerimetro;
   bool _enviando = false;
-  double? _lat;
-  double? _lng;
-  final _picker = ImagePicker();
 
   bool get _fotoSimulada => _fotoBytes != null;
-
-  Future<Position> _leerPosicion() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw 'La ubicación está desactivada en tu dispositivo.';
-    }
-    var permiso = await Geolocator.checkPermission();
-    if (permiso == LocationPermission.denied) {
-      permiso = await Geolocator.requestPermission();
-    }
-    if (permiso == LocationPermission.denied ||
-        permiso == LocationPermission.deniedForever) {
-      throw 'Debes dar permiso de ubicación para continuar.';
-    }
-    return Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-  }
-
-  Future<void> _activarGps() async {
-    setState(() => _cargandoGps = true);
-    try {
-      final posicion = await _leerPosicion();
-      if (!mounted) return;
-      setState(() {
-        _gpsActivo = true;
-        _lat = posicion.latitude;
-        _lng = posicion.longitude;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo activar el GPS: $e')));
-    } finally {
-      if (mounted) setState(() => _cargandoGps = false);
-    }
-  }
 
   Future<void> _verificarPerimetro(Sucursal sucursal) async {
     setState(() => _verificandoPerimetro = true);
     try {
-      final posicion = await _leerPosicion();
+      final posicion = await Ubicacion.actual();
       final distancia = Geolocator.distanceBetween(
         posicion.latitude,
         posicion.longitude,
@@ -93,8 +74,8 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       if (!mounted) return;
       final dentro = distancia <= sucursal.radioM;
       setState(() {
-        _lat = posicion.latitude;
-        _lng = posicion.longitude;
+        lat = posicion.latitude;
+        lng = posicion.longitude;
         _dentroDeGeocerca = dentro;
         _resultadoPerimetro = dentro
             ? 'Estás dentro del perímetro de ${sucursal.nombre}.'
@@ -112,31 +93,18 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
     }
   }
 
-  void _desactivarGps() {
-    setState(() {
-      _gpsActivo = false;
-      _lat = null;
-      _lng = null;
-    });
-  }
-
-  Future<void> _tomarFoto() async {
+  Future<void> _ponerFoto(Future<Uint8List?> Function() origen) async {
     setState(() => _tomandoFoto = true);
     try {
-      final archivo = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1600,
-        imageQuality: 80,
-      );
-      if (archivo == null) return;
-      final bytes = await archivo.readAsBytes();
-      if (!mounted) return;
+      final bytes = await origen();
+      if (bytes == null || !mounted) return;
       setState(() => _fotoBytes = bytes);
+      refrescarGps();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo abrir la cámara: $e')));
+      ).showSnackBar(SnackBar(content: Text('No se pudo abrir la foto: $e')));
     } finally {
       if (mounted) setState(() => _tomandoFoto = false);
     }
@@ -161,7 +129,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       widget.guia.estado == EstadoGuia.enRuta;
 
   bool get _puedeConfirmar {
-    if (!_gpsActivo) return false;
+    if (!gpsActivo) return false;
     final g = widget.guia;
     if (g.tipoEntrega == TipoEntrega.entreSucursales) {
       if (g.estado == EstadoGuia.enProcesoTrasbordo) return _dentroDeGeocerca;
@@ -201,26 +169,28 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
     setState(() => _enviando = true);
     try {
       // Se vuelve a leer el GPS al confirmar para registrar dónde se marcó
-      // realmente, no dónde se encendió el GPS.
-      final Position posicion;
+      // realmente, no dónde se encendió el GPS (si el celular tarda, sirve
+      // la lectura de hace un momento).
+      Position? posicion;
       try {
-        posicion = await _leerPosicion();
+        posicion = await Ubicacion.actual();
       } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo leer tu ubicación: $e')),
-        );
-        return;
+        posicion = Ubicacion.reciente;
+        if (posicion == null) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo leer tu ubicación: $e')),
+          );
+          return;
+        }
       }
-      _lat = posicion.latitude;
-      _lng = posicion.longitude;
       // La foto de la entrega final se guarda junto con el cambio de estado
       // para que el administrador la vea en el detalle de la guía.
       final avisoFoto = await appState.actualizarEstado(
         g.numeroGuia,
         nuevoEstado,
-        lat: _lat,
-        lng: _lng,
+        lat: posicion.latitude,
+        lng: posicion.longitude,
         foto: nuevoEstado.esFinal ? _fotoBytes : null,
       );
       if (!context.mounted) return;
@@ -235,14 +205,12 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
       if (nuevoEstado.esFinal) navigator.pop();
     } on ApiException catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.mensaje)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.mensaje)));
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -255,45 +223,24 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
         g.tipoEntrega == TipoEntrega.entreSucursales &&
         g.estado == EstadoGuia.enProcesoTrasbordo;
     final sucursal = context.watch<AppState>().sucursalPorNombre(g.destino);
+    final puedeFoto = gpsActivo && _requiereFoto && !_tomandoFoto;
 
     return Scaffold(
       appBar: AppBar(title: Text(_tituloAccion)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            color: _gpsActivo ? Ipesa.menta : Colors.red[50],
-            child: SwitchListTile(
-              value: _gpsActivo,
-              onChanged: _cargandoGps
-                  ? null
-                  : (v) => v ? _activarGps() : _desactivarGps(),
-              title: const Text('GPS activo'),
-              subtitle: Text(
-                _cargandoGps
-                    ? 'Solicitando ubicación a tu dispositivo...'
-                    : _gpsActivo
-                    ? 'Ubicación disponible.'
-                    : 'Obligatorio para registrar cualquier evento de esta guía.',
-              ),
-              secondary: _cargandoGps
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      _gpsActivo ? Icons.gps_fixed : Icons.gps_off,
-                      color: _gpsActivo ? Colors.green : Colors.red,
-                    ),
-            ),
+          tarjetaGps(
+            textoActivo: 'Ubicación disponible.',
+            textoApagado:
+                'Obligatorio para registrar cualquier evento de esta guía.',
           ),
           const SizedBox(height: 16),
           if (esPasoGeocerca) ...[
             _TarjetaPerimetro(
               sucursal: sucursal,
               destino: g.destino,
-              gpsActivo: _gpsActivo,
+              gpsActivo: gpsActivo,
               verificando: _verificandoPerimetro,
               dentro: _dentroDeGeocerca,
               resultado: _resultadoPerimetro,
@@ -302,23 +249,50 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen> {
                   : () => _verificarPerimetro(sucursal),
             ),
           ] else ...[
-            OutlinedButton.icon(
-              onPressed: _gpsActivo && _requiereFoto && !_tomandoFoto
-                  ? _tomarFoto
-                  : null,
-              icon: _tomandoFoto
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.camera_alt),
-              label: Text(
-                _fotoSimulada
-                    ? 'Foto de la guía firmada capturada'
-                    : 'Tomar foto de la guía firmada',
-              ),
+            Text(
+              _fotoSimulada
+                  ? 'Foto de la guía firmada lista'
+                  : 'Foto de la guía firmada',
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: puedeFoto
+                        ? () => _ponerFoto(EntregaFlowScreen.tomarFoto)
+                        : null,
+                    icon: _tomandoFoto
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.camera_alt),
+                    label: Text(_fotoSimulada ? 'Otra foto' : 'Tomar foto'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: puedeFoto
+                        ? () => _ponerFoto(EntregaFlowScreen.elegirFoto)
+                        : null,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Galería'),
+                  ),
+                ),
+              ],
+            ),
+            if (!gpsActivo)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Activa el GPS para habilitar la cámara y la galería.',
+                  style: TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              ),
             if (_fotoSimulada) ...[
               const SizedBox(height: 16),
               ClipRRect(
@@ -442,7 +416,9 @@ class _TarjetaPerimetro extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 resultado!,
-                style: TextStyle(color: dentro ? Colors.green[800] : Colors.red),
+                style: TextStyle(
+                  color: dentro ? Colors.green[800] : Colors.red,
+                ),
               ),
             ],
           ],

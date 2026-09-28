@@ -722,12 +722,14 @@ class _MapaGuias extends StatelessWidget {
               padding: const EdgeInsets.all(56),
               maxZoom: 15,
             ),
+            backgroundColor: fondoMapa,
           )
         : MapOptions(
             initialCenter: puntos.isEmpty
                 ? const LatLng(-12.0464, -77.0428)
                 : puntos.first,
             initialZoom: puntos.isEmpty ? 11 : 14,
+            backgroundColor: fondoMapa,
           );
 
     return ClipRRect(
@@ -754,11 +756,7 @@ class _MapaGuias extends StatelessWidget {
                             '${g.transportista}',
                         child: GestureDetector(
                           onTap: () => abrirGuiaAdmin(context, g),
-                          child: Icon(
-                            Icons.location_pin,
-                            size: 40,
-                            color: g.estado.color,
-                          ),
+                          child: pinMapa(g.estado.color),
                         ),
                       ),
                     ),

@@ -257,6 +257,7 @@ class _SucursalEditScreenState extends State<SucursalEditScreen> {
                   options: MapOptions(
                     initialCenter: _centro ?? _centroLima,
                     initialZoom: _centro == null ? 11 : 16,
+                    backgroundColor: fondoMapa,
                     onTap: (_, punto) => setState(() => _centro = punto),
                     onPositionChanged: (camara, _) =>
                         _centroVista = camara.center,
@@ -273,7 +274,9 @@ class _SucursalEditScreenState extends State<SucursalEditScreen> {
                         ),
                       ),
                     if (_centro != null)
-                      MarkerLayer(markers: [marcador(_centro!, Ipesa.petroleo)]),
+                      MarkerLayer(
+                        markers: [marcador(_centro!, Ipesa.petroleo)],
+                      ),
                     atribucionMapa,
                   ],
                 ),

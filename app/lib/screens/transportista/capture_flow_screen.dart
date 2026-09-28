@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -11,29 +10,12 @@ import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/gps_transportista.dart';
 
 final _hora = DateFormat('HH:mm');
 
 /// Cuántas fotos lee la IA a la vez (el resto espera su turno).
 const _lecturasSimultaneas = 3;
-
-/// Ubicación actual con permisos; lanza un texto si no se puede.
-Future<Position> _ubicacionGps() async {
-  if (!await Geolocator.isLocationServiceEnabled()) {
-    throw 'La ubicación está desactivada en tu dispositivo.';
-  }
-  var permiso = await Geolocator.checkPermission();
-  if (permiso == LocationPermission.denied) {
-    permiso = await Geolocator.requestPermission();
-  }
-  if (permiso == LocationPermission.denied ||
-      permiso == LocationPermission.deniedForever) {
-    throw 'Debes dar permiso de ubicación para continuar.';
-  }
-  return Geolocator.getCurrentPosition(
-    locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-  );
-}
 
 final _picker = ImagePicker();
 
@@ -92,9 +74,8 @@ class _Borrador {
 class CaptureFlowScreen extends StatefulWidget {
   const CaptureFlowScreen({super.key});
 
-  /// Los tests los reemplazan (no hay GPS ni cámara ahí).
-  @visibleForTesting
-  static Future<Position> Function() leerUbicacion = _ubicacionGps;
+  /// Los tests los reemplazan (no hay cámara ahí). El GPS, en
+  /// `Ubicacion.leer`.
   @visibleForTesting
   static Future<List<Uint8List>> Function() tomarFoto = _fotoDeCamara;
   @visibleForTesting
@@ -104,13 +85,10 @@ class CaptureFlowScreen extends StatefulWidget {
   State<CaptureFlowScreen> createState() => _CaptureFlowScreenState();
 }
 
-class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
-  bool _gpsActivo = false;
-  bool _cargandoGps = false;
+class _CaptureFlowScreenState extends State<CaptureFlowScreen>
+    with GpsTransportista {
   bool _abriendoFotos = false;
   bool _registrando = false;
-  double? _lat;
-  double? _lng;
   final _borradores = <_Borrador>[];
   final _cola = <_Borrador>[];
   int _leyendoAhora = 0;
@@ -122,34 +100,6 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       b.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _activarGps() async {
-    setState(() => _cargandoGps = true);
-    try {
-      final posicion = await CaptureFlowScreen.leerUbicacion();
-      if (!mounted) return;
-      setState(() {
-        _gpsActivo = true;
-        _lat = posicion.latitude;
-        _lng = posicion.longitude;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo activar el GPS: $e')));
-    } finally {
-      if (mounted) setState(() => _cargandoGps = false);
-    }
-  }
-
-  void _desactivarGps() {
-    setState(() {
-      _gpsActivo = false;
-      _lat = null;
-      _lng = null;
-    });
   }
 
   Future<void> _agregarFotos(Future<List<Uint8List>> Function() origen) async {
@@ -165,6 +115,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         }
       });
       _leerSiguientes();
+      // Cada tanda de fotos lleva la ubicación del momento.
+      refrescarGps();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -258,7 +210,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       for (final b in _borradores)
         if (!b.enviando && _falta(b, appState) == null) b,
     ];
-    if (listas.isEmpty || !_gpsActivo) return;
+    if (listas.isEmpty || !gpsActivo) return;
     setState(() {
       _registrando = true;
       for (final b in listas) {
@@ -301,8 +253,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         origen: 'Almacén Callao',
         destino: b.esTraslado ? b.sucursal! : b.destino.text.trim(),
         destinatario: b.destinatario.text.trim(),
-        lat: _lat!,
-        lng: _lng!,
+        lat: lat!,
+        lng: lng!,
         numeroPedido: b.pedido.text.trim(),
         numeroEntrega: b.entrega.text.trim(),
       );
@@ -337,7 +289,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
         .where((b) => !b.enviando && _falta(b, appState) == null)
         .length;
     final leyendo = _borradores.where((b) => b.enCola || b.leyendo).length;
-    final puedeFotografiar = _gpsActivo && !_abriendoFotos;
+    final puedeFotografiar = gpsActivo && !_abriendoFotos;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nuevas guías · Asignación')),
@@ -362,7 +314,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
                         ),
                       ),
                     FilledButton.icon(
-                      onPressed: listas > 0 && _gpsActivo && !_registrando
+                      onPressed: listas > 0 && gpsActivo && !_registrando
                           ? _registrarListas
                           : null,
                       icon: _registrando
@@ -389,32 +341,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          Card(
-            color: _gpsActivo ? Ipesa.menta : Colors.red[50],
-            child: SwitchListTile(
-              value: _gpsActivo,
-              onChanged: _cargandoGps
-                  ? null
-                  : (v) => v ? _activarGps() : _desactivarGps(),
-              title: const Text('GPS activo'),
-              subtitle: Text(
-                _cargandoGps
-                    ? 'Solicitando ubicación a tu dispositivo...'
-                    : _gpsActivo
-                    ? 'Ubicación disponible: se adjuntará a cada guía.'
-                    : 'Obligatorio: sin GPS no se puede subir ningún registro fotográfico.',
-              ),
-              secondary: _cargandoGps
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      _gpsActivo ? Icons.gps_fixed : Icons.gps_off,
-                      color: _gpsActivo ? Colors.green : Colors.red,
-                    ),
-            ),
+          tarjetaGps(
+            textoActivo: 'Ubicación disponible: se adjuntará a cada guía.',
+            textoApagado: 'Obligatorio: sin GPS no se puede subir ningún registro fotográfico.',
           ),
           const SizedBox(height: 16),
           Row(
@@ -443,12 +372,12 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              _gpsActivo
+              gpsActivo
                   ? 'Puedes tomar varias fotos seguidas o elegir varias de la '
                         'galería: la IA las lee mientras sigues.'
                   : 'Activa el GPS para habilitar la cámara.',
               style: TextStyle(
-                color: _gpsActivo ? Ipesa.textoSuave : Colors.red,
+                color: gpsActivo ? Ipesa.textoSuave : Colors.red,
                 fontSize: 13,
               ),
             ),
