@@ -21,9 +21,17 @@ import '../../widgets/gps_transportista.dart';
 /// solo si ya estaba encendido, ver [GpsTransportista]). La foto se toma
 /// con la cámara o se elige de la galería.
 class EntregaFlowScreen extends StatefulWidget {
-  const EntregaFlowScreen({super.key, required this.guia});
+  const EntregaFlowScreen({
+    super.key,
+    required this.guia,
+    this.desdeDetalle = true,
+  });
 
   final Guia guia;
+
+  /// Abierta desde el detalle de la guía: al entregar se cierra también el
+  /// detalle. Desde "Mis tareas" solo se cierra esta pantalla.
+  final bool desdeDetalle;
 
   /// Los tests los reemplazan (no hay cámara ni galería ahí).
   @visibleForTesting
@@ -202,7 +210,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       // Entregada: vuelve directo a "Mis tareas" (cierra también el detalle),
       // donde la guía ya no aparece.
       final navigator = Navigator.of(context)..pop();
-      if (nuevoEstado.esFinal) navigator.pop();
+      if (nuevoEstado.esFinal && widget.desdeDetalle) navigator.pop();
     } on ApiException catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
