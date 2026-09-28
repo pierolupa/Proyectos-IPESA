@@ -174,6 +174,12 @@ void main() {
         findsNothing,
       );
     }
+    // Cada casilla dice también a qué cliente va.
+    expect(
+      find.descendant(of: paneles, matching: find.text('Cliente T001-4')),
+      findsOneWidget,
+    );
+    expect(find.text('Cliente T001-1'), findsOneWidget);
     for (final numero in ['T001-1', 'T001-2', 'T001-3', 'T001-4', 'T001-5']) {
       expect(find.text(numero), findsOneWidget);
     }

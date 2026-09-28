@@ -588,7 +588,7 @@ class _PanelEntregadas extends StatelessWidget {
 class _Casilla extends StatelessWidget {
   const _Casilla({required this.guia});
 
-  static const ancho = 150.0;
+  static const ancho = 176.0;
 
   final Guia guia;
 
@@ -632,6 +632,24 @@ class _Casilla extends StatelessWidget {
                         fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
+                    if (g.destinatario.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      // El cliente, recortado si es largo (completo al
+                      // pasar el mouse).
+                      Tooltip(
+                        message: g.destinatario.trim(),
+                        waitDuration: const Duration(milliseconds: 400),
+                        child: Text(
+                          g.destinatario.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Ipesa.etiqueta,
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 3),
                     Text(
                       '${g.estado.grupo.etiqueta} · '
