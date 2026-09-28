@@ -7,7 +7,9 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:ipesa_guias/models/guia.dart';
 import 'package:ipesa_guias/screens/admin/admin_dashboard_screen.dart';
+import 'package:ipesa_guias/screens/admin/transportistas.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
@@ -140,4 +142,85 @@ void main() {
     expect(find.text('Perímetro de 200 m'), findsOneWidget);
     expect(find.text('Nueva sucursal'), findsOneWidget);
   });
+
+  testWidgets('Transportistas muestra a cada uno y su desglose', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+
+    await tester.tap(find.text('Transportistas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Juan Pérez'), findsOneWidget);
+    expect(find.text('Ana Díaz'), findsOneWidget);
+    expect(find.text('1 en ruta'), findsOneWidget);
+    expect(find.text('2 entregadas'), findsOneWidget);
+
+    await tester.tap(find.text('Ana Díaz'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Entregó 2 de 2 cerradas (100 %)'), findsOneWidget);
+    expect(find.text('Pendientes · 1'), findsOneWidget);
+    expect(find.text('Entregadas · 2'), findsOneWidget);
+    expect(find.text('T001-3'), findsOneWidget);
+    expect(find.text('T001-4'), findsOneWidget);
+    expect(find.text('T001-1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('El administrador también rastrea como el comercial', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+
+    await tester.tap(find.byTooltip('Rastrear guía'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rastrea tus guías'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Volver al panel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Operación de hoy'), findsOneWidget);
+  });
+
+  testWidgets('En computadora el riel tiene Transportistas y Rastrear', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+    tester.view.physicalSize = const Size(1400, 900);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Transportistas'), findsOneWidget);
+    expect(find.byTooltip('Rastrear'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'Las pendientes cuentan siempre; las cerradas, si cierran en el periodo',
+    () {
+      final ahora = DateTime(2026, 9, 28, 12);
+      Guia guia(String estado, DateTime fecha) => Guia.fromJson(
+        _guia('X', estado, 'Juan Pérez')
+          ..['fecha_actualizacion'] = fecha.toUtc().toIso8601String(),
+      );
+      final vieja = DateTime(2026, 9, 10);
+      final pendiente = guia('en_ruta', vieja);
+      final entregadaVieja = guia('entregado', vieja);
+      final entregadaHoy = guia('entregado', DateTime(2026, 9, 28, 9));
+
+      final hoy = resumirPorTransportista(
+        [pendiente, entregadaVieja, entregadaHoy],
+        PeriodoResumen.hoy,
+        ahora: ahora,
+      ).single;
+      expect(hoy.guias, hasLength(2));
+      expect(hoy.pendientes, 1);
+
+      final todo = resumirPorTransportista(
+        [pendiente, entregadaVieja, entregadaHoy],
+        PeriodoResumen.todo,
+        ahora: ahora,
+      ).single;
+      expect(todo.guias, hasLength(3));
+    },
+  );
 }

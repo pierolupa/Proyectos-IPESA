@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 /// la pantalla siguiente está lista.
 const colorSplash = Color(0xFF000000);
 
-/// Pantalla de carga: logo IPESA y el nombre de la app fijos sobre negro,
-/// y debajo un anillo de progreso que se va llenando mientras cargan los
-/// datos (rápido al principio y cada vez más lento, sin llegar al final).
+/// Pantalla de carga estática: logo IPESA y el nombre de la app sobre
+/// negro. Nada se mueve; se queda fija mientras cargan los datos.
 class SplashIpesa extends StatelessWidget {
   const SplashIpesa({super.key});
 
@@ -26,7 +25,15 @@ class SplashIpesa extends StatelessWidget {
               width: anchoLogo,
               semanticLabel: 'IPESA',
             ),
-            const SizedBox(height: 26),
+            Container(
+              width: 44,
+              height: 3,
+              margin: const EdgeInsets.only(top: 26, bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0E7A3A),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             const Text(
               'TRACKING DISTRIBUCIÓN',
               style: TextStyle(
@@ -34,23 +41,6 @@ class SplashIpesa extends StatelessWidget {
                 fontSize: 14,
                 letterSpacing: 3.2,
                 fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 30),
-            SizedBox.square(
-              dimension: 42,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 0.92),
-                duration: const Duration(seconds: 8),
-                curve: const Cubic(.12, .7, .25, 1),
-                builder: (context, avance, _) => CircularProgressIndicator(
-                  value: avance,
-                  strokeWidth: 3.5,
-                  strokeCap: StrokeCap.round,
-                  color: const Color(0xFF0E7A3A),
-                  backgroundColor: const Color(0x24FFFFFF),
-                  semanticsLabel: 'Cargando',
-                ),
               ),
             ),
           ],

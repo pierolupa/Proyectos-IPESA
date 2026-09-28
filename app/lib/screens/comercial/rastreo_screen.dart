@@ -16,7 +16,11 @@ import 'rastreo_resultados_screen.dart';
 /// animado con el camión IPESA al pie. "Buscar" abre la guía encontrada
 /// (o la lista, si hay varias).
 class RastreoScreen extends StatefulWidget {
-  const RastreoScreen({super.key});
+  const RastreoScreen({super.key, this.desdeAdmin = false});
+
+  /// El administrador la abre desde su panel: vuelve con la flecha y la
+  /// sesión se cierra desde el panel, no desde aquí.
+  final bool desdeAdmin;
 
   @override
   State<RastreoScreen> createState() => _RastreoScreenState();
@@ -158,8 +162,13 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                   ),
                                   child: _Cabecera(
                                     saludo: saludo,
+                                    onVolver: widget.desdeAdmin
+                                        ? () => Navigator.of(context).pop()
+                                        : null,
                                     onActualizar: appState.cargarGuias,
-                                    onCerrarSesion: _cerrarSesion,
+                                    onCerrarSesion: widget.desdeAdmin
+                                        ? null
+                                        : _cerrarSesion,
                                   ),
                                 ),
                               ),
@@ -203,13 +212,15 @@ class _RastreoScreenState extends State<RastreoScreen> {
 class _Cabecera extends StatelessWidget {
   const _Cabecera({
     required this.saludo,
+    required this.onVolver,
     required this.onActualizar,
     required this.onCerrarSesion,
   });
 
   final String saludo;
+  final VoidCallback? onVolver;
   final VoidCallback onActualizar;
-  final VoidCallback onCerrarSesion;
+  final VoidCallback? onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
@@ -218,6 +229,14 @@ class _Cabecera extends StatelessWidget {
       children: [
         Row(
           children: [
+            if (onVolver != null) ...[
+              IconButton(
+                tooltip: 'Volver al panel',
+                onPressed: onVolver,
+                icon: const Icon(Icons.arrow_back, color: Ipesa.petroleo),
+              ),
+              const SizedBox(width: 4),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
@@ -245,14 +264,15 @@ class _Cabecera extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
-                PopupMenuItem(
-                  value: onCerrarSesion,
-                  child: const ListTile(
-                    leading: Icon(Icons.logout),
-                    title: Text('Cerrar sesión'),
-                    contentPadding: EdgeInsets.zero,
+                if (onCerrarSesion != null)
+                  PopupMenuItem(
+                    value: onCerrarSesion,
+                    child: const ListTile(
+                      leading: Icon(Icons.logout),
+                      title: Text('Cerrar sesión'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                ),
               ],
             ),
           ],

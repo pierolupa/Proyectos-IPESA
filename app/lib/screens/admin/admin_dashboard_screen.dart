@@ -12,9 +12,11 @@ import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/mapa_ubicacion.dart';
+import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
 import 'recorrido_timeline.dart';
 import 'sucursal_edit_screen.dart';
+import 'transportistas.dart';
 
 const _anchoEscritorio = 900.0;
 
@@ -31,6 +33,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   static const _titulos = [
     'Operación de hoy',
+    'Transportistas',
     'Recorrido de hoy',
     'Sucursales',
   ];
@@ -104,6 +107,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
+  /// La misma búsqueda del equipo comercial.
+  void _abrirRastreo() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RastreoScreen(desdeAdmin: true)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -119,12 +129,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 titulo: _titulos[_pestana],
                 notificacionesActivas: _notificacionesActivas,
                 onActivarNotificaciones: _activarNotificaciones,
+                onRastrear: ancha ? null : _abrirRastreo,
                 onCerrarSesion: ancha ? null : _cerrarSesion,
               ),
               Expanded(
                 child: switch (_pestana) {
                   0 => _PestanaGuias(ancha: ancha),
-                  1 => const _PestanaRecorrido(),
+                  1 => const PestanaTransportistas(),
+                  2 => const _PestanaRecorrido(),
                   _ => const _PestanaSucursales(),
                 },
               ),
@@ -133,7 +145,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         );
 
         return Scaffold(
-          floatingActionButton: _pestana == 2
+          floatingActionButton: _pestana == 3
               ? FloatingActionButton.extended(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -160,6 +172,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           label: 'Guías',
                         ),
                         NavigationDestination(
+                          icon: Icon(Icons.local_shipping_outlined),
+                          label: 'Transportistas',
+                        ),
+                        NavigationDestination(
                           icon: Icon(Icons.timeline),
                           label: 'Recorrido',
                         ),
@@ -178,6 +194,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       _Riel(
                         seleccionado: _pestana,
                         onSeleccion: (i) => setState(() => _pestana = i),
+                        onRastrear: _abrirRastreo,
                         onCerrarSesion: _cerrarSesion,
                       ),
                       Expanded(
@@ -220,16 +237,18 @@ class _Riel extends StatelessWidget {
   const _Riel({
     required this.seleccionado,
     required this.onSeleccion,
+    required this.onRastrear,
     required this.onCerrarSesion,
   });
 
   final int seleccionado;
   final ValueChanged<int> onSeleccion;
+  final VoidCallback onRastrear;
   final VoidCallback onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
-    Widget item(int i, IconData icono, String etiqueta) {
+    Widget item(int i, IconData icono, String etiqueta, {VoidCallback? onTap}) {
       final activo = i == seleccionado;
       return Tooltip(
         message: etiqueta,
@@ -240,9 +259,9 @@ class _Riel extends StatelessWidget {
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
             child: InkWell(
               borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-              onTap: () => onSeleccion(i),
+              onTap: onTap ?? () => onSeleccion(i),
               child: SizedBox(
-                width: 56,
+                width: 68,
                 height: 56,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -253,12 +272,17 @@ class _Riel extends StatelessWidget {
                       color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      etiqueta,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        etiqueta,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: activo
+                              ? Colors.white
+                              : Ipesa.suaveSobrePetroleo,
+                        ),
                       ),
                     ),
                   ],
@@ -271,7 +295,7 @@ class _Riel extends StatelessWidget {
     }
 
     return Container(
-      width: 84,
+      width: 88,
       color: Ipesa.petroleo,
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
@@ -283,8 +307,10 @@ class _Riel extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           item(0, Icons.receipt_long_outlined, 'Guías'),
-          item(1, Icons.timeline, 'Recorrido'),
-          item(2, Icons.storefront_outlined, 'Sucursales'),
+          item(1, Icons.local_shipping_outlined, 'Transportistas'),
+          item(2, Icons.timeline, 'Recorrido'),
+          item(3, Icons.storefront_outlined, 'Sucursales'),
+          item(-1, Icons.manage_search, 'Rastrear', onTap: onRastrear),
           const Spacer(),
           IconButton(
             tooltip: 'Cerrar sesión',
@@ -306,25 +332,28 @@ class _Cabecera extends StatelessWidget {
     required this.titulo,
     required this.notificacionesActivas,
     required this.onActivarNotificaciones,
+    required this.onRastrear,
     required this.onCerrarSesion,
   });
 
   final String titulo;
   final bool notificacionesActivas;
   final VoidCallback onActivarNotificaciones;
+  final VoidCallback? onRastrear;
   final VoidCallback? onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final angosta = MediaQuery.sizeOf(context).width < 600;
     Widget boton(String tooltip, IconData icono, VoidCallback? onPressed) =>
         Padding(
-          padding: const EdgeInsets.only(left: 8),
+          padding: EdgeInsets.only(left: angosta ? 6 : 8),
           child: IconButton(
             tooltip: tooltip,
             onPressed: onPressed,
             style: IconButton.styleFrom(
-              fixedSize: const Size(44, 44),
+              fixedSize: Size.square(angosta ? 40 : 44),
               backgroundColor: Colors.white,
               side: const BorderSide(color: Ipesa.borde),
             ),
@@ -340,15 +369,22 @@ class _Cabecera extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  titulo,
-                  style: Ipesa.titulo(
-                    MediaQuery.sizeOf(context).width < 600 ? 22 : 26,
+                // En celular, con los botones al lado, el título se
+                // achica en vez de partirse en dos líneas.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    titulo,
+                    maxLines: 1,
+                    style: Ipesa.titulo(angosta ? 22 : 26),
                   ),
                 ),
-                const Text(
-                  'Se actualiza solo cada 15 s',
-                  style: TextStyle(fontSize: 14, color: Ipesa.textoSuave),
+                Text(
+                  angosta ? 'Cada 15 s' : 'Se actualiza solo cada 15 s',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, color: Ipesa.textoSuave),
                 ),
               ],
             ),
@@ -369,6 +405,8 @@ class _Cabecera extends StatelessWidget {
                 ? null
                 : () => context.read<AppState>().cargarGuias(),
           ),
+          if (onRastrear != null)
+            boton('Rastrear guía', Icons.manage_search, onRastrear),
           if (onCerrarSesion != null)
             boton('Cerrar sesión', Icons.logout, onCerrarSesion),
         ],
@@ -499,7 +537,7 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
                     itemCount: guias.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, i) =>
-                        _TarjetaGuiaAdmin(guia: guias[i]),
+                        TarjetaGuiaAdmin(guia: guias[i]),
                   ),
           ),
         ),
@@ -576,10 +614,18 @@ class _Filtro extends StatelessWidget {
   }
 }
 
-class _TarjetaGuiaAdmin extends StatelessWidget {
-  const _TarjetaGuiaAdmin({required this.guia});
+/// Una guía en las listas del administrador; tocarla abre su detalle.
+class TarjetaGuiaAdmin extends StatelessWidget {
+  const TarjetaGuiaAdmin({
+    super.key,
+    required this.guia,
+    this.mostrarTransportista = true,
+  });
 
   final Guia guia;
+
+  /// En el desglose de un transportista su nombre sobra.
+  final bool mostrarTransportista;
 
   @override
   Widget build(BuildContext context) {
@@ -614,7 +660,9 @@ class _TarjetaGuiaAdmin extends StatelessWidget {
                 ),
               ),
               Text(
-                '${guia.transportista} · $detalle',
+                mostrarTransportista
+                    ? '${guia.transportista} · $detalle'
+                    : detalle,
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
               if (guia.estado == EstadoGuia.rechazado &&
