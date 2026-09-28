@@ -5,6 +5,7 @@ import '../../models/estado_guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
+import '../../widgets/acciones_tarea.dart';
 import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/foto_entrega.dart';
@@ -42,9 +43,8 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
   void _mostrarError(Object e) {
     if (!mounted) return;
     final mensaje = e is ApiException ? e.mensaje : 'Error de conexión: $e';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensaje)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   Future<void> _guardarNumero(String actual) async {
@@ -53,9 +53,8 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
     try {
       await context.read<AppState>().corregirNumeroGuia(actual, nuevo);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Número corregido.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Número corregido.')));
     } catch (e) {
       _numeroController.text = actual;
       _mostrarError(e);
@@ -93,12 +92,26 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (guia.eliminacionPendiente) ...[
+            SolicitudEliminacionAdmin(
+              guia: guia,
+              onEliminada: () {
+                final messenger = ScaffoldMessenger.of(context);
+                Navigator.of(context).pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Tarea ${guia.numeroGuia} eliminada de la base de datos.',
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
           EstadoBadge(estado: guia.estado),
           const SizedBox(height: 24),
-          Text(
-            'Número de guía',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
+          Text('Número de guía', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -148,8 +161,24 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
           ),
           const SizedBox(height: 24),
           Text(
+            'Tipo de entrega',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(child: Text(guia.tipoEntrega.etiqueta)),
+              TextButton(
+                onPressed: () =>
+                    mostrarCambioTipo(context, guia, porAdmin: true),
+                child: const Text('Cambiar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
             'Destinatario: ${guia.destinatario}\n'
-            'Origen: ${guia.origen}\n'
+            'Punto de partida: ${guia.origen}\n'
             'Destino: ${guia.destino}\n'
             'Transportista: ${guia.transportista}'
             '${guia.numeroPedido.isNotEmpty ? '\nN° de pedido: ${guia.numeroPedido}' : ''}'
@@ -165,6 +194,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             key: ValueKey('${guia.numeroGuia}|${guia.fotoEntregaUrl}'),
             guia: guia,
           ),
+          BotonEliminarFoto(guia: guia),
           const SizedBox(height: 24),
           SeccionUbicacion(
             guia: guia,

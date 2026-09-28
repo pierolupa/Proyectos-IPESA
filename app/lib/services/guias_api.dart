@@ -72,6 +72,7 @@ class DatosGuiaLeida {
     this.numeroGuia,
     this.destinatario,
     this.destino,
+    this.origen,
     this.numeroPedido,
     this.numeroEntrega,
   });
@@ -79,6 +80,9 @@ class DatosGuiaLeida {
   final String? numeroGuia;
   final String? destinatario;
   final String? destino;
+
+  /// El "Punto de partida" de la hoja.
+  final String? origen;
   final String? numeroPedido;
   final String? numeroEntrega;
 
@@ -87,6 +91,7 @@ class DatosGuiaLeida {
       numeroGuia: json['numero_guia'] as String?,
       destinatario: json['destinatario'] as String?,
       destino: json['destino'] as String?,
+      origen: json['origen'] as String?,
       numeroPedido: json['numero_pedido'] as String?,
       numeroEntrega: json['numero_entrega'] as String?,
     );
@@ -346,5 +351,90 @@ class GuiasApi {
     );
     if (res.statusCode != 200) _lanzarError(res);
     return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// Identifica el registro exacto aunque el número se repita.
+  static String _fechaCreacion(Guia g) =>
+      g.fechaCreacion.toUtc().toIso8601String();
+
+  String _rutaGuia(Guia g, [String sufijo = '']) =>
+      '$apiBaseUrl/guias/${Uri.encodeComponent(g.numeroGuia)}$sufijo';
+
+  /// Cambia el tipo de entrega (el transportista, solo en ruta). Para
+  /// "entre sucursales" [destino] es el nombre de la sucursal.
+  Future<Guia> cambiarTipoEntrega(
+    Guia guia,
+    TipoEntrega tipo, {
+    String? destino,
+    bool porAdmin = false,
+  }) async {
+    final res = await _client.patch(
+      Uri.parse(_rutaGuia(guia, '/tipo')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'tipoEntrega': tipo.valorApi,
+        'destino': ?destino,
+        'porAdmin': porAdmin,
+        'fechaCreacion': _fechaCreacion(guia),
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// El transportista pide borrar la tarea; decide el administrador.
+  Future<Guia> pedirEliminacion(Guia guia, String motivo) async {
+    final res = await _client.post(
+      Uri.parse(_rutaGuia(guia, '/solicitud-eliminacion')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'motivo': motivo,
+        'fechaCreacion': _fechaCreacion(guia),
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// El transportista retira su pedido de eliminación.
+  Future<Guia> retirarPedidoEliminacion(Guia guia) async {
+    final res = await _client.delete(
+      Uri.parse(_rutaGuia(guia, '/solicitud-eliminacion'))
+          .replace(queryParameters: {'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// El administrador no aprueba borrar la tarea.
+  Future<Guia> rechazarEliminacion(Guia guia) async {
+    final res = await _client.post(
+      Uri.parse(_rutaGuia(guia, '/solicitud-eliminacion/rechazo')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// Borra la tarea de la hoja (administrador; solo en ruta).
+  Future<void> eliminarGuia(Guia guia) async {
+    final res = await _client.delete(
+      Uri.parse(_rutaGuia(guia))
+          .replace(queryParameters: {'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+  }
+
+  /// Quita la foto de la entrega (administrador). Devuelve la guía y, si el
+  /// archivo no se pudo borrar, el aviso.
+  Future<(Guia, String?)> eliminarFotoEntrega(Guia guia) async {
+    final res = await _client.delete(
+      Uri.parse(_rutaGuia(guia, '/foto'))
+          .replace(queryParameters: {'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    final json = _decodeBody(res);
+    return (Guia.fromJson(json), json['aviso_foto'] as String?);
   }
 }

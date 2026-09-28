@@ -19,13 +19,15 @@ const MODELO = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
-extrae exactamente estos 5 campos:
+extrae exactamente estos 6 campos:
 
 - numero_guia: el número de la guía, arriba a la derecha, formato \
   "serie-correlativo" (una letra + 3 dígitos + guion + dígitos), ej. \
   "T028-130133".
 - destinatario: el campo "Señor(es)" dentro de "Datos del Destinatario".
 - destino: el campo "Punto de Llegada" dentro de "Datos del Destinatario".
+- origen: el campo "Punto de Partida" (la dirección desde donde sale la \
+  mercadería; suele estar en "Datos del Traslado" o junto al remitente).
 - numero_pedido: el valor de "Pedido" dentro de la línea "Documentos" en \
   "Datos adicionales" (ej. si dice "Pedido:0188173910", el valor es \
   "0188173910").
@@ -34,7 +36,7 @@ extrae exactamente estos 5 campos:
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin \
 explicaciones y sin bloques de código markdown, con exactamente esta forma:
 
-{"numero_guia": string|null, "destinatario": string|null, "destino": string|null, "numero_pedido": string|null, "numero_entrega": string|null}
+{"numero_guia": string|null, "destinatario": string|null, "destino": string|null, "origen": string|null, "numero_pedido": string|null, "numero_entrega": string|null}
 
 Si no puedes leer un campo con confianza, usa null para ese campo en vez de \
 inventar un valor.`;
@@ -70,6 +72,7 @@ async function leerGuiaConIA(imagenBase64, mediaType) {
     numero_guia: datos.numero_guia || null,
     destinatario: datos.destinatario || null,
     destino: datos.destino || null,
+    origen: datos.origen || null,
     numero_pedido: datos.numero_pedido || null,
     numero_entrega: datos.numero_entrega || null,
   };

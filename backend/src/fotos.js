@@ -1,5 +1,5 @@
 const { Readable } = require('node:stream');
-const { put, get } = require('@vercel/blob');
+const { put, get, del } = require('@vercel/blob');
 
 /**
  * Foto de la entrega al cliente (guía firmada), guardada en PRIVADO: no se
@@ -120,6 +120,18 @@ async function enviarFoto(url, res) {
   Readable.fromWeb(resultado.stream).pipe(res);
 }
 
+/**
+ * Borra la foto guardada en `url` (en Drive va a la papelera). Lanza un
+ * Error legible si no se pudo.
+ */
+async function eliminarFoto(url) {
+  if (url.startsWith(PREFIJO_DRIVE)) {
+    await llamarDrive({ accion: 'eliminar', id: url.slice(PREFIJO_DRIVE.length) });
+    return;
+  }
+  await del(url);
+}
+
 /** true si el body trae una foto con forma válida ({base64, mediaType?}). */
 function esFotoValida(foto) {
   return Boolean(foto && typeof foto.base64 === 'string' && foto.base64.length > 0);
@@ -129,5 +141,6 @@ module.exports = {
   almacenamientoConfigurado,
   guardarFoto,
   enviarFoto,
+  eliminarFoto,
   esFotoValida,
 };

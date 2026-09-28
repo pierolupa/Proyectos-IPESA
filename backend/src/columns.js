@@ -1,13 +1,16 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..S.
+ * El orden de este arreglo es el orden real de las columnas A..U.
  * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
  * el transportista la cerró (entregado/finalizado), para el mapa del admin.
  * foto_entrega_url = dónde quedó la foto de la entrega en Vercel Blob
  * (privada; se ve con GET /guias/:numeroGuia/foto, ver fotos.js).
  * motivo_rechazo = por qué el transportista rechazó la tarea (estado
  * "rechazado", POST /guias/:numeroGuia/rechazo).
+ * eliminacion = el transportista pidió borrar la tarea ('pendiente') y
+ * espera que el administrador lo apruebe; 'rechazada' si el administrador
+ * no lo aprobó. motivo_eliminacion = por qué lo pidió.
  */
 const COLUMNS = [
   'numero_guia',
@@ -29,7 +32,14 @@ const COLUMNS = [
   'fecha_cierre',
   'foto_entrega_url',
   'motivo_rechazo',
+  'eliminacion',
+  'motivo_eliminacion',
 ];
+
+const ELIMINACION = Object.freeze({
+  PENDIENTE: 'pendiente',
+  RECHAZADA: 'rechazada',
+});
 
 const SHEET_NAME = 'Guias';
 const DATA_RANGE = `${SHEET_NAME}!A2:${String.fromCharCode(64 + COLUMNS.length)}`;
@@ -95,6 +105,7 @@ module.exports = {
   ESTADOS,
   ESTADOS_FINALES,
   ESTADOS_CERRADOS,
+  ELIMINACION,
   TIPOS_ENTREGA,
   USUARIOS_COLUMNS,
   USUARIOS_SHEET_NAME,

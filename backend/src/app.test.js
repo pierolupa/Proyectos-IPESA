@@ -4,6 +4,7 @@ jest.mock('./fotos', () => ({
   ...jest.requireActual('./fotos'),
   guardarFoto: jest.fn(),
   enviarFoto: jest.fn(),
+  eliminarFoto: jest.fn(),
 }));
 
 const request = require('supertest');
@@ -556,5 +557,125 @@ describe('GET /guias con rango de fechas', () => {
     repo.listarGuias.mockResolvedValue([]);
     const res = await request(app).get('/guias').query({ desde: 'ayer' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('Tipo de entrega editable', () => {
+  it('el transportista cambia el tipo mientras está en ruta', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.AGENCIA, destino: 'Agencia Shalom Ate' });
+    expect(res.status).toBe(200);
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.AGENCIA);
+    expect(res.body.destino).toBe('Agencia Shalom Ate');
+    expect(repo.actualizarGuia).toHaveBeenCalledTimes(1);
+  });
+
+  it('no deja cambiarlo si ya no está en ruta', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.AGENCIA });
+    expect(res.status).toBe(409);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('entre sucursales exige una sucursal registrada', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    repo.listarSucursales.mockResolvedValue([
+      { nombre: 'Sucursal Arequipa', lat: -16.4, lng: -71.5, radio_m: 200 },
+    ]);
+    const mal = await request(app)
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Cusco' });
+    expect(mal.status).toBe(400);
+    const bien = await request(app)
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'sucursal arequipa' });
+    expect(bien.status).toBe(200);
+    expect(bien.body.destino).toBe('Sucursal Arequipa');
+  });
+});
+
+describe('Eliminar una tarea con aprobación del administrador', () => {
+  it('el transportista pide eliminar una tarea en ruta', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/solicitud-eliminacion')
+      .send({ motivo: 'La registré por error' });
+    expect(res.status).toBe(200);
+    expect(res.body.eliminacion).toBe('pendiente');
+    expect(res.body.motivo_eliminacion).toBe('La registré por error');
+    // Todavía no se borra nada.
+    expect(repo.eliminarGuia).not.toHaveBeenCalled();
+  });
+
+  it('no se puede pedir si ya se entregó', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/solicitud-eliminacion')
+      .send({ motivo: 'La registré por error' });
+    expect(res.status).toBe(409);
+  });
+
+  it('el administrador aprueba y se borra de la hoja', async () => {
+    const pendiente = guia({ eliminacion: 'pendiente', motivo_eliminacion: 'Error' });
+    repo.buscarPorNumero.mockResolvedValue(pendiente);
+    const res = await request(app).delete('/guias/IPE-2026-000123');
+    expect(res.status).toBe(200);
+    expect(repo.eliminarGuia).toHaveBeenCalledWith(pendiente);
+  });
+
+  it('una guía entregada no se borra', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const res = await request(app).delete('/guias/IPE-2026-000123');
+    expect(res.status).toBe(409);
+    expect(repo.eliminarGuia).not.toHaveBeenCalled();
+  });
+
+  it('el administrador rechaza el pedido', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ eliminacion: 'pendiente' }));
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/solicitud-eliminacion/rechazo')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.eliminacion).toBe('rechazada');
+  });
+
+  it('busca el registro exacto si viene la fecha de creación', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ fecha_creacion: '2026-01-01T00:00:00.000Z', _row: 2 }),
+      guia({ fecha_creacion: '2026-01-01T05:00:00.000Z', _row: 3 }),
+    ]);
+    const res = await request(app)
+      .delete('/guias/IPE-2026-000123')
+      .query({ fechaCreacion: '2026-01-01T00:00:00.000Z' });
+    expect(res.status).toBe(200);
+    expect(repo.eliminarGuia.mock.calls[0][0]._row).toBe(2);
+  });
+});
+
+describe('DELETE /guias/:numeroGuia/foto', () => {
+  it('quita la foto de una guía entregada', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ estado: ESTADOS.ENTREGADO, foto_entrega_url: 'drive:abc' }),
+    );
+    fotos.eliminarFoto.mockResolvedValue();
+    const res = await request(app).delete('/guias/IPE-2026-000123/foto');
+    expect(res.status).toBe(200);
+    expect(res.body.foto_entrega_url).toBe('');
+    expect(fotos.eliminarFoto).toHaveBeenCalledWith('drive:abc');
+  });
+
+  it('si el archivo no se puede borrar, igual la quita y avisa', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ estado: ESTADOS.ENTREGADO, foto_entrega_url: 'drive:abc' }),
+    );
+    fotos.eliminarFoto.mockRejectedValue(new Error('Acción desconocida.'));
+    const res = await request(app).delete('/guias/IPE-2026-000123/foto');
+    expect(res.status).toBe(200);
+    expect(res.body.foto_entrega_url).toBe('');
+    expect(res.body.aviso_foto).toMatch(/no se pudo borrar/);
   });
 });

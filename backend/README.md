@@ -46,22 +46,27 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a S):
+y esta fila de encabezados (columnas A a U):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion
 ```
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
-`motivo_rechazo` en S1) — las filas existentes quedan
+`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1)
+— las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
 `geo_lat`/`geo_lng` guardan la ubicación del último evento. `cierre_*` se
 llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
+
+`eliminacion` queda en `pendiente` cuando el transportista pide borrar una
+tarea en ruta (con su `motivo_eliminacion`); si el administrador lo aprueba,
+la fila se borra de la hoja, y si no, queda en `rechazada`.
 
 `foto_entrega_url` guarda dónde quedó la foto de la entrega (la guía
 firmada por el cliente, o el comprobante de agencia): `drive:<id>` si está
@@ -96,7 +101,10 @@ de servicio de la hoja no sirve para esto: Google no le da espacio en Drive.
 sin iniciar sesión; sin la clave el script no guarda ni muestra nada, y
 solo entrega fotos de esa carpeta. Si cambias el código del script, vuelve
 a *Implementar → Gestionar implementaciones → editar → Nueva versión* (la
-URL no cambia).
+URL no cambia). Para que el administrador pueda **borrar fotos** hace falta
+la versión del script con la acción `eliminar` (manda la foto a la papelera
+de Drive); con una versión anterior la foto se quita de la guía pero el
+archivo queda en la carpeta.
 
 ### Fotos en Vercel Blob (alternativa, gratis en el plan Hobby)
 
@@ -238,6 +246,12 @@ Al terminar, Vercel te da una URL pública (algo como
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
 | `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |
+| `DELETE` | `/api/guias/:numeroGuia/foto` | Quita la foto de la entrega (administrador). Si el archivo no se puede borrar, se quita igual de la guía y la respuesta trae `aviso_foto`. |
+| `PATCH` | `/api/guias/:numeroGuia/tipo` | Cambia el tipo de entrega (`tipoEntrega`, `destino?`). El transportista solo mientras está `en_ruta`; `porAdmin: true` siempre. `entre_sucursales` exige una sucursal registrada como destino. |
+| `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista pide borrar una tarea `en_ruta` (`motivo` obligatorio). Queda `eliminacion: pendiente` hasta que el administrador decida. |
+| `DELETE` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista retira su pedido. |
+| `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion/rechazo` | El administrador no aprueba el pedido (`eliminacion: rechazada`). |
+| `DELETE` | `/api/guias/:numeroGuia` | Borra la fila de la tarea (administrador). Solo si está `en_ruta`; 409 si no. |
 | `GET` | `/api/fotos/estado` | `{configurado}`: si el almacenamiento de fotos está conectado. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |
 | `GET` | `/api/sucursales` | Sucursales con su perímetro (centro + radio en metros). |
@@ -245,4 +259,8 @@ Al terminar, Vercel te da una URL pública (algo como
 | `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
 | `GET` | `/api/guias?estado=en_ruta&desde=…&hasta=…` | Lista de guías; filtros opcionales por estado y por fecha de la tarea (`fecha_creacion`, ISO, `desde` incluido y `hasta` excluido). |
 | `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
+
+Las rutas que actúan sobre una guía aceptan `fechaCreacion` (en el body o en
+la query) para elegir el registro exacto cuando el mismo número se registró
+más de una vez; sin ella usan el más reciente.
 | `GET` | `/api/health` | Chequeo de salud. |

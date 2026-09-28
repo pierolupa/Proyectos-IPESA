@@ -35,6 +35,10 @@ Future<void> _abrirDetalleAdmin(
   );
   final appState = AppState(api: GuiasApi(client: client));
   await appState.cargarGuias();
+  // Pantalla alta: la sección de ubicación va al final del formulario.
+  tester.view.physicalSize = const Size(800, 2200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ChangeNotifierProvider.value(
       value: appState,

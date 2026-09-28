@@ -27,6 +27,7 @@ function doPost(e) {
     }
     if (datos.accion === 'guardar') return responder({ id: guardar(datos) });
     if (datos.accion === 'leer') return responder(leer(datos.id));
+    if (datos.accion === 'eliminar') return responder(eliminar(datos.id));
     return responder({ error: 'Acción desconocida.' });
   } catch (err) {
     return responder({ error: String((err && err.message) || err) });
@@ -55,22 +56,33 @@ function guardar(datos) {
   return carpeta().createFile(archivo).getId();
 }
 
-function leer(id) {
-  const archivo = DriveApp.getFileById(id);
-  // Solo fotos de la carpeta de entregas: la clave no abre cualquier
-  // archivo del Drive.
+/** Solo fotos de la carpeta de entregas: la clave no abre cualquier
+ * archivo del Drive. */
+function estaEnCarpeta(archivo) {
   const idCarpeta = carpeta().getId();
   const padres = archivo.getParents();
-  let enCarpeta = false;
   while (padres.hasNext()) {
-    if (padres.next().getId() === idCarpeta) enCarpeta = true;
+    if (padres.next().getId() === idCarpeta) return true;
   }
-  if (!enCarpeta) return { error: 'No es una foto de entregas.' };
+  return false;
+}
+
+function leer(id) {
+  const archivo = DriveApp.getFileById(id);
+  if (!estaEnCarpeta(archivo)) return { error: 'No es una foto de entregas.' };
   const contenido = archivo.getBlob();
   return {
     tipo: contenido.getContentType(),
     base64: Utilities.base64Encode(contenido.getBytes()),
   };
+}
+
+/** La manda a la papelera de Drive (se puede recuperar 30 días). */
+function eliminar(id) {
+  const archivo = DriveApp.getFileById(id);
+  if (!estaEnCarpeta(archivo)) return { error: 'No es una foto de entregas.' };
+  archivo.setTrashed(true);
+  return { ok: true };
 }
 
 function responder(objeto) {

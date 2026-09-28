@@ -339,6 +339,38 @@ class _TarjetaTarea extends StatelessWidget {
                 guia.destino,
                 style: const TextStyle(fontSize: 15, color: Ipesa.textoSuave),
               ),
+              if (guia.eliminacionPendiente || guia.eliminacionRechazada)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        guia.eliminacionPendiente
+                            ? Icons.hourglass_top_rounded
+                            : Icons.do_not_disturb_on,
+                        size: 16,
+                        color: guia.eliminacionPendiente
+                            ? const Color(0xFF8A4F00)
+                            : const Color(0xFFB42318),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          guia.eliminacionPendiente
+                              ? 'Pediste eliminarla · esperando al administrador'
+                              : 'El administrador no aprobó eliminarla',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: guia.eliminacionPendiente
+                                ? const Color(0xFF8A4F00)
+                                : const Color(0xFFB42318),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (guia.estado.esFinal) ...[
                 const SizedBox(height: 10),
                 Text(

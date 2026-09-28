@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/estado_guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
+import '../../widgets/acciones_tarea.dart';
 import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import 'entrega_flow_screen.dart';
@@ -56,9 +57,27 @@ class GuiaDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          _DetailRow(label: 'Tipo de entrega', value: guia.tipoEntrega.etiqueta),
+          _DetailRow(
+            label: 'Tipo de entrega',
+            value: guia.tipoEntrega.etiqueta,
+            accion: guia.esEditablePorTransportista
+                ? TextButton(
+                    onPressed: () async {
+                      final ok = await mostrarCambioTipo(context, guia);
+                      if (ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tipo de entrega actualizado.'),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Cambiar'),
+                  )
+                : null,
+          ),
           _DetailRow(label: 'Destinatario', value: guia.destinatario),
-          _DetailRow(label: 'Origen', value: guia.origen),
+          _DetailRow(label: 'Punto de partida', value: guia.origen),
           _DetailRow(label: 'Destino', value: guia.destino),
           _DetailRow(label: 'Transportista', value: guia.transportista),
           if (guia.numeroPedido.isNotEmpty)
@@ -70,6 +89,10 @@ class GuiaDetailScreen extends StatelessWidget {
             value: guia.fechaActualizacion.toString().substring(0, 16),
           ),
           const SizedBox(height: 24),
+          if (guia.eliminacionPendiente || guia.eliminacionRechazada) ...[
+            AvisoEliminacion(guia: guia),
+            const SizedBox(height: 16),
+          ],
           if (siguientePaso != null) ...[
             FilledButton.icon(
               icon: const Icon(Icons.arrow_forward),
@@ -105,6 +128,30 @@ class GuiaDetailScreen extends StatelessWidget {
                 Navigator.of(context).pop();
               },
             ),
+            // Borrar la tarea (por ejemplo, si se registró por error):
+            // solo en ruta y con la aprobación del administrador.
+            if (guia.esEditablePorTransportista &&
+                !guia.eliminacionPendiente) ...[
+              const SizedBox(height: 4),
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Eliminar tarea'),
+                style: TextButton.styleFrom(
+                  foregroundColor: EstadoGuia.rechazado.color,
+                ),
+                onPressed: () async {
+                  final enviado = await mostrarPedidoEliminacion(context, guia);
+                  if (!enviado || !context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Pedido enviado. El administrador debe aprobarlo.',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ] else if (guia.estado == EstadoGuia.rechazado)
             AvisoRechazo(guia: guia)
           else
@@ -128,10 +175,11 @@ class GuiaDetailScreen extends StatelessWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  const _DetailRow({required this.label, required this.value, this.accion});
 
   final String label;
   final String value;
+  final Widget? accion;
 
   @override
   Widget build(BuildContext context) {
@@ -147,9 +195,8 @@ class _DetailRow extends StatelessWidget {
               style: TextStyle(color: Colors.grey[600], fontSize: 13),
             ),
           ),
-          Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 14)),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
+          ?accion,
         ],
       ),
     );

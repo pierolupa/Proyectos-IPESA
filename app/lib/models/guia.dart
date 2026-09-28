@@ -38,6 +38,11 @@ class Guia {
   /// Por qué el transportista rechazó la tarea (vacío si no la rechazó).
   final String motivoRechazo;
 
+  /// El transportista pidió borrar la tarea: 'pendiente' mientras el
+  /// administrador decide, 'rechazada' si no lo aprobó; vacío si no.
+  final String eliminacion;
+  final String motivoEliminacion;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -58,9 +63,17 @@ class Guia {
     this.fechaCierre,
     this.fotoEntregaUrl = '',
     this.motivoRechazo = '',
+    this.eliminacion = '',
+    this.motivoEliminacion = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
+
+  bool get eliminacionPendiente => eliminacion == 'pendiente';
+  bool get eliminacionRechazada => eliminacion == 'rechazada';
+
+  /// Solo una tarea en ruta se puede borrar (o cambiar de tipo).
+  bool get esEditablePorTransportista => estado == EstadoGuia.enRuta;
 
   /// Identifica este registro aunque el mismo número de guía se haya
   /// registrado más de una vez (otro viaje, con 2 horas de diferencia).
@@ -96,6 +109,8 @@ class Guia {
       fechaCierre: DateTime.tryParse(json['fecha_cierre'] as String? ?? ''),
       fotoEntregaUrl: json['foto_entrega_url'] as String? ?? '',
       motivoRechazo: json['motivo_rechazo'] as String? ?? '',
+      eliminacion: (json['eliminacion'] as String? ?? '').trim(),
+      motivoEliminacion: json['motivo_eliminacion'] as String? ?? '',
     );
   }
 
@@ -140,6 +155,8 @@ class Guia {
       fechaCierre: fechaCierre,
       fotoEntregaUrl: fotoEntregaUrl,
       motivoRechazo: motivoRechazo,
+      eliminacion: eliminacion,
+      motivoEliminacion: motivoEliminacion,
     );
   }
 }

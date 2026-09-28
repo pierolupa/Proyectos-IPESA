@@ -45,6 +45,7 @@ class _Borrador {
   final numero = TextEditingController();
   final destinatario = TextEditingController();
   final destino = TextEditingController();
+  final origen = TextEditingController();
   final pedido = TextEditingController();
   final entrega = TextEditingController();
   TipoEntrega tipo = TipoEntrega.clienteFinal;
@@ -58,7 +59,7 @@ class _Borrador {
   bool get esTraslado => tipo == TipoEntrega.entreSucursales;
 
   void dispose() {
-    for (final c in [numero, destinatario, destino, pedido, entrega]) {
+    for (final c in [numero, destinatario, destino, origen, pedido, entrega]) {
       c.dispose();
     }
   }
@@ -156,6 +157,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         llenar(b.numero, datos.numeroGuia);
         llenar(b.destinatario, datos.destinatario);
         llenar(b.destino, datos.destino);
+        llenar(b.origen, datos.origen);
         llenar(b.pedido, datos.numeroPedido);
         llenar(b.entrega, datos.numeroEntrega);
         if (datos.numeroGuia == null) {
@@ -196,6 +198,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     );
     if (repetida) return 'Esta guía ya está en otra foto de esta lista.';
     if (b.destinatario.text.trim().isEmpty) return 'Falta el destinatario.';
+    if (b.origen.text.trim().isEmpty) return 'Falta el punto de partida.';
     if (b.esTraslado ? b.sucursal == null : b.destino.text.trim().isEmpty) {
       return b.esTraslado ? 'Elige la sucursal destino.' : 'Falta el destino.';
     }
@@ -250,7 +253,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       await appState.asignarNuevaGuia(
         numeroGuia: b.numero.text.trim(),
         tipoEntrega: b.tipo,
-        origen: 'Almacén Callao',
+        origen: b.origen.text.trim(),
         destino: b.esTraslado ? b.sucursal! : b.destino.text.trim(),
         destinatario: b.destinatario.text.trim(),
         lat: lat!,
@@ -536,6 +539,7 @@ class _TarjetaBorrador extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  campo(b.origen, 'Punto de partida'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<TipoEntrega>(
                     initialValue: b.tipo,

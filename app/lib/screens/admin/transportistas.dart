@@ -652,14 +652,16 @@ class _Casilla extends StatelessWidget {
                     ],
                     const SizedBox(height: 3),
                     Text(
-                      '${g.estado.grupo.etiqueta} · '
+                      '${g.eliminacionPendiente ? 'Pide eliminar' : g.estado.grupo.etiqueta} · '
                       '${(hoy ? _hora : _diaHora).format(fecha)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
-                        color: g.estado.color,
+                        color: g.eliminacionPendiente
+                            ? EstadoGuia.rechazado.color
+                            : g.estado.color,
                       ),
                     ),
                   ],

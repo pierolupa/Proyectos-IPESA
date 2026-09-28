@@ -678,6 +678,21 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     : detalle,
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              if (guia.eliminacionPendiente)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Pide eliminarla'
+                    '${guia.motivoEliminacion.trim().isEmpty ? '' : ': ${guia.motivoEliminacion.trim()}'}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: EstadoGuia.rechazado.color,
+                    ),
+                  ),
+                ),
               if (guia.estado == EstadoGuia.rechazado &&
                   guia.motivoRechazo.isNotEmpty)
                 Padding(

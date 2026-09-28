@@ -315,6 +315,62 @@ async function guardarSucursal(sucursal) {
 }
 
 /** Borra el contenido de la fila (la fila vacía se ignora al listar). */
+/** El id numérico (gid) de una pestaña, necesario para borrar filas. */
+async function idDePestana(sheets, spreadsheetId, titulo) {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties(sheetId,title)',
+  });
+  const pestana = (res.data.sheets || []).find(
+    (s) => s.properties && s.properties.title === titulo,
+  );
+  if (!pestana) throw new Error(`No existe la pestaña "${titulo}".`);
+  return pestana.properties.sheetId;
+}
+
+/**
+ * Borra de la hoja la fila de una guía (las de abajo suben). Antes vuelve a
+ * leer esa fila y confirma que sigue siendo la misma guía: si alguien
+ * agregó o borró filas entre medio, no borra la equivocada.
+ */
+async function eliminarGuia(guia) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const rowNumber = guia._row;
+  const actual = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${SHEET_NAME}!A${rowNumber}:${String.fromCharCode(64 + COLUMNS.length)}${rowNumber}`,
+  });
+  const fila = rowToGuia(((actual.data.values || [])[0]) || [], rowNumber);
+  if (
+    fila.numero_guia !== guia.numero_guia ||
+    fila.fecha_creacion !== guia.fecha_creacion
+  ) {
+    invalidarCacheGuias();
+    throw Object.assign(new Error('La hoja cambió mientras se borraba; inténtalo de nuevo.'), {
+      status: 409,
+    });
+  }
+  const sheetId = await idDePestana(sheets, spreadsheetId, SHEET_NAME);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: rowNumber - 1,
+              endIndex: rowNumber,
+            },
+          },
+        },
+      ],
+    },
+  }).finally(invalidarCacheGuias);
+}
+
 async function eliminarSucursal(rowNumber) {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
@@ -334,6 +390,7 @@ module.exports = {
   buscarPorNumero,
   crearGuia,
   actualizarGuia,
+  eliminarGuia,
   listarUsuarios,
   crearUsuario,
   // Exportadas además para poder testear el parseo sin credenciales reales.

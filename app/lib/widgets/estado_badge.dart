@@ -14,20 +14,28 @@ class EstadoBadge extends StatelessWidget {
       alignment: Alignment.centerLeft,
       widthFactor: 1,
       heightFactor: 1,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: estado.colorFondo,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          estado.etiqueta,
-          style: TextStyle(
-            color: estado.color,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
+      // Sin fondo: un punto y el texto en el color del estado.
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: estado.color,
+              shape: BoxShape.circle,
+            ),
           ),
-        ),
+          const SizedBox(width: 6),
+          Text(
+            estado.etiqueta,
+            style: TextStyle(
+              color: estado.color,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+        ],
       ),
     );
   }

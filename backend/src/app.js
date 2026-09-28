@@ -1,6 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const { ESTADOS, ESTADOS_FINALES, ESTADOS_CERRADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
+const {
+  ESTADOS,
+  ESTADOS_FINALES,
+  ESTADOS_CERRADOS,
+  ELIMINACION,
+  TIPOS_ENTREGA,
+  ROLES,
+} = require('./columns');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
 const fotos = require('./fotos');
@@ -53,6 +60,30 @@ function distanciaMetros(lat1, lng1, lat2, lng2) {
 function buscarSucursal(sucursales, nombre) {
   const clave = String(nombre).trim().toLowerCase();
   return sucursales.find((s) => s.nombre.toLowerCase() === clave) || null;
+}
+
+/**
+ * El registro de una guía. Si viene `fechaCreacion` (la app la manda) se
+ * busca ese registro exacto; si no, el más reciente con ese número.
+ */
+async function buscarRegistro(numeroGuia, fechaCreacion) {
+  if (fechaCreacion) {
+    const guias = await repo.listarGuias({ fresco: true });
+    const exacta = guias.find(
+      (g) =>
+        g.numero_guia === numeroGuia &&
+        Date.parse(g.fecha_creacion) === Date.parse(fechaCreacion),
+    );
+    if (exacta) return exacta;
+  }
+  return repo.buscarPorNumero(numeroGuia, { fresco: true });
+}
+
+function motivoValido(motivo) {
+  const limpio = String(motivo ?? '').trim();
+  if (limpio.length < 3) return { error: 'Indica el motivo.' };
+  if (limpio.length > 300) return { error: 'El motivo es muy largo (máx. 300 caracteres).' };
+  return { motivo: limpio };
 }
 
 function sinCamposInternos(guia) {
@@ -386,6 +417,11 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 
     guia.estado = estado;
     guia.fecha_actualizacion = new Date().toISOString();
+    // Si ya avanzó, un pedido de eliminación pendiente deja de valer.
+    if (estado !== ESTADOS.EN_RUTA) {
+      guia.eliminacion = '';
+      guia.motivo_eliminacion = '';
+    }
     if (geo) {
       guia.geo_lat = geo.lat;
       guia.geo_lng = geo.lng;
@@ -435,6 +471,8 @@ app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
 
     guia.estado = ESTADOS.RECHAZADO;
     guia.motivo_rechazo = motivoLimpio;
+    guia.eliminacion = '';
+    guia.motivo_eliminacion = '';
     guia.fecha_actualizacion = new Date().toISOString();
     if (geo && typeof geo.lat === 'number' && typeof geo.lng === 'number') {
       guia.geo_lat = geo.lat;
@@ -501,9 +539,170 @@ app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
   }
 });
 
+// Cambia el tipo de entrega. El transportista solo puede mientras la guía
+// está en ruta (antes de iniciar un traslado o entregarla); el
+// administrador (porAdmin: true), siempre. Si pasa a "entre sucursales",
+// el destino debe ser una sucursal registrada.
+app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const { tipoEntrega, destino, porAdmin, fechaCreacion } = req.body || {};
+    if (!TIPOS_VALIDOS.has(tipoEntrega)) {
+      return res.status(400).json({ error: `tipoEntrega inválido: ${tipoEntrega}` });
+    }
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (!porAdmin && guia.estado !== ESTADOS.EN_RUTA) {
+      return res.status(409).json({
+        error: 'Solo se puede cambiar el tipo de entrega mientras la guía está en ruta.',
+      });
+    }
+
+    const destinoPedido = String(destino ?? '').trim();
+    if (tipoEntrega === TIPOS_ENTREGA.ENTRE_SUCURSALES) {
+      const sucursal = buscarSucursal(await repo.listarSucursales(), destinoPedido);
+      if (!sucursal) {
+        return res.status(400).json({
+          error: `"${destinoPedido}" no es una sucursal registrada. Elige una de la lista.`,
+        });
+      }
+      guia.destino = sucursal.nombre;
+    } else if (destinoPedido) {
+      guia.destino = destinoPedido;
+    }
+    guia.tipo_entrega = tipoEntrega;
+    guia.fecha_actualizacion = new Date().toISOString();
+    if (porAdmin) guia.corregido_por_admin = true;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// El transportista pide borrar una tarea que se asignó (solo en ruta). No se
+// borra todavía: el administrador la ve como novedad y decide.
+app.post('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const { motivo, fechaCreacion } = req.body || {};
+    const validado = motivoValido(motivo);
+    if (validado.error) return res.status(400).json({ error: validado.error });
+
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.estado !== ESTADOS.EN_RUTA) {
+      return res.status(409).json({
+        error: 'Solo se puede pedir eliminar una tarea que está en ruta.',
+      });
+    }
+    guia.eliminacion = ELIMINACION.PENDIENTE;
+    guia.motivo_eliminacion = validado.motivo;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// El transportista retira su pedido de eliminación.
+app.delete('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    guia.eliminacion = '';
+    guia.motivo_eliminacion = '';
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// El administrador no aprueba borrar la tarea: sigue como estaba y el
+// transportista ve que se rechazó.
+app.post('/guias/:numeroGuia/solicitud-eliminacion/rechazo', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const guia = await buscarRegistro(numeroGuia, (req.body || {}).fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.eliminacion !== ELIMINACION.PENDIENTE) {
+      return res.status(409).json({ error: 'Esta guía no tiene un pedido de eliminación pendiente.' });
+    }
+    guia.eliminacion = ELIMINACION.RECHAZADA;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Borra la tarea por completo de la hoja (solo administrador; por ejemplo al
+// aprobar el pedido del transportista). Solo mientras está en ruta: una
+// guía entregada o en trasbordo ya es historia y no se borra (el
+// administrador puede corregir datos o quitar la foto).
+app.delete('/guias/:numeroGuia', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.estado !== ESTADOS.EN_RUTA) {
+      return res.status(409).json({
+        error:
+          'Solo se pueden eliminar tareas en ruta. En una guía cerrada puedes '
+          + 'corregir los datos o quitar la foto.',
+      });
+    }
+    await repo.eliminarGuia(guia);
+    res.json({ eliminada: true, numero_guia: guia.numero_guia });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Quita la foto de la entrega (solo administrador). La guía sigue igual.
+app.delete('/guias/:numeroGuia/foto', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (!guia.foto_entrega_url) {
+      return res.status(404).json({ error: 'Esta guía no tiene foto de entrega.' });
+    }
+    let aviso = null;
+    try {
+      await fotos.eliminarFoto(guia.foto_entrega_url);
+    } catch (err) {
+      console.error(err);
+      aviso = `Se quitó de la guía, pero el archivo no se pudo borrar: ${err.message}`;
+    }
+    guia.foto_entrega_url = '';
+    guia.corregido_por_admin = true;
+    guia.fecha_actualizacion = new Date().toISOString();
+    await repo.actualizarGuia(guia._row, guia);
+    res.json({ ...sinCamposInternos(guia), ...(aviso && { aviso_foto: aviso }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error(err);
+  if (err.status) return res.status(err.status).json({ error: err.message });
   res.status(500).json({ error: 'Error interno del servidor.' });
 });
 

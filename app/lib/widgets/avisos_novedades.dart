@@ -10,6 +10,7 @@ import '../theme.dart';
 extension PresentacionNovedad on CambioGuia {
   String get titulo {
     if (nueva) return 'Nueva guía registrada';
+    if (pideEliminar) return 'Pide eliminar una tarea';
     return switch (guia.estado) {
       EstadoGuia.enRuta => 'Guía de vuelta en ruta',
       EstadoGuia.enProcesoTrasbordo => 'Traslado iniciado',
@@ -26,6 +27,10 @@ extension PresentacionNovedad on CambioGuia {
         ? 'Sin transportista'
         : guia.transportista.trim();
     if (nueva) return '$quien · ${guia.tipoEntrega.etiqueta}';
+    if (pideEliminar) {
+      final motivo = guia.motivoEliminacion.trim();
+      return motivo.isEmpty ? quien : '$quien · $motivo';
+    }
     return switch (guia.estado) {
       EstadoGuia.enProcesoTrasbordo ||
       EstadoGuia.recepcionSucursal => '$quien · ${guia.destino}',
@@ -39,6 +44,7 @@ extension PresentacionNovedad on CambioGuia {
 
   IconData get icono {
     if (nueva) return Icons.post_add_rounded;
+    if (pideEliminar) return Icons.delete_outline_rounded;
     return switch (guia.estado) {
       EstadoGuia.enRuta => Icons.local_shipping_outlined,
       EstadoGuia.enProcesoTrasbordo => Icons.swap_horiz_rounded,
@@ -48,7 +54,11 @@ extension PresentacionNovedad on CambioGuia {
     };
   }
 
-  Color get color => nueva ? Ipesa.turquesa : guia.estado.color;
+  Color get color => nueva
+      ? Ipesa.turquesa
+      : pideEliminar
+      ? const Color(0xFFB42318)
+      : guia.estado.color;
 }
 
 String _hace(DateTime momento, DateTime ahora) {

@@ -77,6 +77,7 @@ void main() {
             'numero_guia': numero,
             'destinatario': 'Cliente $numero',
             'destino': 'Av. Lima 100',
+            'origen': 'Almacén Lurín',
           }),
           200,
         );

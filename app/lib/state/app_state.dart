@@ -22,6 +22,10 @@ class CambioGuia {
   final DateTime momento;
 
   bool get nueva => anterior == null;
+
+  /// El transportista pide borrar la tarea (el estado no cambió).
+  bool get pideEliminar =>
+      anterior != null && anterior == guia.estado && guia.eliminacionPendiente;
 }
 
 const _prefRol = 'sesion_rol';
@@ -205,7 +209,12 @@ class AppState extends ChangeNotifier {
     if (antes == null) {
       return '$quien registró la guía $n (${ahora.tipoEntrega.etiqueta}).';
     }
-    if (antes.estado == ahora.estado) return null;
+    if (antes.estado == ahora.estado) {
+      if (ahora.eliminacionPendiente && !antes.eliminacionPendiente) {
+        return '$quien pide eliminar la guía $n: ${ahora.motivoEliminacion}';
+      }
+      return null;
+    }
     switch (ahora.estado) {
       case EstadoGuia.enRuta:
         return 'La guía $n volvió a "En ruta".';
@@ -383,5 +392,71 @@ class AppState extends ChangeNotifier {
       _guias[index] = actualizada;
     }
     notifyListeners();
+  }
+
+  /// Reemplaza en la lista el registro exacto de [guia] (mismo número y
+  /// fecha de creación) por [nueva]; null lo quita.
+  void _reemplazar(Guia guia, Guia? nueva) {
+    final i = _guias.indexWhere((g) => g.clave == guia.clave);
+    if (i == -1) return;
+    if (nueva == null) {
+      _guias.removeAt(i);
+    } else {
+      _guias[i] = nueva;
+    }
+    notifyListeners();
+  }
+
+  Future<Guia> cambiarTipoEntrega(
+    Guia guia,
+    TipoEntrega tipo, {
+    String? destino,
+    bool porAdmin = false,
+  }) async {
+    final nueva = await _api.cambiarTipoEntrega(
+      guia,
+      tipo,
+      destino: destino,
+      porAdmin: porAdmin,
+    );
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<Guia> pedirEliminacion(Guia guia, String motivo) async {
+    final nueva = await _api.pedirEliminacion(guia, motivo);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<Guia> retirarPedidoEliminacion(Guia guia) async {
+    final nueva = await _api.retirarPedidoEliminacion(guia);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<Guia> rechazarEliminacion(Guia guia) async {
+    final nueva = await _api.rechazarEliminacion(guia);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<void> eliminarGuia(Guia guia) async {
+    await _api.eliminarGuia(guia);
+    _reemplazar(guia, null);
+  }
+
+  Future<String?> eliminarFotoEntrega(Guia guia) async {
+    final (nueva, aviso) = await _api.eliminarFotoEntrega(guia);
+    _reemplazar(guia, nueva);
+    return aviso;
+  }
+
+  /// La versión actual (en la lista) de un registro, o null si ya no está.
+  Guia? guiaActual(Guia guia) {
+    for (final g in _guias) {
+      if (g.clave == guia.clave) return g;
+    }
+    return null;
   }
 }
