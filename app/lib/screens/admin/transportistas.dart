@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
@@ -18,6 +19,14 @@ enum PeriodoResumen {
 
   const PeriodoResumen(this.etiqueta);
   final String etiqueta;
+
+  /// Para el selector compacto.
+  String get corta => switch (this) {
+    PeriodoResumen.hoy => 'Hoy',
+    PeriodoResumen.semana => '7 días',
+    PeriodoResumen.mes => 'Mes',
+    PeriodoResumen.todo => 'Todo',
+  };
 
   bool incluye(Guia guia, DateTime ahora) {
     if (this == PeriodoResumen.todo || !guia.estado.esCerrada) return true;
@@ -96,37 +105,57 @@ String _iniciales(String nombre) {
   return partes.take(2).map((p) => p[0].toUpperCase()).join();
 }
 
-class _ChipsPeriodo extends StatelessWidget {
-  const _ChipsPeriodo({required this.periodo, required this.onCambio});
+/// Selector compacto del periodo: Hoy · 7 días · Mes · Todo.
+class _SelectorPeriodo extends StatelessWidget {
+  const _SelectorPeriodo({required this.periodo, required this.onCambio});
 
   final PeriodoResumen periodo;
   final ValueChanged<PeriodoResumen> onCambio;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final p in PeriodoResumen.values)
-          ChoiceChip(
-            label: Text(p.etiqueta),
-            selected: p == periodo,
-            showCheckmark: false,
-            onSelected: (_) => onCambio(p),
-            backgroundColor: Colors.white,
-            selectedColor: Ipesa.menta,
-            side: BorderSide(
-              color: p == periodo ? Ipesa.petroleo : Ipesa.borde,
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Ipesa.borde),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final p in PeriodoResumen.values) ...[
+            if (p != PeriodoResumen.values.first)
+              const VerticalDivider(width: 1, color: Ipesa.borde),
+            Semantics(
+              button: true,
+              selected: p == periodo,
+              child: Material(
+                color: p == periodo ? Ipesa.petroleo : Colors.transparent,
+                child: InkWell(
+                  onTap: () => onCambio(p),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Center(
+                      child: Text(
+                        p.corta,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: p == periodo
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: p == periodo ? Colors.white : Ipesa.etiqueta,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            labelStyle: TextStyle(
-              fontFamily: Ipesa.fuenteTexto,
-              color: p == periodo ? Ipesa.petroleo : Ipesa.texto,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 }
@@ -159,36 +188,51 @@ class _PestanaTransportistasState extends State<PestanaTransportistas> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final ancha = constraints.maxWidth >= 900;
-        final cabecera = Padding(
-          padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                onChanged: (v) => setState(() => _busqueda = v),
-                decoration: const InputDecoration(
-                  hintText: 'Buscar transportista',
-                  prefixIcon: Icon(Icons.search),
-                  contentPadding: EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _ChipsPeriodo(
-                periodo: _periodo,
-                onCambio: (p) => setState(() => _periodo = p),
-              ),
-            ],
+        final buscador = TextField(
+          onChanged: (v) => setState(() => _busqueda = v),
+          decoration: const InputDecoration(
+            hintText: 'Buscar transportista',
+            prefixIcon: Icon(Icons.search),
+            contentPadding: EdgeInsets.symmetric(vertical: 12),
           ),
         );
+        final selector = _SelectorPeriodo(
+          periodo: _periodo,
+          onCambio: (p) => setState(() => _periodo = p),
+        );
+        final cabecera = Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+          child: ancha
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 420),
+                          child: buscador,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    selector,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    buscador,
+                    const SizedBox(height: 10),
+                    Align(alignment: Alignment.centerLeft, child: selector),
+                  ],
+                ),
+        );
 
-        Widget tarjeta(ResumenTransportista r) => _TarjetaTransportista(
-          resumen: r,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => TransportistaDetalleScreen(
-                nombre: r.nombre,
-                periodoInicial: _periodo,
-              ),
+        void abrir(ResumenTransportista r) => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TransportistaDetalleScreen(
+              nombre: r.nombre,
+              periodoInicial: _periodo,
             ),
           ),
         );
@@ -208,24 +252,16 @@ class _PestanaTransportistasState extends State<PestanaTransportistas> {
               ),
             ],
           );
-        } else if (ancha) {
-          lista = GridView.builder(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 440,
-              mainAxisExtent: 150,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-            ),
-            itemCount: resumenes.length,
-            itemBuilder: (_, i) => tarjeta(resumenes[i]),
-          );
         } else {
           lista = ListView.separated(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             itemCount: resumenes.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (_, i) => tarjeta(resumenes[i]),
+            separatorBuilder: (_, _) => const SizedBox(height: 16),
+            itemBuilder: (_, i) => _TarjetaTransportista(
+              resumen: resumenes[i],
+              ancha: ancha,
+              onAbrir: () => abrir(resumenes[i]),
+            ),
           );
         }
 
@@ -246,109 +282,373 @@ class _PestanaTransportistasState extends State<PestanaTransportistas> {
   }
 }
 
+const _bordeTarjeta = Color(0xFFE1E6E4);
+final _hora = DateFormat('HH:mm');
+final _diaHora = DateFormat('dd/MM HH:mm');
+
+/// Un transportista: su cabecera (toca para ver el desglose), sus guías en
+/// curso como casillas y, en un panel aparte, las que ya entregó.
 class _TarjetaTransportista extends StatelessWidget {
-  const _TarjetaTransportista({required this.resumen, required this.onTap});
+  const _TarjetaTransportista({
+    required this.resumen,
+    required this.ancha,
+    required this.onAbrir,
+  });
 
   final ResumenTransportista resumen;
-  final VoidCallback onTap;
+  final bool ancha;
+  final VoidCallback onAbrir;
 
   @override
   Widget build(BuildContext context) {
     final r = resumen;
-    final total = r.guias.length;
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+    final sinNombre = r.nombre == 'Sin transportista';
+    final entregadas = r.de([GrupoEstado.entregado]);
+    final enCurso = r.de([
+      GrupoEstado.enRuta,
+      GrupoEstado.trasbordo,
+      GrupoEstado.rechazado,
+    ]);
+    final conteos = Wrap(
+      spacing: 18,
+      runSpacing: 4,
+      children: [
+        for (final g in GrupoEstado.values)
+          if (r.cuantas(g) > 0)
+            Text(
+              _conteo(g, r.cuantas(g)),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _estadoDe(g).color,
+              ),
+            ),
+      ],
+    );
+
+    final cabecera = InkWell(
+      onTap: onAbrir,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            _Avatar(nombre: r.nombre, sinNombre: sinNombre),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Ipesa.menta,
-                    child: Text(_iniciales(r.nombre), style: Ipesa.titulo(15)),
+                  Text(
+                    r.nombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Ipesa.titulo(17, color: Ipesa.texto),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          r.nombre,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Ipesa.titulo(16),
-                        ),
-                        Text(
-                          '${total == 1 ? '1 guía' : '$total guías'} · '
-                          '${haceCuanto(r.ultimaActividad!)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Ipesa.textoSuave,
-                          ),
-                        ),
-                      ],
+                  const SizedBox(height: 2),
+                  Text(
+                    sinNombre
+                        ? 'Por asignar · ${haceCuanto(r.ultimaActividad!)}'
+                        : 'Última actividad ${haceCuanto(r.ultimaActividad!)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: sinNombre
+                          ? EstadoGuia.enProcesoTrasbordo.color
+                          : Ipesa.textoSuave,
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: Ipesa.textoSuave),
                 ],
               ),
-              const SizedBox(height: 12),
-              _BarraEstados(resumen: r),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  for (final g in GrupoEstado.values)
-                    if (r.cuantas(g) > 0)
-                      Text(
-                        _conteo(g, r.cuantas(g)),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: _estadoDe(g).color,
-                        ),
-                      ),
-                ],
+            ),
+            if (ancha) ...[
+              conteos,
+              Container(
+                width: 1,
+                height: 32,
+                margin: const EdgeInsets.symmetric(horizontal: 18),
+                color: _bordeTarjeta,
               ),
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: '${entregadas.length}'),
+                    TextSpan(
+                      text: '/${r.guias.length}',
+                      style: const TextStyle(color: Ipesa.textoSuave),
+                    ),
+                  ],
+                ),
+                style: Ipesa.titulo(20, color: Ipesa.texto),
+              ),
+              const SizedBox(width: 14),
             ],
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                border: Border.all(color: Ipesa.borde),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.chevron_right, color: Ipesa.petroleo),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final casillasEnCurso = _Seccion(
+      titulo: 'En curso',
+      guias: enCurso,
+      maximo: 12,
+      vacio: 'No tiene guías en curso.',
+      onVerMas: onAbrir,
+    );
+    final panelEntregadas = _PanelEntregadas(
+      guias: entregadas,
+      onVerMas: onAbrir,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _bordeTarjeta),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      padding: EdgeInsets.fromLTRB(ancha ? 24 : 16, 16, ancha ? 24 : 16, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          cabecera,
+          if (!ancha) ...[const SizedBox(height: 8), conteos],
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, c) => c.maxWidth >= 720
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: casillasEnCurso),
+                      const SizedBox(width: 20),
+                      SizedBox(
+                        width: _PanelEntregadas.ancho,
+                        child: panelEntregadas,
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      casillasEnCurso,
+                      const SizedBox(height: 14),
+                      panelEntregadas,
+                    ],
+                  ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.nombre, required this.sinNombre});
+
+  final String nombre;
+  final bool sinNombre;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sinNombre) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Ipesa.borde, width: 1.5),
+        ),
+        child: const Icon(
+          Icons.person_outline,
+          size: 22,
+          color: Ipesa.textoSuave,
+        ),
+      );
+    }
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: Ipesa.petroleo,
+      child: Text(
+        _iniciales(nombre),
+        style: Ipesa.titulo(15, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// Título pequeño + casillas de guías; si son muchas, "Ver N más".
+class _Seccion extends StatelessWidget {
+  const _Seccion({
+    required this.titulo,
+    required this.guias,
+    required this.maximo,
+    required this.vacio,
+    required this.onVerMas,
+    this.cabecera,
+  });
+
+  final String titulo;
+  final List<Guia> guias;
+  final int maximo;
+  final String vacio;
+  final VoidCallback onVerMas;
+  final Widget? cabecera;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibles = guias.take(maximo).toList();
+    final restantes = guias.length - visibles.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        cabecera ??
+            Text(
+              '${titulo.toUpperCase()} · ${guias.length}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.8,
+                color: Ipesa.textoSuave,
+              ),
+            ),
+        const SizedBox(height: 10),
+        if (guias.isEmpty)
+          Text(vacio, style: const TextStyle(color: Ipesa.textoSuave))
+        else
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [for (final g in visibles) _Casilla(guia: g)],
+          ),
+        if (restantes > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: TextButton(
+              onPressed: onVerMas,
+              child: Text(restantes == 1 ? 'Ver 1 más' : 'Ver $restantes más'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Ventana aparte con las guías que el transportista ya entregó.
+class _PanelEntregadas extends StatelessWidget {
+  const _PanelEntregadas({required this.guias, required this.onVerMas});
+
+  /// Dos casillas por fila.
+  static const ancho = _Casilla.ancho * 2 + 10 + 16 * 2 + 2;
+
+  final List<Guia> guias;
+  final VoidCallback onVerMas;
+
+  @override
+  Widget build(BuildContext context) {
+    const verde = Color(0xFF1D6B41);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F7F5),
+        border: Border.all(color: _bordeTarjeta),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: _Seccion(
+        titulo: 'Entregadas',
+        guias: guias,
+        maximo: 8,
+        vacio: 'Aún no entrega ninguna.',
+        onVerMas: onVerMas,
+        cabecera: Row(
+          children: [
+            const Icon(Icons.task_alt, size: 18, color: verde),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Entregadas',
+                style: Ipesa.titulo(15, color: Ipesa.texto),
+              ),
+            ),
+            Text('${guias.length}', style: Ipesa.titulo(15, color: verde)),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Barra con la proporción de guías en cada estado.
-class _BarraEstados extends StatelessWidget {
-  const _BarraEstados({required this.resumen});
+/// Una guía: número, estado (solo texto de color) y hora; tocarla la abre.
+class _Casilla extends StatelessWidget {
+  const _Casilla({required this.guia});
 
-  final ResumenTransportista resumen;
+  static const ancho = 150.0;
+
+  final Guia guia;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: SizedBox(
-        height: 8,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final g in GrupoEstado.values)
-              if (resumen.cuantas(g) > 0)
-                Expanded(
-                  flex: resumen.cuantas(g),
-                  child: ColoredBox(color: _estadoDe(g).color),
+    final g = guia;
+    final fecha = g.fechaActualizacion.toLocal();
+    final ahora = DateTime.now();
+    final hoy =
+        fecha.year == ahora.year &&
+        fecha.month == ahora.month &&
+        fecha.day == ahora.day;
+    return SizedBox(
+      width: ancho,
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: _bordeTarjeta),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => abrirGuiaAdmin(context, g),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(height: 3, color: g.estado.color),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      g.numeroGuia,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Ipesa.texto,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${g.estado.grupo.etiqueta} · '
+                      '${(hoy ? _hora : _diaHora).format(fecha)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: g.estado.color,
+                      ),
+                    ),
+                  ],
                 ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -386,9 +686,12 @@ class _TransportistaDetalleScreenState
     final ancha = MediaQuery.sizeOf(context).width >= 700;
 
     final contenido = <Widget>[
-      _ChipsPeriodo(
-        periodo: _periodo,
-        onCambio: (p) => setState(() => _periodo = p),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: _SelectorPeriodo(
+          periodo: _periodo,
+          onCambio: (p) => setState(() => _periodo = p),
+        ),
       ),
       const SizedBox(height: 16),
     ];
@@ -505,8 +808,9 @@ class _Cifra extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: estado.colorFondo,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        border: Border.all(color: _bordeTarjeta),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

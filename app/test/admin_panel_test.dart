@@ -155,6 +155,28 @@ void main() {
     expect(find.text('Ana Díaz'), findsOneWidget);
     expect(find.text('1 en ruta'), findsOneWidget);
     expect(find.text('2 entregadas'), findsOneWidget);
+    // Las entregadas van en su propio panel; las demás, como casillas en
+    // curso. Juan no entregó ninguna todavía.
+    expect(find.text('Entregadas'), findsNWidgets(2));
+    expect(find.text('Aún no entrega ninguna.'), findsOneWidget);
+    final paneles = find.byWidgetPredicate(
+      (w) => w.runtimeType.toString() == '_PanelEntregadas',
+    );
+    for (final numero in ['T001-4', 'T001-5']) {
+      expect(
+        find.descendant(of: paneles, matching: find.text(numero)),
+        findsOneWidget,
+      );
+    }
+    for (final numero in ['T001-1', 'T001-2', 'T001-3']) {
+      expect(
+        find.descendant(of: paneles, matching: find.text(numero)),
+        findsNothing,
+      );
+    }
+    for (final numero in ['T001-1', 'T001-2', 'T001-3', 'T001-4', 'T001-5']) {
+      expect(find.text(numero), findsOneWidget);
+    }
 
     await tester.tap(find.text('Ana Díaz'));
     await tester.pumpAndSettle();
