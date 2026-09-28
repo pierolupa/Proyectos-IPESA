@@ -64,11 +64,43 @@ con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
 
 `foto_entrega_url` guarda dónde quedó la foto de la entrega (la guía
-firmada por el cliente, o el comprobante de agencia) en Vercel Blob. Solo
-se guarda la foto de la entrega final. Es una URL **privada**: no se abre
-directo, el administrador la ve en la app vía `GET /guias/:numeroGuia/foto`.
+firmada por el cliente, o el comprobante de agencia): `drive:<id>` si está
+en Google Drive, o la URL del blob si está en Vercel Blob. Solo se guarda
+la foto de la entrega final. Es **privada**: no se abre directo, se ve en
+la app vía `GET /guias/:numeroGuia/foto`.
 
-### Fotos (Vercel Blob, gratis en el plan Hobby)
+### Fotos en Google Drive (recomendado, gratis)
+
+Las fotos quedan en la carpeta **IPESA · Fotos de entregas** del Drive de
+la cuenta de Google que instale el script (usa sus 15 GB gratis). La cuenta
+de servicio de la hoja no sirve para esto: Google no le da espacio en Drive.
+
+1. Entra a [script.google.com](https://script.google.com) con la cuenta de
+   IPESA → **Nuevo proyecto** → borra lo que haya y pega todo
+   `apps-script/fotos-drive.gs`. Ponle de nombre "IPESA fotos".
+2. En la línea `const CLAVE = 'ESCRIBE_AQUI_TU_CLAVE';` cambia el texto por
+   una clave larga que inventes (letras y números, 20 o más). Guarda (💾).
+3. Arriba elige la función **autorizar** → **Ejecutar** → acepta los
+   permisos (si dice "Google no verificó esta app": *Configuración
+   avanzada* → *Ir a IPESA fotos*). Se crea la carpeta en tu Drive.
+4. **Implementar → Nueva implementación** → tipo **Aplicación web** →
+   *Ejecutar como*: **Yo**; *Quién tiene acceso*: **Cualquier persona** →
+   Implementar. Copia la **URL de la aplicación web** (termina en `/exec`).
+5. En Vercel, proyecto del backend (**proyectos-ipesa**) → Settings →
+   Environment Variables, agrega:
+   - `DRIVE_FOTOS_URL` = la URL del paso 4
+   - `DRIVE_FOTOS_CLAVE` = la clave del paso 2
+6. Deployments → ⋯ → **Redeploy** para que tome las variables.
+
+"Cualquier persona" solo significa que el backend puede llamar al script
+sin iniciar sesión; sin la clave el script no guarda ni muestra nada, y
+solo entrega fotos de esa carpeta. Si cambias el código del script, vuelve
+a *Implementar → Gestionar implementaciones → editar → Nueva versión* (la
+URL no cambia).
+
+### Fotos en Vercel Blob (alternativa, gratis en el plan Hobby)
+
+Si Drive está configurado se usa Drive; si no, Vercel Blob.
 
 1. En Vercel, abre el proyecto del backend → pestaña **Storage** →
    **Create Database** → **Blob**.
@@ -78,7 +110,7 @@ directo, el administrador la ve en la app vía `GET /guias/:numeroGuia/foto`.
 3. Vuelve a desplegar (Deployments → ⋯ → Redeploy) para que tome la variable.
 
 El plan Hobby incluye un cupo mensual gratis; si se llena, Vercel pausa el
-almacenamiento, **no cobra**. Sin el Blob configurado las guías se
+almacenamiento, **no cobra**. Sin Drive ni Blob configurados las guías se
 registran igual, solo que sin foto (la app muestra un aviso).
 
 La pestaña `Sucursales` (columnas `nombre | lat | lng | radio_m`) **se crea

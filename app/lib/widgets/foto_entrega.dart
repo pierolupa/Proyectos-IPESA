@@ -66,10 +66,10 @@ class _FotoEntregaState extends State<FotoEntrega> {
                     icono: Icons.warning_amber_rounded,
                     alerta: true,
                     texto:
-                        'Las fotos NO se están guardando: falta conectar el '
-                        'almacenamiento en Vercel (proyecto proyectos-ipesa → '
-                        'Storage → Create → Blob, acceso Private, y luego '
-                        'Redeploy).',
+                        'Las fotos NO se están guardando: falta conectar '
+                        'Google Drive (o Vercel Blob) al servidor '
+                        'proyectos-ipesa. Pasos en backend/README.md, '
+                        'sección "Fotos".',
                   )
                 : const _Aviso(
                     icono: Icons.no_photography_outlined,
