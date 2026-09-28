@@ -13,7 +13,6 @@ import 'rastreo_detalle_screen.dart';
 import 'rastreo_resultados_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
-final _diaMes = DateFormat('dd/MM');
 
 DateTime _hoy() => DateUtils.dateOnly(DateTime.now());
 
@@ -84,13 +83,6 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
   bool get _esHoy => _desde == _hoy() && _hasta == _hoy();
 
-  String get _textoRango {
-    if (_desde == _hasta) {
-      return _esHoy ? 'Hoy · ${_fecha.format(_desde)}' : _fecha.format(_desde);
-    }
-    return '${_diaMes.format(_desde)} – ${_fecha.format(_hasta)}';
-  }
-
   void _cambiarRango(DateTime desde, DateTime hasta) {
     setState(() {
       _desde = DateUtils.dateOnly(desde);
@@ -101,28 +93,31 @@ class _RastreoScreenState extends State<RastreoScreen> {
     context.read<AppState>().asegurarRangoTareas(_desde, _hasta);
   }
 
-  Future<void> _elegirFechas() async {
-    final elegido = await showDateRangePicker(
+  /// Fecha inicio o fin de la tarea. Si quedan al revés, la otra se
+  /// ajusta para que el rango siga siendo válido.
+  Future<void> _elegirFecha({required bool inicio}) async {
+    final elegida = await showDatePicker(
       context: context,
+      initialDate: inicio ? _desde : _hasta,
       firstDate: DateTime(2024),
       lastDate: _hoy(),
-      initialDateRange: DateTimeRange(start: _desde, end: _hasta),
-      helpText: 'Fecha de la tarea',
-      saveText: 'Aplicar',
+      helpText: inicio ? 'Fecha inicio' : 'Fecha fin',
       // En computadora, una ventana del tamaño de un celular en vez de
       // ocupar toda la pantalla.
       builder: (context, child) => Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440, maxHeight: 680),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(Ipesa.radio),
-            child: child,
-          ),
+          child: child,
         ),
       ),
     );
-    if (elegido == null || !mounted) return;
-    _cambiarRango(elegido.start, elegido.end);
+    if (elegida == null || !mounted) return;
+    final dia = DateUtils.dateOnly(elegida);
+    if (inicio) {
+      _cambiarRango(dia, _hasta.isBefore(dia) ? dia : _hasta);
+    } else {
+      _cambiarRango(_desde.isAfter(dia) ? dia : _desde, dia);
+    }
   }
 
   /// Una sola guía coincide: se abre de frente. Varias: la lista para
@@ -158,7 +153,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
       setState(
         () => _error = _esHoy
             ? 'No encontramos ninguna guía de hoy con esos datos. Si es de '
-                  'otro día, cambia la fecha.'
+                  'otro día, cambia las fechas.'
             : 'No encontramos ninguna guía con esos datos en esas fechas.',
       );
       return;
@@ -274,9 +269,12 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                   entrega: _entrega,
                                   hayFiltros: _hayFiltros,
                                   error: _error,
-                                  textoRango: _textoRango,
+                                  fechaInicio: _fecha.format(_desde),
+                                  fechaFin: _fecha.format(_hasta),
                                   buscando: _buscando,
-                                  onElegirFechas: _elegirFechas,
+                                  onFechaInicio: () =>
+                                      _elegirFecha(inicio: true),
+                                  onFechaFin: () => _elegirFecha(inicio: false),
                                   onHoy: _esHoy
                                       ? null
                                       : () => _cambiarRango(_hoy(), _hoy()),
@@ -388,9 +386,11 @@ class _TarjetaBusqueda extends StatelessWidget {
     required this.entrega,
     required this.hayFiltros,
     required this.error,
-    required this.textoRango,
+    required this.fechaInicio,
+    required this.fechaFin,
     required this.buscando,
-    required this.onElegirFechas,
+    required this.onFechaInicio,
+    required this.onFechaFin,
     required this.onHoy,
     required this.onTexto,
     required this.onLimpiar,
@@ -403,9 +403,11 @@ class _TarjetaBusqueda extends StatelessWidget {
   final TextEditingController entrega;
   final bool hayFiltros;
   final String? error;
-  final String textoRango;
+  final String fechaInicio;
+  final String fechaFin;
   final bool buscando;
-  final VoidCallback onElegirFechas;
+  final VoidCallback onFechaInicio;
+  final VoidCallback onFechaFin;
 
   /// Volver a hoy (null si ya es hoy).
   final VoidCallback? onHoy;
@@ -454,6 +456,8 @@ class _TarjetaBusqueda extends StatelessWidget {
                 Expanded(
                   child: Text('Rastrea tus guías', style: Ipesa.titulo(19)),
                 ),
+                if (onHoy != null)
+                  TextButton(onPressed: onHoy, child: const Text('Hoy')),
                 if (hayFiltros)
                   TextButton(
                     onPressed: onLimpiar,
@@ -492,31 +496,25 @@ class _TarjetaBusqueda extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          separacion,
+          // Fecha de la tarea: por defecto hoy en las dos.
           Row(
             children: [
-              Text(
-                'Fecha de tarea',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: onElegirFechas,
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 40),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      foregroundColor: Ipesa.petroleo,
-                    ),
-                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                    label: Text(textoRango, overflow: TextOverflow.ellipsis),
-                  ),
+                child: _CampoFecha(
+                  etiqueta: 'Fecha inicio',
+                  valor: fechaInicio,
+                  onTap: onFechaInicio,
                 ),
               ),
-              if (onHoy != null)
-                TextButton(onPressed: onHoy, child: const Text('Hoy')),
+              separacion,
+              Expanded(
+                child: _CampoFecha(
+                  etiqueta: 'Fecha fin',
+                  valor: fechaFin,
+                  onTap: onFechaFin,
+                ),
+              ),
             ],
           ),
           if (error != null) ...[
@@ -544,6 +542,48 @@ class _TarjetaBusqueda extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
+      ),
+    );
+  }
+}
+
+/// Campo de fecha con el mismo aspecto que los de texto; tocarlo abre el
+/// calendario.
+class _CampoFecha extends StatelessWidget {
+  const _CampoFecha({
+    required this.etiqueta,
+    required this.valor,
+    required this.onTap,
+  });
+
+  final String etiqueta;
+  final String valor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$etiqueta: $valor',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: etiqueta,
+            prefixIcon: const Icon(Icons.event_outlined, size: 18),
+            prefixIconConstraints: const BoxConstraints(minWidth: 38),
+            isDense: true,
+            contentPadding: const EdgeInsets.fromLTRB(0, 14, 10, 14),
+          ),
+          child: Text(
+            valor,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16, color: Ipesa.texto),
+          ),
+        ),
       ),
     );
   }

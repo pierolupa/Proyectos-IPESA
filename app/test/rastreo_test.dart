@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -368,7 +369,11 @@ void main() {
     // Guías de otros días: con "Hoy" no aparecen.
     await _abrirRastreo(tester, datos: _datos);
 
-    expect(find.textContaining('Hoy · '), findsOneWidget);
+    // Fecha inicio y fecha fin, las dos en hoy.
+    final hoy = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    expect(find.text('Fecha inicio'), findsOneWidget);
+    expect(find.text('Fecha fin'), findsOneWidget);
+    expect(find.text(hoy), findsNWidgets(2));
     await tester.enterText(
       find.widgetWithText(TextField, 'N° de guía'),
       'T033-3455',
