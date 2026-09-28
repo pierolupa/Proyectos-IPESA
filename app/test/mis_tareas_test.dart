@@ -91,13 +91,16 @@ void main() {
     expect(find.text('T001-94855'), findsOneWidget);
   });
 
-  testWidgets('Sin pendientes aparece "Todo entregado"', (tester) async {
+  testWidgets('Sin pendientes aparece "Ruta completada"', (tester) async {
     await _abrir(tester, [
       _guia('T1', 'Cliente A', estado: 'entregado'),
       _guia('T2', 'Cliente B', estado: 'entregado'),
     ]);
-    expect(find.text('¡Todo entregado!'), findsOneWidget);
-    expect(find.textContaining('Hoy entregaste 2 guías'), findsOneWidget);
+    expect(find.text('RUTA COMPLETADA'), findsOneWidget);
+    expect(find.text('No tienes más tareas pendientes'), findsOneWidget);
+    expect(find.textContaining('Entregaste 2 guías hoy'), findsOneWidget);
+    // "Nueva guía" queda en la tarjeta (sin el botón flotante repetido).
+    expect(find.text('Nueva guía'), findsOneWidget);
     // No hay nada que buscar.
     expect(find.byType(TextField), findsNothing);
     expect(find.text('100%'), findsOneWidget);

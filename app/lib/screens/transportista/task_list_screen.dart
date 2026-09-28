@@ -10,7 +10,6 @@ import '../../theme.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
-import '../../widgets/escena_ruta.dart';
 import '../../widgets/estado_badge.dart';
 import 'capture_flow_screen.dart';
 import 'entrega_flow_screen.dart';
@@ -86,13 +85,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return Scaffold(
       backgroundColor: Ipesa.fondo,
       bottomNavigationBar: const BandaMarcas(),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Ipesa.turquesa,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.photo_camera_outlined),
-        label: const Text('Nueva guía'),
-        onPressed: _nuevaGuia,
-      ),
+      // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
+      floatingActionButton: !_verEntregadas && pendientes.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: Ipesa.turquesa,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('Nueva guía'),
+              onPressed: _nuevaGuia,
+            ),
       body: ActualizacionAutomatica(
         intervalo: const Duration(seconds: 60),
         child: Column(
@@ -191,7 +193,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
       contenido = Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
-          child: _TodoEntregado(entregadasHoy: entregadasHoy),
+          child: _TodoEntregado(
+            entregadasHoy: entregadasHoy,
+            onNuevaGuia: _nuevaGuia,
+          ),
         ),
       );
     } else if (guias.isEmpty) {
@@ -448,57 +453,170 @@ class _Pestanas extends StatelessWidget {
   }
 }
 
-/// Sin tareas pendientes: el camión llegó y todo quedó entregado.
+/// Sin tareas pendientes: la carretera llega al atardecer con la bandera
+/// de meta, y debajo el mensaje de ruta completada.
 class _TodoEntregado extends StatelessWidget {
-  const _TodoEntregado({required this.entregadasHoy});
+  const _TodoEntregado({
+    required this.entregadasHoy,
+    required this.onNuevaGuia,
+  });
 
   final int entregadasHoy;
+  final VoidCallback onNuevaGuia;
 
   @override
   Widget build(BuildContext context) {
-    const verde = Color(0xFF1D6B41);
     return Container(
       margin: const EdgeInsets.only(top: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: const Color(0xFFDEE5E3)),
-        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEBDCC8)),
+        borderRadius: BorderRadius.circular(22),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 30),
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: verde.withValues(alpha: 0.3), width: 6),
-            ),
-            child: const Icon(Icons.check_rounded, color: verde, size: 46),
+          const AspectRatio(
+            aspectRatio: 390 / 300,
+            child: CustomPaint(painter: _Atardecer()),
           ),
-          const SizedBox(height: 18),
-          Text('¡Todo entregado!', style: Ipesa.titulo(24)),
-          const SizedBox(height: 6),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Text(
-              entregadasHoy == 0
-                  ? 'No tienes tareas pendientes.'
-                  : entregadasHoy == 1
-                  ? 'No tienes tareas pendientes. Hoy entregaste 1 guía.'
-                  : 'No tienes tareas pendientes. Hoy entregaste '
-                        '$entregadasHoy guías.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'RUTA COMPLETADA',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: Color(0xFF1D6B41),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'No tienes más tareas pendientes',
+                  style: Ipesa.titulo(26).copyWith(height: 1.15),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  entregadasHoy == 0
+                      ? 'Si te asignan otra, aparecerá aquí.'
+                      : entregadasHoy == 1
+                      ? 'Entregaste 1 guía hoy. Si te asignan otra, '
+                            'aparecerá aquí.'
+                      : 'Entregaste $entregadasHoy guías hoy. Si te asignan '
+                            'otra, aparecerá aquí.',
+                  style: const TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+                ),
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: onNuevaGuia,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('Nueva guía'),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 18),
-          const EscenaRuta(alto: 150),
         ],
       ),
     );
   }
+}
+
+/// Cielo cálido, sol, cerros y la carretera hacia la bandera de meta.
+/// Dibujado en un lienzo de 390×300 que se escala al ancho disponible.
+class _Atardecer extends CustomPainter {
+  const _Atardecer();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / 390, size.height / 300);
+    Paint p(int color) => Paint()..color = Color(color);
+
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 390, 300), p(0xFFFBE3C4));
+    canvas.drawCircle(const Offset(195, 140), 86, p(0xFFF6B566));
+    canvas.drawCircle(const Offset(195, 140), 60, p(0xFFF59E4A));
+
+    canvas.drawPath(
+      Path()
+        ..moveTo(-10, 190)
+        ..lineTo(60, 120)
+        ..lineTo(120, 162)
+        ..lineTo(190, 90)
+        ..lineTo(260, 158)
+        ..lineTo(320, 116)
+        ..lineTo(400, 190)
+        ..close(),
+      p(0xFFE7B48B),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(-10, 208)
+        ..quadraticBezierTo(60, 170, 130, 194)
+        ..quadraticBezierTo(200, 172, 270, 202)
+        ..quadraticBezierTo(330, 182, 400, 206)
+        ..lineTo(400, 300)
+        ..lineTo(-10, 300)
+        ..close(),
+      p(0xFFC98E6A),
+    );
+
+    // La carretera se angosta hacia el horizonte.
+    canvas.drawPath(
+      Path()
+        ..moveTo(150, 300)
+        ..lineTo(186, 208)
+        ..lineTo(204, 208)
+        ..lineTo(240, 300)
+        ..close(),
+      p(0xFF2B2F33),
+    );
+    final linea = p(0xE6FFFFFF);
+    for (final (y1, y2, a1, a2) in [
+      (220.0, 236.0, 1.0, 1.6),
+      (252.0, 272.0, 2.0, 3.0),
+      (286.0, 300.0, 3.2, 4.0),
+    ]) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(195 - a1, y1)
+          ..lineTo(195 + a1, y1)
+          ..lineTo(195 + a2, y2)
+          ..lineTo(195 - a2, y2)
+          ..close(),
+        linea,
+      );
+    }
+
+    // Bandera de meta.
+    canvas.drawLine(
+      const Offset(212, 196),
+      const Offset(212, 152),
+      Paint()
+        ..color = Ipesa.petroleo
+        ..strokeWidth = 3,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(212, 152)
+        ..lineTo(238, 161)
+        ..lineTo(212, 170)
+        ..close(),
+      p(0xFF1D6B41),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Atardecer oldDelegate) => false;
 }
 
 /// Qué hace el botón principal según el tipo y el estado de la guía.
