@@ -46,20 +46,23 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a U):
+y esta fila de encabezados (columnas A a W):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | salida_lat | salida_lng
 ```
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
-`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1)
+`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
+`salida_lat` en V1, `salida_lng` en W1)
 — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
-`geo_lat`/`geo_lng` guardan la ubicación del último evento. `cierre_*` se
+`geo_lat`/`geo_lng` guardan la ubicación del último evento;
+`salida_lat`/`salida_lng`, el punto de salida (dónde estaba al registrar la
+guía, no cambia después; las guías anteriores no lo tienen). `cierre_*` se
 llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
