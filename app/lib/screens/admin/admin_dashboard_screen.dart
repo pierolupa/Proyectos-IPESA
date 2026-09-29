@@ -13,12 +13,10 @@ import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
-import '../../widgets/figuras_ipesa.dart';
 import '../../widgets/mapa_ubicacion.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
 import 'dashboard.dart';
-import 'recorrido_timeline.dart';
 import 'sucursal_edit_screen.dart';
 import 'transportistas.dart';
 
@@ -46,7 +44,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     'Operación',
     'Transportistas',
     'Dashboard',
-    'Recorrido de hoy',
     'Sucursales',
   ];
 
@@ -150,7 +147,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   0 => _PestanaGuias(ancha: ancha),
                   1 => const PestanaTransportistas(),
                   2 => const _PestanaDashboard(),
-                  3 => const _PestanaRecorrido(),
                   _ => const _PestanaSucursales(),
                 },
               ),
@@ -163,7 +159,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
           onVerTodas: _abrirNovedades,
           child: Scaffold(
-            floatingActionButton: _pestana == 4
+            floatingActionButton: _pestana == 3
                 ? FloatingActionButton.extended(
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -180,41 +176,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const BandaMarcas(),
-                      // En petróleo, como la barra de la computadora, para
-                      // que las figuras en relieve se vean igual. Cinco
-                      // secciones: la etiqueta un poco más chica para que
-                      // "Transportistas" entre en una línea.
-                      NavigationBarTheme(
-                        data: NavigationBarThemeData(
-                          backgroundColor: Ipesa.petroleo,
-                          indicatorColor: Colors.transparent,
-                          labelTextStyle: WidgetStateProperty.resolveWith(
-                            (estados) => TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: estados.contains(WidgetState.selected)
-                                  ? Colors.white
-                                  : Ipesa.suaveSobrePetroleo,
+                      NavigationBar(
+                        selectedIndex: _pestana,
+                        onDestinationSelected: (i) =>
+                            setState(() => _pestana = i),
+                        destinations: [
+                          for (final (icono, etiqueta) in _secciones)
+                            NavigationDestination(
+                              icon: Icon(icono),
+                              label: etiqueta,
                             ),
-                          ),
-                        ),
-                        child: NavigationBar(
-                          selectedIndex: _pestana,
-                          onDestinationSelected: (i) =>
-                              setState(() => _pestana = i),
-                          destinations: [
-                            for (final (figura, etiqueta) in _secciones)
-                              NavigationDestination(
-                                icon: FiguraIpesa(figura, tamano: 34),
-                                selectedIcon: FiguraIpesa(
-                                  figura,
-                                  tamano: 34,
-                                  activa: true,
-                                ),
-                                label: etiqueta,
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -267,11 +239,10 @@ String haceCuanto(DateTime fecha) {
 
 /// Las secciones del menú, en el orden de las pestañas.
 const _secciones = [
-  (Figura.guias, 'Guías'),
-  (Figura.transportistas, 'Transportistas'),
-  (Figura.dashboard, 'Dashboard'),
-  (Figura.recorrido, 'Recorrido'),
-  (Figura.sucursales, 'Sucursales'),
+  (Icons.receipt_long_outlined, 'Guías'),
+  (Icons.local_shipping_outlined, 'Transportistas'),
+  (Icons.space_dashboard_outlined, 'Dashboard'),
+  (Icons.storefront_outlined, 'Sucursales'),
 ];
 
 class _Riel extends StatelessWidget {
@@ -289,33 +260,35 @@ class _Riel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(int i, Figura figura, String etiqueta, {VoidCallback? onTap}) {
+    Widget item(int i, IconData icono, String etiqueta, {VoidCallback? onTap}) {
       final activo = i == seleccionado;
-      return Semantics(
-        selected: activo,
-        button: true,
+      return Tooltip(
+        message: etiqueta,
         child: Material(
-          color: activo
-              ? Colors.white.withValues(alpha: 0.07)
-              : Colors.transparent,
+          color: activo ? Ipesa.turquesa : Colors.transparent,
           borderRadius: BorderRadius.circular(Ipesa.radioCampo),
           child: InkWell(
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
             onTap: onTap ?? () => onSeleccion(i),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(
+            child: SizedBox(
+              width: 80,
+              height: 76,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FiguraIpesa(figura, tamano: 48, activa: activo),
-                  const SizedBox(width: 14),
-                  Expanded(
+                  Icon(
+                    icono,
+                    size: 27,
+                    color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
+                  ),
+                  const SizedBox(height: 5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
                     child: Text(
                       etiqueta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: activo ? FontWeight.w800 : FontWeight.w700,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                         color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
                       ),
                     ),
@@ -329,22 +302,15 @@ class _Riel extends StatelessWidget {
     }
 
     return Container(
-      width: 224,
+      width: 96,
       color: Ipesa.petroleo,
-      padding: const EdgeInsets.fromLTRB(14, 26, 14, 20),
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Image.asset(
-                'assets/brand/ipesa_blanco.png',
-                width: 76,
-                semanticLabel: 'IPESA',
-              ),
-            ),
+          Image.asset(
+            'assets/brand/ipesa_blanco.png',
+            width: 60,
+            semanticLabel: 'IPESA',
           ),
           const SizedBox(height: 16),
           // Las secciones se reparten a lo alto de toda la barra.
@@ -355,61 +321,30 @@ class _Riel extends StatelessWidget {
                   constraints: BoxConstraints(minHeight: c.maxHeight),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final (i, (figura, etiqueta)) in _secciones.indexed)
-                        item(i, figura, etiqueta),
-                      item(-1, Figura.rastrear, 'Rastrear', onTap: onRastrear),
+                      for (final (i, (icono, etiqueta)) in _secciones.indexed)
+                        item(i, icono, etiqueta),
+                      item(
+                        -1,
+                        Icons.manage_search,
+                        'Rastrear',
+                        onTap: onRastrear,
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-              onTap: onCerrarSesion,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Ipesa.menta,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.logout,
-                        color: Ipesa.petroleo,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Flexible(
-                      child: Text(
-                        'Cerrar sesión',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w700,
-                          color: Ipesa.suaveSobrePetroleo,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          const SizedBox(height: 16),
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: onCerrarSesion,
+            style: IconButton.styleFrom(
+              fixedSize: const Size(48, 48),
+              backgroundColor: Ipesa.menta,
             ),
+            icon: const Icon(Icons.logout, color: Ipesa.petroleo, size: 22),
           ),
         ],
       ),
@@ -1070,31 +1005,6 @@ class _PestanaDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     return _conCarga(context, appState, const PestanaDashboard());
-  }
-}
-
-class _PestanaRecorrido extends StatelessWidget {
-  const _PestanaRecorrido();
-
-  @override
-  Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    return _conCarga(
-      context,
-      appState,
-      RefreshIndicator(
-        onRefresh: () => context.read<AppState>().cargarGuias(),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          children: [
-            RecorridoTimeline(
-              guias: appState.guias,
-              onGuia: (g) => abrirGuiaAdmin(context, g),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

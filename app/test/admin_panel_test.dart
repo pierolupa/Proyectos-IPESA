@@ -140,24 +140,6 @@ void main() {
     expect(find.text('T001-1'), findsNothing);
   });
 
-  testWidgets('Recorrido muestra a cada transportista en la línea de tiempo', (
-    tester,
-  ) async {
-    await _abrirPanel(tester);
-
-    await tester.tap(find.text('Recorrido'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Recorrido de hoy'), findsOneWidget);
-    expect(find.text('Juan Pérez'), findsOneWidget);
-    expect(find.text('1 en ruta · 1 trasbordo'), findsOneWidget);
-    expect(find.text('Ana Díaz'), findsOneWidget);
-    expect(find.text('2 entregadas · 1 trasbordo'), findsOneWidget);
-    for (final n in ['T001-1', 'T001-2', 'T001-3', 'T001-4', 'T001-5']) {
-      expect(find.text(n), findsOneWidget);
-    }
-  });
-
   testWidgets('Sucursales lista los perímetros marcados', (tester) async {
     await _abrirPanel(tester);
 
@@ -243,19 +225,18 @@ void main() {
     tester.view.physicalSize = const Size(1400, 900);
     await tester.pumpAndSettle();
 
-    // Las secciones van en orden, con el nombre al costado.
+    // Las secciones van en orden, con el nombre bajo el ícono.
     final orden = [
       'Guías',
       'Transportistas',
       'Dashboard',
-      'Recorrido',
       'Sucursales',
       'Rastrear',
     ].map((t) => tester.getTopLeft(find.text(t).first).dy).toList();
     for (var i = 1; i < orden.length; i++) {
       expect(orden[i], greaterThan(orden[i - 1]));
     }
-    expect(find.text('Cerrar sesión'), findsOneWidget);
+    expect(find.byTooltip('Cerrar sesión'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
