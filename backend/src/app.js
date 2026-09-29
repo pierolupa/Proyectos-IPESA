@@ -19,7 +19,19 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: '8mb' }));
 
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
-const TIPOS_VALIDOS = new Set(Object.values(TIPOS_ENTREGA));
+// "Entre sucursales" ya no se ofrece: la sucursal se detecta sola por GPS
+// (origen al registrar, destino al entregar). Las guías antiguas de ese tipo
+// se siguen leyendo y se pueden terminar, pero no se crean nuevas.
+const TIPOS_VALIDOS = new Set(
+  Object.values(TIPOS_ENTREGA).filter((t) => t !== TIPOS_ENTREGA.ENTRE_SUCURSALES),
+);
+const AVISO_SIN_TRASLADOS =
+  'Ya no se registran traslados entre sucursales: elige cliente final o agencia.';
+function tipoInvalido(tipoEntrega) {
+  return tipoEntrega === TIPOS_ENTREGA.ENTRE_SUCURSALES
+    ? AVISO_SIN_TRASLADOS
+    : `tipoEntrega inválido: ${tipoEntrega}`;
+}
 const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
 // Tiempo mínimo entre dos registros del mismo número de guía.
@@ -312,7 +324,7 @@ app.post('/guias', async (req, res, next) => {
       return res.status(400).json({ error: 'Faltan campos obligatorios.' });
     }
     if (!TIPOS_VALIDOS.has(tipoEntrega)) {
-      return res.status(400).json({ error: `tipoEntrega inválido: ${tipoEntrega}` });
+      return res.status(400).json({ error: tipoInvalido(tipoEntrega) });
     }
     if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
       return res.status(400).json({
@@ -320,16 +332,6 @@ app.post('/guias', async (req, res, next) => {
       });
     }
 
-    let destinoFinal = destino;
-    if (tipoEntrega === TIPOS_ENTREGA.ENTRE_SUCURSALES) {
-      const sucursal = buscarSucursal(await repo.listarSucursales(), destino);
-      if (!sucursal) {
-        return res.status(400).json({
-          error: `"${destino}" no es una sucursal registrada. Elige una de la lista.`,
-        });
-      }
-      destinoFinal = sucursal.nombre;
-    }
 
     // Un mismo número de guía se puede volver a registrar (otro viaje de
     // la misma guía), pero no dentro de las 2 horas siguientes al último
@@ -365,7 +367,7 @@ app.post('/guias', async (req, res, next) => {
       estado: ESTADOS.EN_RUTA,
       tipo_entrega: tipoEntrega,
       origen: origenFinal,
-      destino: destinoFinal,
+      destino,
       transportista,
       destinatario,
       geo_lat: geo.lat,
@@ -572,14 +574,13 @@ app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
 
 // Cambia el tipo de entrega. El transportista solo puede mientras la guía
 // está en ruta (antes de iniciar un traslado o entregarla); el
-// administrador (porAdmin: true), siempre. Si pasa a "entre sucursales",
-// el destino debe ser una sucursal registrada.
+// administrador (porAdmin: true), siempre.
 app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const { tipoEntrega, destino, porAdmin, fechaCreacion } = req.body || {};
     if (!TIPOS_VALIDOS.has(tipoEntrega)) {
-      return res.status(400).json({ error: `tipoEntrega inválido: ${tipoEntrega}` });
+      return res.status(400).json({ error: tipoInvalido(tipoEntrega) });
     }
     const guia = await buscarRegistro(numeroGuia, fechaCreacion);
     if (!guia) {
@@ -592,17 +593,7 @@ app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
     }
 
     const destinoPedido = String(destino ?? '').trim();
-    if (tipoEntrega === TIPOS_ENTREGA.ENTRE_SUCURSALES) {
-      const sucursal = buscarSucursal(await repo.listarSucursales(), destinoPedido);
-      if (!sucursal) {
-        return res.status(400).json({
-          error: `"${destinoPedido}" no es una sucursal registrada. Elige una de la lista.`,
-        });
-      }
-      guia.destino = sucursal.nombre;
-    } else if (destinoPedido) {
-      guia.destino = destinoPedido;
-    }
+    if (destinoPedido) guia.destino = destinoPedido;
     guia.tipo_entrega = tipoEntrega;
     guia.fecha_actualizacion = new Date().toISOString();
     if (porAdmin) guia.corregido_por_admin = true;

@@ -364,18 +364,19 @@ describe('Sucursales y geocerca', () => {
     expect(repo.eliminarSucursal).toHaveBeenCalledWith(2);
   });
 
-  it('no crea un traslado hacia una sucursal que no existe', async () => {
+  it('ya no crea traslados entre sucursales', async () => {
     repo.listarSucursales.mockResolvedValue([sucursal]);
     const res = await request(app).post('/guias').send({
       numeroGuia: 'T001-1',
       tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES,
       origen: 'Almacén Callao',
-      destino: 'Sucursal Cusco',
+      destino: 'Sucursal Arequipa',
       transportista: 'Juan Pérez',
       destinatario: 'Sucursal',
       geo: { lat: -12.05, lng: -77.04 },
     });
     expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Ya no se registran traslados/);
     expect(repo.crearGuia).not.toHaveBeenCalled();
   });
 
@@ -581,20 +582,25 @@ describe('Tipo de entrega editable', () => {
     expect(repo.actualizarGuia).not.toHaveBeenCalled();
   });
 
-  it('entre sucursales exige una sucursal registrada', async () => {
+  it('ya no deja cambiar a entre sucursales', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia());
-    repo.listarSucursales.mockResolvedValue([
-      { nombre: 'Sucursal Arequipa', lat: -16.4, lng: -71.5, radio_m: 200 },
-    ]);
-    const mal = await request(app)
+    const res = await request(app)
       .patch('/guias/IPE-2026-000123/tipo')
-      .send({ tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Cusco' });
-    expect(mal.status).toBe(400);
-    const bien = await request(app)
+      .send({ tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Sucursal Arequipa' });
+    expect(res.status).toBe(400);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('una guía antigua entre sucursales puede pasar a cliente final', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ tipo_entrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'Sucursal Arequipa' }),
+    );
+    const res = await request(app)
       .patch('/guias/IPE-2026-000123/tipo')
-      .send({ tipoEntrega: TIPOS_ENTREGA.ENTRE_SUCURSALES, destino: 'sucursal arequipa' });
-    expect(bien.status).toBe(200);
-    expect(bien.body.destino).toBe('Sucursal Arequipa');
+      .send({ tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL, destino: 'Av. Ejército 101' });
+    expect(res.status).toBe(200);
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.CLIENTE_FINAL);
+    expect(res.body.destino).toBe('Av. Ejército 101');
   });
 });
 

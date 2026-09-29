@@ -42,23 +42,14 @@ class _DialogoTipo extends StatefulWidget {
 }
 
 class _DialogoTipoState extends State<_DialogoTipo> {
-  late TipoEntrega _tipo = widget.guia.tipoEntrega;
-  String? _sucursal;
-  late final _destino = TextEditingController(
-    text: widget.guia.tipoEntrega == TipoEntrega.entreSucursales
-        ? ''
-        : widget.guia.destino,
-  );
+  // Una guía antigua "Entre sucursales" pasa a uno de los tipos vigentes.
+  late TipoEntrega _tipo =
+      tiposEntregaElegibles.contains(widget.guia.tipoEntrega)
+      ? widget.guia.tipoEntrega
+      : TipoEntrega.clienteFinal;
+  late final _destino = TextEditingController(text: widget.guia.destino);
   bool _guardando = false;
   String? _falla;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.guia.tipoEntrega == TipoEntrega.entreSucursales) {
-      _sucursal = widget.guia.destino;
-    }
-  }
 
   @override
   void dispose() {
@@ -66,14 +57,8 @@ class _DialogoTipoState extends State<_DialogoTipo> {
     super.dispose();
   }
 
-  bool get _traslado => _tipo == TipoEntrega.entreSucursales;
-
   Future<void> _guardar() async {
-    final destino = _traslado ? _sucursal : _destino.text.trim();
-    if (_traslado && destino == null) {
-      setState(() => _falla = 'Elige la sucursal destino.');
-      return;
-    }
+    final destino = _destino.text.trim();
     setState(() {
       _guardando = true;
       _falla = null;
@@ -82,7 +67,7 @@ class _DialogoTipoState extends State<_DialogoTipo> {
       await context.read<AppState>().cambiarTipoEntrega(
         widget.guia,
         _tipo,
-        destino: destino == null || destino.isEmpty ? null : destino,
+        destino: destino.isEmpty ? null : destino,
         porAdmin: widget.porAdmin,
       );
       if (mounted) Navigator.of(context).pop(true);
@@ -98,9 +83,6 @@ class _DialogoTipoState extends State<_DialogoTipo> {
 
   @override
   Widget build(BuildContext context) {
-    final sucursales = [
-      for (final s in context.watch<AppState>().sucursales) s.nombre,
-    ];
     return AlertDialog(
       title: const Text('Tipo de entrega'),
       content: SizedBox(
@@ -117,7 +99,7 @@ class _DialogoTipoState extends State<_DialogoTipo> {
                 },
                 child: Column(
                   children: [
-                    for (final t in TipoEntrega.values)
+                    for (final t in tiposEntregaElegibles)
                       RadioListTile<TipoEntrega>(
                         value: t,
                         title: Text(t.etiqueta),
@@ -128,34 +110,14 @@ class _DialogoTipoState extends State<_DialogoTipo> {
                 ),
               ),
               const SizedBox(height: 8),
-              if (_traslado)
-                DropdownButtonFormField<String>(
-                  initialValue: sucursales.contains(_sucursal)
-                      ? _sucursal
-                      : null,
-                  decoration: InputDecoration(
-                    labelText: 'Sucursal destino',
-                    helperText: sucursales.isEmpty
-                        ? 'El administrador aún no registró sucursales.'
-                        : null,
-                  ),
-                  items: [
-                    for (final s in sucursales)
-                      DropdownMenuItem(value: s, child: Text(s)),
-                  ],
-                  onChanged: _guardando
-                      ? null
-                      : (v) => setState(() => _sucursal = v),
-                )
-              else
-                TextField(
-                  controller: _destino,
-                  enabled: !_guardando,
-                  decoration: const InputDecoration(
-                    labelText: 'Destino',
-                    helperText: 'Déjalo igual si no cambia.',
-                  ),
+              TextField(
+                controller: _destino,
+                enabled: !_guardando,
+                decoration: const InputDecoration(
+                  labelText: 'Destino',
+                  helperText: 'Déjalo igual si no cambia.',
                 ),
+              ),
               if (_falla != null) ...[
                 const SizedBox(height: 10),
                 Text(_falla!, style: const TextStyle(color: _rojo)),

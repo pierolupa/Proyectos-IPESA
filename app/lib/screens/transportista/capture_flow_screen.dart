@@ -51,14 +51,11 @@ class _Borrador {
   final pedido = TextEditingController();
   final entrega = TextEditingController();
   TipoEntrega tipo = TipoEntrega.clienteFinal;
-  String? sucursal;
   bool enCola = true;
   bool leyendo = false;
   String? avisoLectura;
   bool enviando = false;
   String? error;
-
-  bool get esTraslado => tipo == TipoEntrega.entreSucursales;
 
   void dispose() {
     for (final c in [numero, destinatario, destino, origen, pedido, entrega]) {
@@ -209,9 +206,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (b.origen.text.trim().isEmpty && _sucursalAqui(appState) == null) {
       return 'Falta el punto de partida.';
     }
-    if (b.esTraslado ? b.sucursal == null : b.destino.text.trim().isEmpty) {
-      return b.esTraslado ? 'Elige la sucursal destino.' : 'Falta el destino.';
-    }
+    if (b.destino.text.trim().isEmpty) return 'Falta el destino.';
     return null;
   }
 
@@ -265,7 +260,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         tipoEntrega: b.tipo,
         // Dentro del perímetro de una sucursal, sale de ahí.
         origen: _sucursalAqui(appState)?.nombre ?? b.origen.text.trim(),
-        destino: b.esTraslado ? b.sucursal! : b.destino.text.trim(),
+        destino: b.destino.text.trim(),
         destinatario: b.destinatario.text.trim(),
         lat: lat!,
         lng: lng!,
@@ -409,7 +404,6 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               key: ValueKey(b.id),
               borrador: b,
               falta: _falta(b, appState),
-              sucursales: [for (final s in appState.sucursales) s.nombre],
               sucursalAqui: _sucursalAqui(appState)?.nombre,
               onCambio: () => setState(() {}),
               onQuitar: b.enviando ? null : () => _quitar(b),
@@ -426,7 +420,6 @@ class _TarjetaBorrador extends StatelessWidget {
     super.key,
     required this.borrador,
     required this.falta,
-    required this.sucursales,
     required this.sucursalAqui,
     required this.onCambio,
     required this.onQuitar,
@@ -434,7 +427,6 @@ class _TarjetaBorrador extends StatelessWidget {
 
   final _Borrador borrador;
   final String? falta;
-  final List<String> sucursales;
 
   /// Si está dentro de una sucursal, ese es el punto de partida.
   final String? sucursalAqui;
@@ -596,7 +588,7 @@ class _TarjetaBorrador extends StatelessWidget {
                       isDense: true,
                     ),
                     items: [
-                      for (final tipo in TipoEntrega.values)
+                      for (final tipo in tiposEntregaElegibles)
                         DropdownMenuItem(
                           value: tipo,
                           child: Text(tipo.etiqueta),
@@ -609,33 +601,7 @@ class _TarjetaBorrador extends StatelessWidget {
                             onCambio();
                           },
                   ),
-                  if (b.esTraslado)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: DropdownButtonFormField<String>(
-                        initialValue: b.sucursal,
-                        isDense: true,
-                        decoration: InputDecoration(
-                          labelText: 'Sucursal destino',
-                          isDense: true,
-                          helperText: sucursales.isEmpty
-                              ? 'El administrador aún no registró sucursales.'
-                              : null,
-                        ),
-                        items: [
-                          for (final s in sucursales)
-                            DropdownMenuItem(value: s, child: Text(s)),
-                        ],
-                        onChanged: ocupado
-                            ? null
-                            : (v) {
-                                b.sucursal = v;
-                                onCambio();
-                              },
-                      ),
-                    )
-                  else
-                    campo(b.destino, 'Destino'),
+                  campo(b.destino, 'Destino'),
                   Row(
                     children: [
                       Expanded(child: campo(b.pedido, 'N° pedido')),

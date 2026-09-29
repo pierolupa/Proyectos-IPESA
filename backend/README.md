@@ -143,8 +143,10 @@ reciente.
 no pasar el límite de lecturas de Google Sheets (~60 por minuto); cualquier
 escritura la borra, y las rutas que escriben siempre leen la hoja fresca.
 
-Valores válidos de `tipo_entrega`: `cliente_final`, `agencia`,
-`entre_sucursales`.
+Valores válidos de `tipo_entrega` para guías nuevas: `cliente_final`,
+`agencia`. `entre_sucursales` ya no se acepta al registrar ni al cambiar el
+tipo (la sucursal se detecta sola por GPS); solo se conserva para leer y
+terminar guías antiguas.
 
 Agrega además una **segunda pestaña** llamada exactamente `Usuarios`, con
 esta fila de encabezados (columnas A a D):
@@ -247,7 +249,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |
 | `DELETE` | `/api/guias/:numeroGuia/foto` | Quita la foto de la entrega (administrador). Si el archivo no se puede borrar, se quita igual de la guía y la respuesta trae `aviso_foto`. |
-| `PATCH` | `/api/guias/:numeroGuia/tipo` | Cambia el tipo de entrega (`tipoEntrega`, `destino?`). El transportista solo mientras está `en_ruta`; `porAdmin: true` siempre. `entre_sucursales` exige una sucursal registrada como destino. |
+| `PATCH` | `/api/guias/:numeroGuia/tipo` | Cambia el tipo de entrega (`tipoEntrega`, `destino?`). El transportista solo mientras está `en_ruta`; `porAdmin: true` siempre. Ya no acepta `entre_sucursales`. |
 | `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista pide borrar una tarea `en_ruta` (`motivo` obligatorio). Queda `eliminacion: pendiente` hasta que el administrador decida. |
 | `DELETE` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista retira su pedido. |
 | `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion/rechazo` | El administrador no aprueba el pedido (`eliminacion: rechazada`). |

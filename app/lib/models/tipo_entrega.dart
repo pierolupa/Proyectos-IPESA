@@ -1,5 +1,10 @@
 enum TipoEntrega { clienteFinal, agencia, entreSucursales }
 
+/// Tipos que se pueden elegir al registrar o cambiar una guía. "Entre
+/// sucursales" ya no se ofrece (la sucursal se detecta sola por GPS); solo
+/// se conserva para mostrar y terminar las guías antiguas de ese tipo.
+const tiposEntregaElegibles = [TipoEntrega.clienteFinal, TipoEntrega.agencia];
+
 extension TipoEntregaX on TipoEntrega {
   String get etiqueta {
     switch (this) {
