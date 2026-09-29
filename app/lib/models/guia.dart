@@ -24,11 +24,6 @@ class Guia {
   final double? ultimaLat;
   final double? ultimaLng;
 
-  /// Dónde estaba al registrar la guía (el punto de salida). Null en las
-  /// guías anteriores a este dato.
-  final double? salidaLat;
-  final double? salidaLng;
-
   /// Dónde y cuándo el transportista cerró la guía (entregado/finalizado).
   /// Null si sigue abierta o si la cerró un administrador a mano.
   final double? cierreLat;
@@ -63,8 +58,6 @@ class Guia {
     this.numeroEntrega = '',
     this.ultimaLat,
     this.ultimaLng,
-    this.salidaLat,
-    this.salidaLng,
     this.cierreLat,
     this.cierreLng,
     this.fechaCierre,
@@ -86,7 +79,6 @@ class Guia {
   /// registrado más de una vez (otro viaje, con 2 horas de diferencia).
   String get clave => '$numeroGuia|${fechaCreacion.toUtc().toIso8601String()}';
 
-  bool get tieneSalida => salidaLat != null && salidaLng != null;
   bool get tieneUbicacionCierre => cierreLat != null && cierreLng != null;
 
   String get ultimosCuatroDigitos {
@@ -112,8 +104,6 @@ class Guia {
       numeroEntrega: json['numero_entrega'] as String? ?? '',
       ultimaLat: _coordenada(json['geo_lat']),
       ultimaLng: _coordenada(json['geo_lng']),
-      salidaLat: _coordenada(json['salida_lat']),
-      salidaLng: _coordenada(json['salida_lng']),
       cierreLat: _coordenada(json['cierre_lat']),
       cierreLng: _coordenada(json['cierre_lng']),
       fechaCierre: DateTime.tryParse(json['fecha_cierre'] as String? ?? ''),
@@ -160,8 +150,6 @@ class Guia {
       numeroEntrega: numeroEntrega ?? this.numeroEntrega,
       ultimaLat: ultimaLat,
       ultimaLng: ultimaLng,
-      salidaLat: salidaLat,
-      salidaLng: salidaLng,
       cierreLat: cierreLat,
       cierreLng: cierreLng,
       fechaCierre: fechaCierre,

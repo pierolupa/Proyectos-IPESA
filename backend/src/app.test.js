@@ -97,15 +97,6 @@ describe('POST /guias (asignación)', () => {
       expect.objectContaining({ numero_guia: payload.numeroGuia, estado: ESTADOS.EN_RUTA }),
     );
   });
-
-  it('guarda el punto de salida al registrar la guía', async () => {
-    const res = await request(app).post('/guias').send(payload);
-    expect(res.status).toBe(201);
-    expect(repo.crearGuia).toHaveBeenCalledWith(
-      expect.objectContaining({ salida_lat: payload.geo.lat, salida_lng: payload.geo.lng }),
-    );
-    expect(res.body.salida_lat).toBe(payload.geo.lat);
-  });
 });
 
 describe('PATCH /guias/:numeroGuia/estado', () => {
