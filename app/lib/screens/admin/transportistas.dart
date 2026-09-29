@@ -106,8 +106,12 @@ String _iniciales(String nombre) {
 }
 
 /// Selector compacto del periodo: Hoy · 7 días · Mes · Todo.
-class _SelectorPeriodo extends StatelessWidget {
-  const _SelectorPeriodo({required this.periodo, required this.onCambio});
+class SelectorPeriodo extends StatelessWidget {
+  const SelectorPeriodo({
+    super.key,
+    required this.periodo,
+    required this.onCambio,
+  });
 
   final PeriodoResumen periodo;
   final ValueChanged<PeriodoResumen> onCambio;
@@ -196,7 +200,7 @@ class _PestanaTransportistasState extends State<PestanaTransportistas> {
             contentPadding: EdgeInsets.symmetric(vertical: 12),
           ),
         );
-        final selector = _SelectorPeriodo(
+        final selector = SelectorPeriodo(
           periodo: _periodo,
           onCambio: (p) => setState(() => _periodo = p),
         );
@@ -708,7 +712,7 @@ class _TransportistaDetalleScreenState
     final contenido = <Widget>[
       Align(
         alignment: Alignment.centerLeft,
-        child: _SelectorPeriodo(
+        child: SelectorPeriodo(
           periodo: _periodo,
           onCambio: (p) => setState(() => _periodo = p),
         ),

@@ -13,9 +13,11 @@ import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
+import '../../widgets/figuras_ipesa.dart';
 import '../../widgets/mapa_ubicacion.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
+import 'dashboard.dart';
 import 'recorrido_timeline.dart';
 import 'sucursal_edit_screen.dart';
 import 'transportistas.dart';
@@ -41,6 +43,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   static const _titulos = [
+    'Dashboard',
     'Operación',
     'Transportistas',
     'Recorrido de hoy',
@@ -144,9 +147,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               Expanded(
                 child: switch (_pestana) {
-                  0 => _PestanaGuias(ancha: ancha),
-                  1 => const PestanaTransportistas(),
-                  2 => const _PestanaRecorrido(),
+                  0 => const _PestanaDashboard(),
+                  1 => _PestanaGuias(ancha: ancha),
+                  2 => const PestanaTransportistas(),
+                  3 => const _PestanaRecorrido(),
                   _ => const _PestanaSucursales(),
                 },
               ),
@@ -159,7 +163,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
           onVerTodas: _abrirNovedades,
           child: Scaffold(
-            floatingActionButton: _pestana == 3
+            floatingActionButton: _pestana == 4
                 ? FloatingActionButton.extended(
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -176,28 +180,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const BandaMarcas(),
-                      NavigationBar(
-                        selectedIndex: _pestana,
-                        onDestinationSelected: (i) =>
-                            setState(() => _pestana = i),
-                        destinations: const [
-                          NavigationDestination(
-                            icon: Icon(Icons.receipt_long_outlined),
-                            label: 'Guías',
+                      // Cinco secciones: la etiqueta un poco más chica
+                      // para que "Transportistas" entre en una línea.
+                      NavigationBarTheme(
+                        data: const NavigationBarThemeData(
+                          labelTextStyle: WidgetStatePropertyAll(
+                            TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: Ipesa.etiqueta,
+                            ),
                           ),
-                          NavigationDestination(
-                            icon: Icon(Icons.local_shipping_outlined),
-                            label: 'Transportistas',
-                          ),
-                          NavigationDestination(
-                            icon: Icon(Icons.timeline),
-                            label: 'Recorrido',
-                          ),
-                          NavigationDestination(
-                            icon: Icon(Icons.storefront_outlined),
-                            label: 'Sucursales',
-                          ),
-                        ],
+                        ),
+                        child: NavigationBar(
+                          selectedIndex: _pestana,
+                          onDestinationSelected: (i) =>
+                              setState(() => _pestana = i),
+                          destinations: [
+                            for (final (figura, etiqueta) in _secciones)
+                              NavigationDestination(
+                                icon: FiguraIpesa(figura, tamano: 30),
+                                label: etiqueta,
+                              ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -248,6 +254,15 @@ String haceCuanto(DateTime fecha) {
   return dias == 1 ? 'hace 1 día' : 'hace $dias días';
 }
 
+/// Las secciones del menú, en el orden de las pestañas.
+const _secciones = [
+  (Figura.dashboard, 'Dashboard'),
+  (Figura.guias, 'Guías'),
+  (Figura.transportistas, 'Transportistas'),
+  (Figura.recorrido, 'Recorrido'),
+  (Figura.sucursales, 'Sucursales'),
+];
+
 class _Riel extends StatelessWidget {
   const _Riel({
     required this.seleccionado,
@@ -263,28 +278,33 @@ class _Riel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(int i, IconData icono, String etiqueta, {VoidCallback? onTap}) {
+    Widget item(int i, Figura figura, String etiqueta, {VoidCallback? onTap}) {
       final activo = i == seleccionado;
       return Tooltip(
         message: etiqueta,
         child: Material(
-          color: activo ? Ipesa.turquesa : Colors.transparent,
-          borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+          color: activo
+              ? Colors.white.withValues(alpha: 0.13)
+              : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+            side: BorderSide(
+              color: activo
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : Colors.transparent,
+            ),
+          ),
           child: InkWell(
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
             onTap: onTap ?? () => onSeleccion(i),
             child: SizedBox(
               width: 80,
-              height: 76,
+              height: 84,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    icono,
-                    size: 27,
-                    color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
-                  ),
-                  const SizedBox(height: 5),
+                  FiguraIpesa(figura, tamano: activo ? 42 : 38),
+                  const SizedBox(height: 7),
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
@@ -325,16 +345,9 @@ class _Riel extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      item(0, Icons.receipt_long_outlined, 'Guías'),
-                      item(1, Icons.local_shipping_outlined, 'Transportistas'),
-                      item(2, Icons.timeline, 'Recorrido'),
-                      item(3, Icons.storefront_outlined, 'Sucursales'),
-                      item(
-                        -1,
-                        Icons.manage_search,
-                        'Rastrear',
-                        onTap: onRastrear,
-                      ),
+                      for (final (i, (figura, etiqueta)) in _secciones.indexed)
+                        item(i, figura, etiqueta),
+                      item(-1, Figura.rastrear, 'Rastrear', onTap: onRastrear),
                     ],
                   ),
                 ),
@@ -1000,6 +1013,16 @@ class _Leyenda extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _PestanaDashboard extends StatelessWidget {
+  const _PestanaDashboard();
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    return _conCarga(context, appState, const PestanaDashboard());
   }
 }
 

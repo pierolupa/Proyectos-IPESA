@@ -73,6 +73,8 @@ void main() {
         child: const MaterialApp(home: AdminDashboardScreen()),
       ),
     );
+    await tester.tap(find.text('Guías'));
+    await tester.pump();
     expect(find.text('En ruta · 1'), findsOneWidget);
 
     servidor.guias = [_guia('T001-1', 'entregado'), _guia('T001-2', 'en_ruta')];

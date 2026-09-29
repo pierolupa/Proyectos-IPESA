@@ -42,7 +42,7 @@ Map<String, dynamic> _guia(
   'corregido_por_admin': false,
 };
 
-Future<void> _abrirPanel(WidgetTester tester) async {
+Future<void> _abrirPanel(WidgetTester tester, {bool enGuias = true}) async {
   final client = MockClient((request) async {
     if (request.url.path.endsWith('/sucursales')) {
       return http.Response(
@@ -81,10 +81,40 @@ Future<void> _abrirPanel(WidgetTester tester) async {
       child: const MaterialApp(home: AdminDashboardScreen()),
     ),
   );
+  // Abre en el dashboard; casi todas las pruebas parten de Guías.
+  if (enGuias) {
+    await tester.tap(find.text('Guías'));
+    await tester.pumpAndSettle();
+  }
 }
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  testWidgets('El panel abre en el dashboard con los indicadores', (
+    tester,
+  ) async {
+    await _abrirPanel(tester, enGuias: false);
+
+    expect(find.text('Dashboard'), findsWidgets);
+    expect(find.textContaining('Cumplimiento'), findsOneWidget);
+    expect(find.text('Guías del periodo'), findsOneWidget);
+    await tester.dragUntilVisible(
+      find.text('Estado de las guías'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
+    );
+    await tester.dragUntilVisible(
+      find.text('0 de 2'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
+    );
+    expect(find.text('Ranking de transportistas'), findsOneWidget);
+    // Ana entregó 2 de sus 3 guías; Juan, ninguna de 2.
+    expect(find.text('2 de 3'), findsOneWidget);
+    expect(find.text('0 de 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('El panel filtra por En ruta, Entregado y Rechazada', (
     tester,

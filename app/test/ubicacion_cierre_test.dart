@@ -74,9 +74,7 @@ void main() {
     expect(guia.fechaCierre, isNull);
   });
 
-  testWidgets('El admin ve dónde se cerró la tarea en un mapa', (
-    tester,
-  ) async {
+  testWidgets('El admin ve dónde se cerró la tarea en un mapa', (tester) async {
     await _abrirDetalleAdmin(
       tester,
       _guiaJson({

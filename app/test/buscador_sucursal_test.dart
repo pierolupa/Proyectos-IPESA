@@ -22,7 +22,8 @@ void main() {
           jsonEncode([
             {
               'name': 'Plaza Vea Arequipa',
-              'display_name': 'Plaza Vea Arequipa, Av. Ejército, Arequipa, Perú',
+              'display_name':
+                  'Plaza Vea Arequipa, Av. Ejército, Arequipa, Perú',
               'lat': '-16.3920',
               'lon': '-71.5470',
             },
