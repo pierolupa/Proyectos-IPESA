@@ -679,3 +679,57 @@ describe('DELETE /guias/:numeroGuia/foto', () => {
     expect(res.body.aviso_foto).toMatch(/no se pudo borrar/);
   });
 });
+
+describe('Sucursal por GPS', () => {
+  const sanLuis = { nombre: 'Trp San Luis', lat: -12.075, lng: -77.0, radio_m: 150 };
+
+  it('registrada dentro del perímetro: el punto de partida es la sucursal', async () => {
+    repo.buscarPorNumero.mockResolvedValue(null);
+    repo.listarSucursales.mockResolvedValue([sanLuis]);
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'T1',
+      tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen: 'Av. Argentina 4458',
+      destino: 'Av. Siempre Viva 742',
+      transportista: 'Juan Pérez',
+      destinatario: 'María Torres',
+      geo: { lat: -12.0752, lng: -77.0003 },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.origen).toBe('Trp San Luis');
+  });
+
+  it('registrada fuera del perímetro: queda el punto de partida de la hoja', async () => {
+    repo.buscarPorNumero.mockResolvedValue(null);
+    repo.listarSucursales.mockResolvedValue([sanLuis]);
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'T1',
+      tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen: 'Av. Argentina 4458',
+      destino: 'Av. Siempre Viva 742',
+      transportista: 'Juan Pérez',
+      destinatario: 'María Torres',
+      geo: { lat: -12.05, lng: -77.04 },
+    });
+    expect(res.body.origen).toBe('Av. Argentina 4458');
+  });
+
+  it('entregada dentro del perímetro: queda entregada en la sucursal', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    repo.listarSucursales.mockResolvedValue([sanLuis]);
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.0751, lng: -77.0001 } });
+    expect(res.status).toBe(200);
+    expect(res.body.destino).toBe('Trp San Luis');
+  });
+
+  it('entregada fuera: el destino no cambia', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    repo.listarSucursales.mockResolvedValue([sanLuis]);
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 } });
+    expect(res.body.destino).toBe('Av. Siempre Viva 742');
+  });
+});

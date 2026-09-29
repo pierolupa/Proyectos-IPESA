@@ -86,22 +86,23 @@ Future<void> _abrirPanel(WidgetTester tester) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('El panel filtra por En ruta, Trasbordo, Entregado y Rechazada', (
+  testWidgets('El panel filtra por En ruta, Entregado y Rechazada', (
     tester,
   ) async {
     await _abrirPanel(tester);
 
     expect(find.text('Todas · 5'), findsOneWidget);
     expect(find.text('En ruta · 1'), findsOneWidget);
-    expect(find.text('Trasbordo · 2'), findsOneWidget);
+    // Sin filtro de trasbordo (sus guías siguen en "Todas").
+    expect(find.textContaining('Trasbordo ·'), findsNothing);
     expect(find.text('Entregado · 2'), findsOneWidget);
     expect(find.text('Rechazada · 0'), findsOneWidget);
-    expect(find.byType(ChoiceChip), findsNWidgets(5));
+    expect(find.byType(ChoiceChip), findsNWidgets(4));
 
-    await tester.tap(find.text('Trasbordo · 2'));
+    await tester.tap(find.text('Entregado · 2'));
     await tester.pumpAndSettle();
-    expect(find.text('T001-2'), findsOneWidget);
-    expect(find.text('T001-3'), findsOneWidget);
+    expect(find.text('T001-4'), findsOneWidget);
+    expect(find.text('T001-5'), findsOneWidget);
     expect(find.text('T001-1'), findsNothing);
   });
 
@@ -207,7 +208,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Volver al panel'));
     await tester.pumpAndSettle();
-    expect(find.text('Operación de hoy'), findsOneWidget);
+    expect(find.text('Operación'), findsOneWidget);
   });
 
   testWidgets('En computadora el riel tiene Transportistas y Rastrear', (

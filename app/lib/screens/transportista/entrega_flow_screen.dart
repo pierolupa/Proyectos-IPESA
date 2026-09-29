@@ -13,6 +13,7 @@ import '../../services/guias_api.dart';
 import '../../services/ubicacion.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/aviso_sucursal.dart';
 import '../../widgets/celebracion_jornada.dart';
 import '../../widgets/gps_transportista.dart';
 
@@ -264,6 +265,20 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
             textoApagado:
                 'Obligatorio para registrar cualquier evento de esta guía.',
           ),
+          // Entrega final dentro de una sucursal: queda entregada ahí.
+          if (gpsActivo &&
+              lat != null &&
+              lng != null &&
+              g.tipoEntrega != TipoEntrega.entreSucursales)
+            if (context.read<AppState>().sucursalEnPunto(lat!, lng!)
+                case final aqui?) ...[
+              const SizedBox(height: 10),
+              AvisoSucursal(
+                nombre: aqui.nombre,
+                detalle:
+                    'Si entregas aquí, quedará entregada en ${aqui.nombre}.',
+              ),
+            ],
           const SizedBox(height: 16),
           if (esPasoGeocerca) ...[
             _TarjetaPerimetro(

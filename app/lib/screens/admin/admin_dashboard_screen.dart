@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -40,7 +41,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   static const _titulos = [
-    'Operación de hoy',
+    'Operación',
     'Transportistas',
     'Recorrido de hoy',
     'Sucursales',
@@ -266,41 +267,36 @@ class _Riel extends StatelessWidget {
       final activo = i == seleccionado;
       return Tooltip(
         message: etiqueta,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          child: Material(
-            color: activo ? Ipesa.turquesa : Colors.transparent,
+        child: Material(
+          color: activo ? Ipesa.turquesa : Colors.transparent,
+          borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+          child: InkWell(
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-              onTap: onTap ?? () => onSeleccion(i),
-              child: SizedBox(
-                width: 68,
-                height: 56,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      icono,
-                      size: 22,
-                      color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        etiqueta,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: activo
-                              ? Colors.white
-                              : Ipesa.suaveSobrePetroleo,
-                        ),
+            onTap: onTap ?? () => onSeleccion(i),
+            child: SizedBox(
+              width: 80,
+              height: 76,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icono,
+                    size: 27,
+                    color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
+                  ),
+                  const SizedBox(height: 5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      etiqueta,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -309,31 +305,51 @@ class _Riel extends StatelessWidget {
     }
 
     return Container(
-      width: 88,
+      width: 96,
       color: Ipesa.petroleo,
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
           Image.asset(
             'assets/brand/ipesa_blanco.png',
-            width: 56,
+            width: 60,
             semanticLabel: 'IPESA',
           ),
-          const SizedBox(height: 24),
-          item(0, Icons.receipt_long_outlined, 'Guías'),
-          item(1, Icons.local_shipping_outlined, 'Transportistas'),
-          item(2, Icons.timeline, 'Recorrido'),
-          item(3, Icons.storefront_outlined, 'Sucursales'),
-          item(-1, Icons.manage_search, 'Rastrear', onTap: onRastrear),
-          const Spacer(),
+          const SizedBox(height: 16),
+          // Las secciones se reparten a lo alto de toda la barra.
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, c) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: c.maxHeight),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      item(0, Icons.receipt_long_outlined, 'Guías'),
+                      item(1, Icons.local_shipping_outlined, 'Transportistas'),
+                      item(2, Icons.timeline, 'Recorrido'),
+                      item(3, Icons.storefront_outlined, 'Sucursales'),
+                      item(
+                        -1,
+                        Icons.manage_search,
+                        'Rastrear',
+                        onTap: onRastrear,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           IconButton(
             tooltip: 'Cerrar sesión',
             onPressed: onCerrarSesion,
             style: IconButton.styleFrom(
-              fixedSize: const Size(44, 44),
+              fixedSize: const Size(48, 48),
               backgroundColor: Ipesa.menta,
             ),
-            icon: const Icon(Icons.logout, color: Ipesa.petroleo, size: 20),
+            icon: const Icon(Icons.logout, color: Ipesa.petroleo, size: 22),
           ),
         ],
       ),
@@ -467,9 +483,34 @@ class _PestanaGuias extends StatefulWidget {
   State<_PestanaGuias> createState() => _PestanaGuiasState();
 }
 
+enum _Periodo { hoy, semana, fechas }
+
 class _PestanaGuiasState extends State<_PestanaGuias> {
   GrupoEstado? _filtro;
   String _busqueda = '';
+  _Periodo _periodo = _Periodo.hoy;
+  DateTimeRange? _fechas;
+
+  static DateTime _dia(DateTime f) => DateTime(f.year, f.month, f.day);
+
+  /// Días de la tarea (fecha de registro) que se muestran, inclusive.
+  (DateTime, DateTime) get _rango {
+    final hoy = _dia(DateTime.now());
+    return switch (_periodo) {
+      _Periodo.hoy => (hoy, hoy),
+      _Periodo.semana => (hoy.subtract(const Duration(days: 6)), hoy),
+      _Periodo.fechas => (
+        _dia(_fechas?.start ?? hoy),
+        _dia(_fechas?.end ?? hoy),
+      ),
+    };
+  }
+
+  bool _enRango(Guia g) {
+    final (desde, hasta) = _rango;
+    final dia = _dia(g.fechaCreacion.toLocal());
+    return !dia.isBefore(desde) && !dia.isAfter(hasta);
+  }
 
   bool _coincide(Guia g) {
     if (_filtro != null && g.estado.grupo != _filtro) return false;
@@ -480,33 +521,132 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
         g.transportista.toLowerCase().contains(q);
   }
 
+  Future<void> _elegirFechas() async {
+    final hoy = _dia(DateTime.now());
+    final elegido = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: hoy,
+      initialDateRange: _fechas ?? DateTimeRange(start: hoy, end: hoy),
+      helpText: 'Fechas de las tareas',
+      saveText: 'Ver',
+    );
+    if (elegido == null) return;
+    setState(() {
+      _fechas = elegido;
+      _periodo = _Periodo.fechas;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final todas = appState.guias;
+    final todas = appState.guias.where(_enRango).toList();
     final guias = todas.where(_coincide).toList()
       ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));
+    final formato = DateFormat('dd/MM');
+    final etiquetaFechas = _periodo == _Periodo.fechas && _fechas != null
+        ? (_dia(_fechas!.start) == _dia(_fechas!.end)
+              ? formato.format(_fechas!.start)
+              : '${formato.format(_fechas!.start)} – '
+                    '${formato.format(_fechas!.end)}')
+        : 'Fechas';
+
+    Widget segmento(
+      String texto,
+      bool activo,
+      VoidCallback onTap, {
+      IconData? icono,
+    }) => Material(
+      color: activo ? Ipesa.petroleo : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icono != null) ...[
+                Icon(
+                  icono,
+                  size: 16,
+                  color: activo ? Colors.white : Ipesa.etiqueta,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                texto,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: activo ? FontWeight.w700 : FontWeight.w600,
+                  color: activo ? Colors.white : Ipesa.etiqueta,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final periodo = Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Ipesa.borde),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          segmento(
+            'Hoy',
+            _periodo == _Periodo.hoy,
+            () => setState(() => _periodo = _Periodo.hoy),
+          ),
+          const VerticalDivider(width: 1, color: Ipesa.borde),
+          segmento(
+            '7 días',
+            _periodo == _Periodo.semana,
+            () => setState(() => _periodo = _Periodo.semana),
+          ),
+          const VerticalDivider(width: 1, color: Ipesa.borde),
+          segmento(
+            etiquetaFechas,
+            _periodo == _Periodo.fechas,
+            _elegirFechas,
+            icono: Icons.calendar_month_outlined,
+          ),
+        ],
+      ),
+    );
 
     final filtros = Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          periodo,
+          const SizedBox(width: 8),
           _Filtro(
             etiqueta: 'Todas · ${todas.length}',
             seleccionado: _filtro == null,
             onTap: () => setState(() => _filtro = null),
           ),
+          // El trasbordo ya no se filtra aparte (sus guías siguen en "Todas").
           for (final grupo in GrupoEstado.values)
-            _Filtro(
-              etiqueta:
-                  '${grupo.etiqueta} · '
-                  '${todas.where((g) => g.estado.grupo == grupo).length}',
-              seleccionado: _filtro == grupo,
-              estado: _estadoDeGrupo(grupo),
-              onTap: () => setState(() => _filtro = grupo),
-            ),
+            if (grupo != GrupoEstado.trasbordo)
+              _Filtro(
+                etiqueta:
+                    '${grupo.etiqueta} · '
+                    '${todas.where((g) => g.estado.grupo == grupo).length}',
+                seleccionado: _filtro == grupo,
+                estado: _estadoDeGrupo(grupo),
+                onTap: () => setState(() => _filtro = grupo),
+              ),
         ],
       ),
     );
@@ -537,7 +677,11 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
                 ? ListView(
                     children: const [
                       SizedBox(height: 100),
-                      Center(child: Text('No hay guías con este filtro.')),
+                      Center(
+                        child: Text(
+                          'No hay guías en estas fechas con este filtro.',
+                        ),
+                      ),
                     ],
                   )
                 : ListView.separated(
@@ -642,7 +786,12 @@ class TarjetaGuiaAdmin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detalle = guia.estado.esFinal && guia.tieneUbicacionCierre
+    final enSucursal =
+        guia.estado.esFinal &&
+        context.read<AppState>().sucursalPorNombre(guia.destino) != null;
+    final detalle = enSucursal
+        ? 'entregada en ${guia.destino} ${haceCuanto(guia.fechaActualizacion)}'
+        : guia.estado.esFinal && guia.tieneUbicacionCierre
         ? 'cerrada ${haceCuanto(guia.fechaActualizacion)} · ver en el mapa'
         : haceCuanto(guia.fechaActualizacion);
     return Material(
@@ -803,7 +952,6 @@ class _MapaGuias extends StatelessWidget {
                 spacing: 16,
                 children: [
                   _Leyenda(color: Color(0xFF2459A8), texto: 'En ruta'),
-                  _Leyenda(color: Color(0xFF8A4F00), texto: 'Trasbordo'),
                   _Leyenda(color: Color(0xFF1D6B41), texto: 'Entregado'),
                   _Leyenda(
                     color: Ipesa.turquesa,

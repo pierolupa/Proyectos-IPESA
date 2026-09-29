@@ -755,8 +755,15 @@ class _TarjetaTarea extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 entregada
-                    ? 'Entregada a las '
-                          '${hora.format(g.fechaActualizacion.toLocal())}'
+                    ? [
+                        'Entregada',
+                        if (context.read<AppState>().sucursalPorNombre(
+                              g.destino,
+                            ) !=
+                            null)
+                          'en ${g.destino}',
+                        'a las ${hora.format(g.fechaActualizacion.toLocal())}',
+                      ].join(' ')
                     : meta,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

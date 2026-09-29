@@ -12,6 +12,9 @@ import 'package:ipesa_guias/screens/transportista/task_list_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 
+// Hoy (el panel muestra las tareas del día), fijo para todo el archivo.
+final _hoy = DateTime.now().toUtc().toIso8601String();
+
 Map<String, dynamic> _guia(String numero, String estado) => {
   'numero_guia': numero,
   'estado': estado,
@@ -20,7 +23,7 @@ Map<String, dynamic> _guia(String numero, String estado) => {
   'destino': 'Av. Principal 123',
   'transportista': 'Juan Pérez',
   'destinatario': 'Cliente $numero',
-  'fecha_actualizacion': '2026-09-01T15:30:00.000Z',
+  'fecha_actualizacion': _hoy,
   'corregido_por_admin': false,
 };
 

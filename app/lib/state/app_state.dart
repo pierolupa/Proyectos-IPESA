@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,6 +35,19 @@ const _prefRol = 'sesion_rol';
 /// Un mismo número de guía se puede volver a registrar pasado este tiempo
 /// desde su último registro (lo mismo valida el backend).
 const esperaMismaGuia = Duration(hours: 2);
+
+/// Distancia en metros entre dos puntos (haversine).
+double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
+  double rad(double g) => g * math.pi / 180;
+  final dLat = rad(lat2 - lat1);
+  final dLng = rad(lng2 - lng1);
+  final a =
+      math.pow(math.sin(dLat / 2), 2) +
+      math.cos(rad(lat1)) *
+          math.cos(rad(lat2)) *
+          math.pow(math.sin(dLng / 2), 2);
+  return 2 * 6371000 * math.asin(math.sqrt(a));
+}
 
 DateTime _inicioDelDia(DateTime f) => DateTime(f.year, f.month, f.day);
 
@@ -231,6 +246,21 @@ class AppState extends ChangeNotifier {
             ? '$quien rechazó la guía $n.'
             : '$quien rechazó la guía $n: ${ahora.motivoRechazo}';
     }
+  }
+
+  /// La sucursal cuyo perímetro contiene el punto (la más cercana si hay
+  /// varias); null si no está dentro de ninguna. Lo mismo decide el backend.
+  Sucursal? sucursalEnPunto(double lat, double lng) {
+    Sucursal? mejor;
+    var menor = double.infinity;
+    for (final s in _sucursales) {
+      final d = distanciaMetros(lat, lng, s.lat, s.lng);
+      if (d <= s.radioM && d < menor) {
+        mejor = s;
+        menor = d;
+      }
+    }
+    return mejor;
   }
 
   Sucursal? sucursalPorNombre(String nombre) {

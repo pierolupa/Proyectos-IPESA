@@ -57,6 +57,21 @@ function distanciaMetros(lat1, lng1, lat2, lng2) {
   return 2 * 6371000 * Math.asin(Math.sqrt(a));
 }
 
+/** La sucursal cuyo perímetro contiene el punto (la más cercana si hay varias). */
+function sucursalEnPunto(sucursales, lat, lng) {
+  let mejor = null;
+  let menor = Infinity;
+  for (const s of sucursales || []) {
+    if (typeof s.lat !== 'number' || typeof s.lng !== 'number' || !s.radio_m) continue;
+    const d = distanciaMetros(lat, lng, s.lat, s.lng);
+    if (d <= s.radio_m && d < menor) {
+      mejor = s;
+      menor = d;
+    }
+  }
+  return mejor;
+}
+
 function buscarSucursal(sucursales, nombre) {
   const clave = String(nombre).trim().toLowerCase();
   return sucursales.find((s) => s.nombre.toLowerCase() === clave) || null;
@@ -335,12 +350,21 @@ app.post('/guias', async (req, res, next) => {
       }
     }
 
+    // Si se registra dentro del perímetro de una sucursal, sale de ahí.
+    let origenFinal = origen;
+    try {
+      const aqui = sucursalEnPunto(await repo.listarSucursales(), geo.lat, geo.lng);
+      if (aqui) origenFinal = aqui.nombre;
+    } catch (err) {
+      console.error(err);
+    }
+
     const ahora = new Date().toISOString();
     const nueva = {
       numero_guia: numeroGuia,
       estado: ESTADOS.EN_RUTA,
       tipo_entrega: tipoEntrega,
-      origen,
+      origen: origenFinal,
       destino: destinoFinal,
       transportista,
       destinatario,
@@ -432,6 +456,13 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       guia.cierre_lat = geo.lat;
       guia.cierre_lng = geo.lng;
       guia.fecha_cierre = guia.fecha_actualizacion;
+      // Entregada dentro del perímetro de una sucursal: quedó ahí.
+      try {
+        const aqui = sucursalEnPunto(await repo.listarSucursales(), geo.lat, geo.lng);
+        if (aqui) guia.destino = aqui.nombre;
+      } catch (err) {
+        console.error(err);
+      }
     }
     await repo.actualizarGuia(guia._row, guia);
 

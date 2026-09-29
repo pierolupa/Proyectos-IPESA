@@ -6,10 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/aviso_sucursal.dart';
 import '../../widgets/gps_transportista.dart';
 
 final _hora = DateFormat('HH:mm');
@@ -102,6 +104,12 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     }
     super.dispose();
   }
+
+  /// La sucursal donde está el transportista (por el GPS), si hay.
+  Sucursal? _sucursalAqui(AppState appState) =>
+      gpsActivo && lat != null && lng != null
+      ? appState.sucursalEnPunto(lat!, lng!)
+      : null;
 
   Future<void> _agregarFotos(Future<List<Uint8List>> Function() origen) async {
     setState(() => _abriendoFotos = true);
@@ -198,7 +206,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     );
     if (repetida) return 'Esta guía ya está en otra foto de esta lista.';
     if (b.destinatario.text.trim().isEmpty) return 'Falta el destinatario.';
-    if (b.origen.text.trim().isEmpty) return 'Falta el punto de partida.';
+    if (b.origen.text.trim().isEmpty && _sucursalAqui(appState) == null) {
+      return 'Falta el punto de partida.';
+    }
     if (b.esTraslado ? b.sucursal == null : b.destino.text.trim().isEmpty) {
       return b.esTraslado ? 'Elige la sucursal destino.' : 'Falta el destino.';
     }
@@ -253,7 +263,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       await appState.asignarNuevaGuia(
         numeroGuia: b.numero.text.trim(),
         tipoEntrega: b.tipo,
-        origen: b.origen.text.trim(),
+        // Dentro del perímetro de una sucursal, sale de ahí.
+        origen: _sucursalAqui(appState)?.nombre ?? b.origen.text.trim(),
         destino: b.esTraslado ? b.sucursal! : b.destino.text.trim(),
         destinatario: b.destinatario.text.trim(),
         lat: lat!,
@@ -348,6 +359,13 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
             textoActivo: 'Ubicación disponible: se adjuntará a cada guía.',
             textoApagado: 'Obligatorio: sin GPS no se puede subir ningún registro fotográfico.',
           ),
+          if (_sucursalAqui(appState) case final aqui?) ...[
+            const SizedBox(height: 10),
+            AvisoSucursal(
+              nombre: aqui.nombre,
+              detalle: 'Será el punto de partida de las guías que registres.',
+            ),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [
@@ -392,6 +410,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               borrador: b,
               falta: _falta(b, appState),
               sucursales: [for (final s in appState.sucursales) s.nombre],
+              sucursalAqui: _sucursalAqui(appState)?.nombre,
               onCambio: () => setState(() {}),
               onQuitar: b.enviando ? null : () => _quitar(b),
             ),
@@ -408,6 +427,7 @@ class _TarjetaBorrador extends StatelessWidget {
     required this.borrador,
     required this.falta,
     required this.sucursales,
+    required this.sucursalAqui,
     required this.onCambio,
     required this.onQuitar,
   });
@@ -415,6 +435,9 @@ class _TarjetaBorrador extends StatelessWidget {
   final _Borrador borrador;
   final String? falta;
   final List<String> sucursales;
+
+  /// Si está dentro de una sucursal, ese es el punto de partida.
+  final String? sucursalAqui;
   final VoidCallback onCambio;
   final VoidCallback? onQuitar;
 
@@ -539,7 +562,31 @@ class _TarjetaBorrador extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  campo(b.origen, 'Punto de partida'),
+                  if (sucursalAqui != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.storefront_outlined,
+                            size: 18,
+                            color: Ipesa.turquesa,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Punto de partida: $sucursalAqui',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Ipesa.petroleo,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    campo(b.origen, 'Punto de partida'),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<TipoEntrega>(
                     initialValue: b.tipo,

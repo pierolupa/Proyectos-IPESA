@@ -35,6 +35,8 @@ Map<String, dynamic> _guia(String numero, DateTime creada) => {
 void main() {
   late List<String> leidas;
   late List<String> registradas;
+  late List<String> origenes;
+  var sucursales = '[]';
 
   setUp(() {
     SharedPreferences.setMockInitialValues({
@@ -43,6 +45,8 @@ void main() {
     });
     leidas = ['T200', 'T201', 'T100'];
     registradas = [];
+    origenes = [];
+    sucursales = '[]';
     Ubicacion.olvidarUltima();
     Ubicacion.permisoConcedido = () async => false;
     Ubicacion.leer = () async => Position(
@@ -69,7 +73,7 @@ void main() {
     final hace30 = DateTime.now().subtract(const Duration(minutes: 30));
     final client = MockClient((request) async {
       final ruta = request.url.path;
-      if (ruta.endsWith('/sucursales')) return http.Response('[]', 200);
+      if (ruta.endsWith('/sucursales')) return http.Response(sucursales, 200);
       if (ruta.endsWith('/ocr/leer-guia')) {
         final numero = leidas.removeAt(0);
         return http.Response(
@@ -86,6 +90,7 @@ void main() {
         final cuerpo = jsonDecode(request.body) as Map<String, dynamic>;
         final numero = cuerpo['numeroGuia'] as String;
         registradas.add(numero);
+        origenes.add(cuerpo['origen'] as String);
         return http.Response(jsonEncode(_guia(numero, DateTime.now())), 201);
       }
       return http.Response(jsonEncode([_guia('T100', hace30)]), 200);
@@ -223,5 +228,32 @@ void main() {
       tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
       isFalse,
     );
+  });
+
+  testWidgets('Dentro de una sucursal, sale de ahí', (tester) async {
+    // El GPS de prueba está en -12.05, -77.04: dentro de este perímetro.
+    sucursales = jsonEncode([
+      {
+        'nombre': 'Trp San Luis',
+        'lat': -12.0501,
+        'lng': -77.0401,
+        'radio_m': 150,
+      },
+    ]);
+    leidas = ['T200'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    Ubicacion.permisoConcedido = () async => true;
+    await abrir(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Estás en Trp San Luis'), findsOneWidget);
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    expect(find.text('Punto de partida: Trp San Luis'), findsOneWidget);
+
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(registradas, ['T200']);
+    expect(origenes, ['Trp San Luis']);
   });
 }
