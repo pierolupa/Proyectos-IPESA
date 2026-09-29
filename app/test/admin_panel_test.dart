@@ -42,7 +42,7 @@ Map<String, dynamic> _guia(
   'corregido_por_admin': false,
 };
 
-Future<void> _abrirPanel(WidgetTester tester, {bool enGuias = true}) async {
+Future<void> _abrirPanel(WidgetTester tester) async {
   final client = MockClient((request) async {
     if (request.url.path.endsWith('/sucursales')) {
       return http.Response(
@@ -81,20 +81,15 @@ Future<void> _abrirPanel(WidgetTester tester, {bool enGuias = true}) async {
       child: const MaterialApp(home: AdminDashboardScreen()),
     ),
   );
-  // Abre en el dashboard; casi todas las pruebas parten de Guías.
-  if (enGuias) {
-    await tester.tap(find.text('Guías'));
-    await tester.pumpAndSettle();
-  }
 }
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('El panel abre en el dashboard con los indicadores', (
-    tester,
-  ) async {
-    await _abrirPanel(tester, enGuias: false);
+  testWidgets('El dashboard muestra los indicadores', (tester) async {
+    await _abrirPanel(tester);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Dashboard'), findsWidgets);
     expect(find.textContaining('Cumplimiento'), findsOneWidget);
@@ -248,8 +243,19 @@ void main() {
     tester.view.physicalSize = const Size(1400, 900);
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Transportistas'), findsOneWidget);
-    expect(find.byTooltip('Rastrear'), findsOneWidget);
+    // Las secciones van en orden, con el nombre al costado.
+    final orden = [
+      'Guías',
+      'Transportistas',
+      'Dashboard',
+      'Recorrido',
+      'Sucursales',
+      'Rastrear',
+    ].map((t) => tester.getTopLeft(find.text(t).first).dy).toList();
+    for (var i = 1; i < orden.length; i++) {
+      expect(orden[i], greaterThan(orden[i - 1]));
+    }
+    expect(find.text('Cerrar sesión'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

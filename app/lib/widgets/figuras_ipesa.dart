@@ -2,10 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Las figuras del menú del administrador: cada sección es una placa con
-/// degradé, brillo y sombra, con un dibujo blanco encima (y un toque del
-/// naranja de la marca). Se pintan en código, así que no pesan nada y se
-/// ven nítidas en cualquier pantalla.
+/// Las figuras del menú del administrador, en relieve: botones tallados en
+/// el mismo petróleo de la barra, con luz arriba a la izquierda y sombra
+/// abajo a la derecha. La sección activa se hunde y su dibujo pasa a
+/// blanco. Se pintan en código, así que no pesan nada y se ven nítidas en
+/// cualquier pantalla.
 enum Figura {
   dashboard,
   guias,
@@ -15,117 +16,130 @@ enum Figura {
   rastrear,
 }
 
-/// Acento cálido común a todas las figuras.
-const _acento = Color(0xFFF59E4A);
+const _petroleo = Color(0xFF0F4C5C);
 const _llanta = Color(0xFF17262B);
 
-extension on Figura {
-  /// Claro (arriba a la izquierda) y oscuro (abajo a la derecha).
-  (Color, Color) get placa => switch (this) {
-    Figura.dashboard => (const Color(0xFFFFC07A), const Color(0xFFE0762A)),
-    Figura.guias => (const Color(0xFF5B9BEA), const Color(0xFF2459A8)),
-    Figura.transportistas => (const Color(0xFF45C7BA), const Color(0xFF148078)),
-    Figura.recorrido => (const Color(0xFFA48BEA), const Color(0xFF5B45A8)),
-    Figura.sucursales => (const Color(0xFF52C28A), const Color(0xFF1D6B41)),
-    Figura.rastrear => (const Color(0xFF86A3AE), const Color(0xFF3A5864)),
-  };
-}
-
 class FiguraIpesa extends StatelessWidget {
-  const FiguraIpesa(this.figura, {super.key, this.tamano = 40});
+  const FiguraIpesa(
+    this.figura, {
+    super.key,
+    this.tamano = 44,
+    this.activa = false,
+  });
 
   final Figura figura;
   final double tamano;
+
+  /// Hundida y con el dibujo en blanco.
+  final bool activa;
 
   @override
   Widget build(BuildContext context) {
     return ExcludeSemantics(
       child: CustomPaint(
         size: Size.square(tamano),
-        painter: _PintorFigura(figura),
+        painter: _PintorFigura(figura, activa),
       ),
     );
   }
 }
 
 class _PintorFigura extends CustomPainter {
-  _PintorFigura(this.figura);
+  _PintorFigura(this.figura, this.activa);
 
   final Figura figura;
+  final bool activa;
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.shortestSide;
-    final (claro, oscuro) = figura.placa;
-    final placa = RRect.fromRectAndRadius(
-      Offset.zero & Size.square(s),
-      Radius.circular(s * 0.28),
+    final boton = RRect.fromRectAndRadius(
+      Rect.fromLTWH(s * 0.06, s * 0.06, s * 0.88, s * 0.88),
+      Radius.circular(s * 0.26),
     );
+    final desenfoque = MaskFilter.blur(BlurStyle.normal, s * 0.045);
 
-    // Sombra bajo la placa.
-    canvas.drawRRect(
-      placa.shift(Offset(0, s * 0.06)),
-      Paint()
-        ..color = oscuro.withValues(alpha: 0.45)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, s * 0.07),
-    );
-    // Cuerpo con degradé.
-    canvas.drawRRect(
-      placa,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [claro, oscuro],
-        ).createShader(placa.outerRect),
-    );
-    // Brillo en la mitad de arriba.
-    canvas.save();
-    canvas.clipRRect(placa);
-    canvas.drawOval(
-      Rect.fromLTWH(-s * 0.25, -s * 0.62, s * 1.5, s * 1.05),
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.white.withValues(alpha: 0.34),
-            Colors.white.withValues(alpha: 0.04),
-          ],
-        ).createShader(Rect.fromLTWH(0, 0, s, s * 0.45)),
-    );
-    canvas.restore();
-    // Filo interior.
-    canvas.drawRRect(
-      placa.deflate(s * 0.012),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = s * 0.024
-        ..color = Colors.white.withValues(alpha: 0.28),
-    );
+    if (activa) {
+      // Hundido: más oscuro arriba a la izquierda, con un filo de sombra.
+      canvas.drawRRect(
+        boton,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF083743), Color(0xFF15596A)],
+          ).createShader(boton.outerRect),
+      );
+      canvas.drawRRect(
+        boton,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = s * 0.03
+          ..color = const Color(0x99062A33),
+      );
+    } else {
+      // En relieve: sombra abajo a la derecha y luz arriba a la izquierda.
+      canvas.drawRRect(
+        boton.shift(Offset(s * 0.045, s * 0.045)),
+        Paint()
+          ..color = const Color(0xBF062A33)
+          ..maskFilter = desenfoque,
+      );
+      canvas.drawRRect(
+        boton.shift(Offset(-s * 0.045, -s * 0.045)),
+        Paint()
+          ..color = const Color(0xE61C6C7F)
+          ..maskFilter = desenfoque,
+      );
+      canvas.drawRRect(boton, Paint()..color = _petroleo);
+    }
 
     // El dibujo, en una grilla de 24 × 24.
-    final escala = s * 0.64 / 24;
+    final escala = s * 0.5 / 24;
     canvas.save();
-    canvas.translate(s * 0.18, s * 0.18);
+    canvas.translate(s * 0.25, s * 0.25);
     canvas.scale(escala);
-    _Dibujo(canvas, oscuro).pintar(figura);
+    final dibujo = activa
+        ? _Dibujo(
+            canvas,
+            principal: Colors.white,
+            suave: Colors.white.withValues(alpha: 0.55),
+            recorte: const Color(0xFF0B4150),
+            acento: const Color(0xFFBFD9D5),
+          )
+        : _Dibujo(
+            canvas,
+            principal: const Color(0xFF9CC9C2),
+            suave: const Color(0x8C9CC9C2),
+            recorte: _petroleo,
+            acento: const Color(0xFFDDEFEC),
+          );
+    dibujo.pintar(figura);
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_PintorFigura old) => old.figura != figura;
+  bool shouldRepaint(_PintorFigura old) =>
+      old.figura != figura || old.activa != activa;
 }
 
 /// Pinta cada dibujo en coordenadas de 0 a 24.
 class _Dibujo {
-  _Dibujo(this.c, this.oscuro);
+  _Dibujo(
+    this.c, {
+    required this.principal,
+    required this.suave,
+    required this.recorte,
+    required this.acento,
+  });
 
   final Canvas c;
-  final Color oscuro;
+  final Color principal;
+  final Color suave;
 
-  static const _blanco = Colors.white;
-  static final _blancoSuave = Colors.white.withValues(alpha: 0.72);
+  /// Huecos del dibujo (ventanas, puerta, renglones).
+  final Color recorte;
+  final Color acento;
 
   Paint relleno(Color color) => Paint()
     ..color = color
@@ -137,16 +151,6 @@ class _Dibujo {
     ..strokeWidth = ancho
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round;
-
-  /// Sombra corta bajo la silueta, para que el dibujo se despegue.
-  void sombra(Path silueta) {
-    c.drawPath(
-      silueta.shift(const Offset(0, 1.1)),
-      Paint()
-        ..color = Colors.black.withValues(alpha: 0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.9),
-    );
-  }
 
   void pintar(Figura figura) {
     switch (figura) {
@@ -169,33 +173,25 @@ class _Dibujo {
   void _dashboard() {
     const centro = Offset(12, 15);
     final arco = Rect.fromCircle(center: centro, radius: 9);
-    final silueta = Path()..addArc(arco.inflate(1.8), math.pi, math.pi);
-    sombra(silueta);
-    c.drawArc(
-      arco,
-      math.pi,
-      math.pi,
-      false,
-      trazo(Colors.black.withValues(alpha: 0.2), 3.4),
-    );
-    c.drawArc(arco, math.pi, math.pi * 0.68, false, trazo(_blanco, 3.4));
+    c.drawArc(arco, math.pi, math.pi, false, trazo(suave, 3.4));
+    c.drawArc(arco, math.pi, math.pi * 0.68, false, trazo(principal, 3.4));
     // Marcas.
     for (var i = 0; i <= 4; i++) {
       final a = math.pi + math.pi * i / 4;
       final dentro = centro + Offset(math.cos(a), math.sin(a)) * 5.2;
       final fuera = centro + Offset(math.cos(a), math.sin(a)) * 6.4;
-      c.drawLine(dentro, fuera, trazo(_blancoSuave, 1));
+      c.drawLine(dentro, fuera, trazo(suave, 1));
     }
     // Aguja.
     const angulo = math.pi * 1.68;
     final punta = centro + Offset(math.cos(angulo), math.sin(angulo)) * 7;
     c.drawLine(centro, punta, trazo(_llanta, 2.2));
-    c.drawCircle(centro, 2.4, relleno(_blanco));
+    c.drawCircle(centro, 2.4, relleno(principal));
     c.drawCircle(centro, 1, relleno(_llanta));
     // Base.
     c.drawRRect(
       RRect.fromLTRBR(4, 19.4, 20, 21.6, const Radius.circular(1.1)),
-      relleno(_blanco),
+      relleno(principal),
     );
   }
 
@@ -212,8 +208,7 @@ class _Dibujo {
       ..lineTo(4.3, 4.2)
       ..quadraticBezierTo(4.3, 2.5, 6, 2.5)
       ..close();
-    sombra(hoja);
-    c.drawPath(hoja, relleno(_blanco));
+    c.drawPath(hoja, relleno(principal));
     c.drawPath(
       Path()
         ..moveTo(13.2, 2.5)
@@ -223,19 +218,19 @@ class _Dibujo {
         ..close(),
       relleno(Colors.black.withValues(alpha: 0.16)),
     );
-    final linea = trazo(oscuro, 1.6);
+    final linea = trazo(recorte, 1.6);
     c.drawLine(const Offset(7.4, 11), const Offset(15.4, 11), linea);
     c.drawLine(const Offset(7.4, 14.4), const Offset(12.6, 14.4), linea);
     c.drawLine(const Offset(7.4, 17.8), const Offset(10.6, 17.8), linea);
     // Sello de entregada.
-    c.drawCircle(const Offset(17.4, 17.6), 5.2, relleno(_blanco));
-    c.drawCircle(const Offset(17.4, 17.6), 4.1, relleno(_acento));
+    c.drawCircle(const Offset(17.4, 17.6), 5.2, relleno(principal));
+    c.drawCircle(const Offset(17.4, 17.6), 4.1, relleno(acento));
     c.drawPath(
       Path()
         ..moveTo(15.4, 17.7)
         ..lineTo(16.8, 19.1)
         ..lineTo(19.5, 16.2),
-      trazo(_blanco, 1.5),
+      trazo(recorte, 1.5),
     );
   }
 
@@ -258,14 +253,9 @@ class _Dibujo {
       ..quadraticBezierTo(22.9, 16.8, 21.9, 16.8)
       ..lineTo(15.6, 16.8)
       ..close();
-    sombra(
-      Path()
-        ..addRRect(caja)
-        ..addPath(cabina, Offset.zero),
-    );
-    c.drawRRect(caja, relleno(_blanco));
-    c.drawRect(const Rect.fromLTRB(1.2, 12.4, 14.6, 14.2), relleno(_acento));
-    c.drawPath(cabina, relleno(_blancoSuave));
+    c.drawRRect(caja, relleno(principal));
+    c.drawRect(const Rect.fromLTRB(1.2, 12.4, 14.6, 14.2), relleno(acento));
+    c.drawPath(cabina, relleno(suave));
     c.drawPath(
       Path()
         ..moveTo(16.9, 10)
@@ -273,12 +263,12 @@ class _Dibujo {
         ..lineTo(21, 12.9)
         ..lineTo(16.9, 12.9)
         ..close(),
-      relleno(oscuro),
+      relleno(recorte),
     );
     for (final x in [5.8, 18.6]) {
-      c.drawCircle(Offset(x, 18), 3, relleno(_blanco));
+      c.drawCircle(Offset(x, 18), 3, relleno(principal));
       c.drawCircle(Offset(x, 18), 2.2, relleno(_llanta));
-      c.drawCircle(Offset(x, 18), 0.9, relleno(_blanco));
+      c.drawCircle(Offset(x, 18), 0.9, relleno(principal));
     }
   }
 
@@ -293,10 +283,10 @@ class _Dibujo {
         punteado.addPath(m.extractPath(d, d + 1.8), Offset.zero);
       }
     }
-    c.drawPath(punteado, trazo(_blancoSuave, 1.9));
+    c.drawPath(punteado, trazo(suave, 1.9));
     // Partida.
-    c.drawCircle(const Offset(5, 18.6), 3, relleno(_blanco));
-    c.drawCircle(const Offset(5, 18.6), 1.3, relleno(oscuro));
+    c.drawCircle(const Offset(5, 18.6), 3, relleno(principal));
+    c.drawCircle(const Offset(5, 18.6), 1.3, relleno(recorte));
     // Destino.
     final pin = Path()
       ..moveTo(17.6, 14.2)
@@ -304,9 +294,8 @@ class _Dibujo {
       ..arcToPoint(const Offset(22.2, 6.8), radius: const Radius.circular(4.6))
       ..cubicTo(22.2, 9.2, 19.8, 11.6, 17.6, 14.2)
       ..close();
-    sombra(pin);
-    c.drawPath(pin, relleno(_blanco));
-    c.drawCircle(const Offset(17.6, 6.8), 2, relleno(_acento));
+    c.drawPath(pin, relleno(principal));
+    c.drawCircle(const Offset(17.6, 6.8), 2, relleno(acento));
   }
 
   /// Una tienda con su toldo a rayas.
@@ -319,12 +308,7 @@ class _Dibujo {
       bottomLeft: const Radius.circular(1.2),
       bottomRight: const Radius.circular(1.2),
     );
-    sombra(
-      Path()
-        ..addRRect(cuerpo)
-        ..addRect(const Rect.fromLTRB(3, 3.4, 21, 10)),
-    );
-    c.drawRRect(cuerpo, relleno(_blancoSuave));
+    c.drawRRect(cuerpo, relleno(suave));
     // Puerta y ventana.
     c.drawRRect(
       RRect.fromLTRBAndCorners(
@@ -335,15 +319,15 @@ class _Dibujo {
         topLeft: const Radius.circular(1.6),
         topRight: const Radius.circular(1.6),
       ),
-      relleno(oscuro),
+      relleno(recorte),
     );
     c.drawRRect(
       RRect.fromLTRBR(15.6, 13, 18, 16, const Radius.circular(0.6)),
-      relleno(oscuro),
+      relleno(recorte),
     );
     c.drawRRect(
       RRect.fromLTRBR(6, 13, 8.4, 16, const Radius.circular(0.6)),
-      relleno(oscuro),
+      relleno(recorte),
     );
     // Toldo: cuatro gajos alternados.
     const ancho = 18 / 4;
@@ -355,12 +339,12 @@ class _Dibujo {
         ..lineTo(x + ancho, 8)
         ..arcToPoint(Offset(x, 8), radius: const Radius.circular(ancho / 2))
         ..close();
-      c.drawPath(gajo, relleno(i.isEven ? _blanco : _acento));
+      c.drawPath(gajo, relleno(i.isEven ? principal : acento));
     }
     c.drawLine(
       const Offset(2.6, 20.8),
       const Offset(21.4, 20.8),
-      trazo(_blanco, 1.6),
+      trazo(principal, 1.6),
     );
   }
 
@@ -373,24 +357,22 @@ class _Dibujo {
       15,
       const Radius.circular(1.6),
     );
-    sombra(Path()..addRRect(caja));
-    c.drawRRect(caja, relleno(_blancoSuave));
-    c.drawRect(const Rect.fromLTRB(7.3, 3.2, 9.3, 9), relleno(_acento));
+    c.drawRRect(caja, relleno(suave));
+    c.drawRect(const Rect.fromLTRB(7.3, 3.2, 9.3, 9), relleno(acento));
     const centro = Offset(14.2, 13.2);
-    sombra(Path()..addOval(Rect.fromCircle(center: centro, radius: 6.4)));
     c.drawLine(
       const Offset(18.6, 17.6),
       const Offset(21.6, 20.6),
-      trazo(_blanco, 3.4),
+      trazo(principal, 3.4),
     );
     c.drawCircle(centro, 5.2, relleno(Colors.white.withValues(alpha: 0.3)));
-    c.drawCircle(centro, 5.2, trazo(_blanco, 2.2));
+    c.drawCircle(centro, 5.2, trazo(principal, 2.2));
     c.drawArc(
       Rect.fromCircle(center: centro, radius: 3.1),
       math.pi * 1.1,
       math.pi * 0.45,
       false,
-      trazo(_blanco, 1.2),
+      trazo(principal, 1.2),
     );
   }
 }

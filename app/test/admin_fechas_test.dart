@@ -54,8 +54,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Guías'));
-    await tester.pumpAndSettle();
 
     expect(find.text('Todas · 1'), findsOneWidget);
     expect(find.text('HOY-1'), findsOneWidget);

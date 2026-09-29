@@ -43,9 +43,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   static const _titulos = [
-    'Dashboard',
     'Operación',
     'Transportistas',
+    'Dashboard',
     'Recorrido de hoy',
     'Sucursales',
   ];
@@ -147,9 +147,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               Expanded(
                 child: switch (_pestana) {
-                  0 => const _PestanaDashboard(),
-                  1 => _PestanaGuias(ancha: ancha),
-                  2 => const PestanaTransportistas(),
+                  0 => _PestanaGuias(ancha: ancha),
+                  1 => const PestanaTransportistas(),
+                  2 => const _PestanaDashboard(),
                   3 => const _PestanaRecorrido(),
                   _ => const _PestanaSucursales(),
                 },
@@ -180,15 +180,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const BandaMarcas(),
-                      // Cinco secciones: la etiqueta un poco más chica
-                      // para que "Transportistas" entre en una línea.
+                      // En petróleo, como la barra de la computadora, para
+                      // que las figuras en relieve se vean igual. Cinco
+                      // secciones: la etiqueta un poco más chica para que
+                      // "Transportistas" entre en una línea.
                       NavigationBarTheme(
-                        data: const NavigationBarThemeData(
-                          labelTextStyle: WidgetStatePropertyAll(
-                            TextStyle(
+                        data: NavigationBarThemeData(
+                          backgroundColor: Ipesa.petroleo,
+                          indicatorColor: Colors.transparent,
+                          labelTextStyle: WidgetStateProperty.resolveWith(
+                            (estados) => TextStyle(
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: Ipesa.etiqueta,
+                              fontWeight: FontWeight.w700,
+                              color: estados.contains(WidgetState.selected)
+                                  ? Colors.white
+                                  : Ipesa.suaveSobrePetroleo,
                             ),
                           ),
                         ),
@@ -199,7 +205,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           destinations: [
                             for (final (figura, etiqueta) in _secciones)
                               NavigationDestination(
-                                icon: FiguraIpesa(figura, tamano: 30),
+                                icon: FiguraIpesa(figura, tamano: 34),
+                                selectedIcon: FiguraIpesa(
+                                  figura,
+                                  tamano: 34,
+                                  activa: true,
+                                ),
                                 label: etiqueta,
                               ),
                           ],
@@ -256,9 +267,9 @@ String haceCuanto(DateTime fecha) {
 
 /// Las secciones del menú, en el orden de las pestañas.
 const _secciones = [
-  (Figura.dashboard, 'Dashboard'),
   (Figura.guias, 'Guías'),
   (Figura.transportistas, 'Transportistas'),
+  (Figura.dashboard, 'Dashboard'),
   (Figura.recorrido, 'Recorrido'),
   (Figura.sucursales, 'Sucursales'),
 ];
@@ -280,38 +291,31 @@ class _Riel extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget item(int i, Figura figura, String etiqueta, {VoidCallback? onTap}) {
       final activo = i == seleccionado;
-      return Tooltip(
-        message: etiqueta,
+      return Semantics(
+        selected: activo,
+        button: true,
         child: Material(
           color: activo
-              ? Colors.white.withValues(alpha: 0.13)
+              ? Colors.white.withValues(alpha: 0.07)
               : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-            side: BorderSide(
-              color: activo
-                  ? Colors.white.withValues(alpha: 0.22)
-                  : Colors.transparent,
-            ),
-          ),
+          borderRadius: BorderRadius.circular(Ipesa.radioCampo),
           child: InkWell(
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
             onTap: onTap ?? () => onSeleccion(i),
-            child: SizedBox(
-              width: 80,
-              height: 84,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
                 children: [
-                  FiguraIpesa(figura, tamano: activo ? 42 : 38),
-                  const SizedBox(height: 7),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
+                  FiguraIpesa(figura, tamano: 48, activa: activo),
+                  const SizedBox(width: 14),
+                  Expanded(
                     child: Text(
                       etiqueta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        fontWeight: activo ? FontWeight.w800 : FontWeight.w700,
                         color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
                       ),
                     ),
@@ -325,15 +329,22 @@ class _Riel extends StatelessWidget {
     }
 
     return Container(
-      width: 96,
+      width: 224,
       color: Ipesa.petroleo,
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.fromLTRB(14, 26, 14, 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Image.asset(
-            'assets/brand/ipesa_blanco.png',
-            width: 60,
-            semanticLabel: 'IPESA',
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Image.asset(
+                'assets/brand/ipesa_blanco.png',
+                width: 76,
+                semanticLabel: 'IPESA',
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           // Las secciones se reparten a lo alto de toda la barra.
@@ -344,6 +355,7 @@ class _Riel extends StatelessWidget {
                   constraints: BoxConstraints(minHeight: c.maxHeight),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final (i, (figura, etiqueta)) in _secciones.indexed)
                         item(i, figura, etiqueta),
@@ -354,15 +366,50 @@ class _Riel extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: onCerrarSesion,
-            style: IconButton.styleFrom(
-              fixedSize: const Size(48, 48),
-              backgroundColor: Ipesa.menta,
+          const SizedBox(height: 12),
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+              onTap: onCerrarSesion,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Ipesa.menta,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.logout,
+                        color: Ipesa.petroleo,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Flexible(
+                      child: Text(
+                        'Cerrar sesión',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: Ipesa.suaveSobrePetroleo,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            icon: const Icon(Icons.logout, color: Ipesa.petroleo, size: 22),
           ),
         ],
       ),
