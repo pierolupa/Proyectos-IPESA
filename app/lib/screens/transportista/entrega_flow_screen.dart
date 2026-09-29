@@ -13,6 +13,7 @@ import '../../services/guias_api.dart';
 import '../../services/ubicacion.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/celebracion_jornada.dart';
 import '../../widgets/gps_transportista.dart';
 
 /// Flujo de "Entrega" y "Entrega entre sucursales" (ARCHITECTURE.md,
@@ -211,6 +212,26 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       // donde la guía ya no aparece.
       final navigator = Navigator.of(context)..pop();
       if (nuevoEstado.esFinal && widget.desdeDetalle) navigator.pop();
+      // Era la última pendiente: felicitación (una vez al día).
+      if (nuevoEstado.esFinal) {
+        final nombre = appState.transportistaActual;
+        final hoy = DateTime.now();
+        final suyas = appState.guiasDelTransportista(nombre);
+        if (suyas.every((x) => x.estado.esCerrada)) {
+          final entregadasHoy = suyas.where((x) {
+            final f = x.fechaActualizacion.toLocal();
+            return x.estado.esFinal &&
+                f.year == hoy.year &&
+                f.month == hoy.month &&
+                f.day == hoy.day;
+          }).length;
+          await CelebracionJornada.mostrarSiCorresponde(
+            navigator,
+            nombre: nombre,
+            entregadasHoy: entregadasHoy,
+          );
+        }
+      }
     } on ApiException catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)

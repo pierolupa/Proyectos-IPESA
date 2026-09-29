@@ -142,6 +142,12 @@ void main() {
     expect(cambios.single['estado'], 'entregado');
     expect(cambios.single['geo'], {'lat': -12.05, 'lng': -77.04});
     expect(cambios.single['foto'], isNotNull);
+    // Era su única pendiente: sale la felicitación.
+    expect(find.text('JORNADA IMPECABLE'), findsOneWidget);
+    expect(find.text('¡Excelente trabajo, Juan!'), findsOneWidget);
+    await tester.tap(find.text('¡Sigo así!'));
+    await tester.pumpAndSettle();
+    expect(find.text('JORNADA IMPECABLE'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

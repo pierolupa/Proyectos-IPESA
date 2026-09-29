@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:ipesa_guias/widgets/carrusel_marcas.dart';
+import 'package:ipesa_guias/widgets/celebracion_jornada.dart';
 import 'package:ipesa_guias/widgets/escena_ruta.dart';
 import 'package:ipesa_guias/widgets/splash_ipesa.dart';
 
@@ -12,5 +13,6 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   CarruselMarcas.animar = false;
   EscenaRuta.animar = false;
   SplashIpesa.animar = false;
+  CelebracionJornada.animar = false;
   await testMain();
 }
