@@ -372,9 +372,6 @@ app.post('/guias', async (req, res, next) => {
       destinatario,
       geo_lat: geo.lat,
       geo_lng: geo.lng,
-      // El punto de salida queda fijo; geo_* se actualiza con cada evento.
-      salida_lat: geo.lat,
-      salida_lng: geo.lng,
       corregido_por_admin: false,
       fecha_creacion: ahora,
       fecha_actualizacion: ahora,
