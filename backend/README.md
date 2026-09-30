@@ -52,11 +52,13 @@ y esta fila de encabezados (columnas A a X):
 numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de
 ```
 
-El servidor reconoce cada columna **por el nombre de su encabezado**, no
-por su posición: puedes tener las columnas en otro orden o agregar columnas
-propias (el servidor nunca las toca). Si falta alguna de las suyas, la
-agrega sola **al final** de la fila 1. Las filas sin `numero_guia` se
-ignoran.
+El servidor busca cada columna **por el nombre de su encabezado**; si no lo
+encuentra (o está escrito distinto), usa su posición de siempre. Si el
+encabezado está vacío, lo escribe en su lugar; solo si ese lugar lo ocupa
+otra columna del sistema, lo agrega **al final** de la fila 1. Las guías
+nuevas se escriben siempre desde la columna A en la fila siguiente a la
+última con datos, y una guía que haya quedado corrida a la derecha se
+devuelve sola a su lugar. Las filas sin `numero_guia` se ignoran.
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,

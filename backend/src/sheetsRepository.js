@@ -2,6 +2,7 @@ const { google } = require('googleapis');
 const { GoogleAuth } = require('google-auth-library');
 const {
   COLUMNS,
+  ESTADOS,
   SHEET_NAME,
   TRANSBORDO,
   USUARIOS_COLUMNS,
@@ -61,14 +62,19 @@ function requireSheetId() {
 }
 
 /*
- * Columnas de la hoja de guías POR NOMBRE. Cada dato se ubica por el
- * encabezado de su columna (fila 1), no por su posición: si alguien
- * inserta, mueve o agrega columnas propias, todo se sigue leyendo bien y
- * las columnas que el servidor no conoce nunca se tocan. Si falta alguna
- * de las que usa, se agrega sola AL FINAL de los encabezados.
+ * Columnas de la hoja de guías. Cada dato se busca primero por el nombre de
+ * su encabezado (fila 1); si ese encabezado no está (o está escrito
+ * distinto), se usa su posición de siempre (A = numero_guia, B = estado...),
+ * que es donde el servidor siempre lo escribió. Solo si esa posición la
+ * ocupa otra columna del sistema, el encabezado que falta se agrega AL
+ * FINAL. Las demás columnas de la fila se reescriben tal cual estaban.
  */
 const ULTIMA_COLUMNA = 'ZZ';
 const TRANSBORDOS_VALIDOS = new Set(Object.values(TRANSBORDO));
+const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
+const CONOCIDAS = new Set(COLUMNS);
+// Columnas que existieron un tiempo y ya no se usan: su lugar se reutiliza.
+const RETIRADAS = new Set(['salida_lat', 'salida_lng']);
 
 /** "A" para 1, "Z" para 26, "AA" para 27... */
 function letraColumna(numero) {
@@ -84,56 +90,83 @@ function letraColumna(numero) {
 
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
 
-/** Posición de cada columna conocida según la fila de encabezados. */
+/**
+ * Posición de cada columna según la fila de encabezados, y qué encabezados
+ * hay que escribir: `enSuLugar` (su posición de siempre estaba libre) y
+ * `alFinal` (su posición la ocupa otra columna).
+ */
 function mapearColumnas(encabezados) {
   const nombres = (encabezados || []).map(normalizar);
   const indices = {};
+  const ocupadas = new Set();
   for (const col of COLUMNS) {
     const i = nombres.indexOf(col);
-    if (i !== -1) indices[col] = i;
-  }
-  // Sin ningún encabezado reconocible: el orden de siempre (A..).
-  if (Object.keys(indices).length === 0) {
-    COLUMNS.forEach((col, i) => {
+    if (i !== -1) {
       indices[col] = i;
-    });
+      ocupadas.add(i);
+    }
   }
-  const ancho = Math.max(nombres.length, ...Object.values(indices).map((i) => i + 1));
-  return { indices, ancho };
+  const enSuLugar = [];
+  const alFinal = [];
+  COLUMNS.forEach((col, posicion) => {
+    if (indices[col] !== undefined) return;
+    const actual = nombres[posicion] || '';
+    // Su lugar de siempre, salvo que ahí esté otra columna del sistema.
+    if (!ocupadas.has(posicion) && !CONOCIDAS.has(actual)) {
+      indices[col] = posicion;
+      ocupadas.add(posicion);
+      // El encabezado se escribe si está vacío o era de una columna retirada;
+      // uno escrito distinto se respeta.
+      if (actual === '' || RETIRADAS.has(actual)) enSuLugar.push(col);
+    } else {
+      alFinal.push(col);
+    }
+  });
+  const usadas = [...ocupadas];
+  const ancho = Math.max(nombres.length, ...usadas.map((i) => i + 1));
+  return { indices, ancho, enSuLugar, alFinal };
 }
 
 // Las columnas de la última lectura (para escribir en las mismas).
 let columnasGuias = null;
 
 /**
- * Agrega al final de la fila 1 los encabezados que falten. Si no se puede
- * (por ejemplo, sin permiso de escritura), esas columnas se leen vacías.
+ * Escribe en la fila 1 los encabezados que faltan: en su posición de
+ * siempre si está libre, o al final. Si no se puede (sin permiso de
+ * escritura), igual se lee y escribe en esas posiciones.
  */
 async function completarEncabezados(sheets, spreadsheetId, encabezados) {
   const mapa = mapearColumnas(encabezados);
-  const faltan = COLUMNS.filter((col) => mapa.indices[col] === undefined);
-  if (faltan.length === 0) return mapa;
-  // Después de la última columna con encabezado.
-  let ultima = 0;
-  (encabezados || []).forEach((h, i) => {
-    if (normalizar(h)) ultima = i + 1;
-  });
-  const desde = letraColumna(ultima + 1);
-  const hasta = letraColumna(ultima + faltan.length);
   try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAME}!${desde}1:${hasta}1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [faltan] },
-    });
-    faltan.forEach((col, k) => {
-      mapa.indices[col] = ultima + k;
-    });
-    mapa.ancho = Math.max(mapa.ancho, ultima + faltan.length);
+    for (const col of mapa.enSuLugar) {
+      const letra = letraColumna(mapa.indices[col] + 1);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAME}!${letra}1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [[col]] },
+      });
+    }
+    if (mapa.alFinal.length > 0) {
+      const ultima = mapa.ancho;
+      const desde = letraColumna(ultima + 1);
+      const hasta = letraColumna(ultima + mapa.alFinal.length);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SHEET_NAME}!${desde}1:${hasta}1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: [mapa.alFinal] },
+      });
+      mapa.alFinal.forEach((col, k) => {
+        mapa.indices[col] = ultima + k;
+      });
+      mapa.ancho = ultima + mapa.alFinal.length;
+    }
   } catch (err) {
-    console.error(`No se pudieron agregar las columnas ${faltan.join(', ')}:`, err.message);
+    console.error('No se pudieron escribir los encabezados de la hoja:', err.message);
   }
+  mapa.enSuLugar = [];
+  mapa.alFinal = [];
   return mapa;
 }
 
@@ -169,6 +202,10 @@ function rowToGuia(row, rowNumber, mapa = MAPA_POR_POSICION) {
   // columna) no cuenta como transbordo.
   const transbordo = normalizar(guia.transbordo_estado);
   guia.transbordo_estado = TRANSBORDOS_VALIDOS.has(transbordo) ? transbordo : '';
+  if (!guia.transbordo_estado) {
+    guia.transbordo_a = '';
+    guia.transbordo_de = '';
+  }
   guia._row = rowNumber; // fila real en la hoja (1-indexed), uso interno
   // La fila tal cual, para no borrar columnas que el servidor no conoce
   // (uso interno, como _row: la API no la devuelve).
@@ -190,8 +227,41 @@ function guiaToRow(guia, mapa = MAPA_POR_POSICION) {
 }
 
 /**
+ * Una guía que quedó corrida a la derecha (por ejemplo, desde la columna V
+ * en vez de la A): la fila está vacía hasta donde empieza, ahí está el
+ * número de guía y en la celda siguiente un estado válido. Devuelve cuántas
+ * columnas está corrida, o 0 si la fila está bien.
+ */
+function desplazamiento(fila, mapa) {
+  const numero = fila[mapa.indices.numero_guia];
+  if (numero !== undefined && String(numero).trim() !== '') return 0;
+  const inicio = fila.findIndex((v) => String(v ?? '').trim() !== '');
+  if (inicio <= 0) return 0;
+  const estado = normalizar(fila[inicio + 1]);
+  return ESTADOS_VALIDOS.has(estado) ? inicio : 0;
+}
+
+/**
+ * La fila corrida, puesta en su lugar: los datos (en el orden de siempre)
+ * en sus columnas y las celdas donde estaban, vacías.
+ */
+function filaReacomodada(fila, corrida, mapa) {
+  const bloque = fila.slice(corrida, corrida + COLUMNS.length);
+  const guia = rowToGuia(bloque, 0);
+  const limpia = [...fila];
+  for (let k = corrida; k < corrida + bloque.length; k++) limpia[k] = '';
+  guia._fila = limpia;
+  return guiaToRow(guia, mapa);
+}
+
+// Filas de la hoja (con encabezado) en la última lectura: la próxima guía
+// va en la siguiente.
+let filasOcupadas = 1;
+
+/**
  * Lee todas las guías directamente de la hoja (sin caché). Las filas sin
- * número de guía (vacías o a medio llenar) se saltan.
+ * número de guía (vacías o a medio llenar) se saltan; las que quedaron
+ * corridas a la derecha se devuelven a su lugar.
  */
 async function leerGuiasDeHoja() {
   const sheets = await getSheetsClient();
@@ -200,12 +270,35 @@ async function leerGuiasDeHoja() {
     spreadsheetId,
     range: `${SHEET_NAME}!A1:${ULTIMA_COLUMNA}`,
   });
-  const [encabezados = [], ...filas] = res.data.values || [];
+  const valores = res.data.values || [];
+  const [encabezados = [], ...filas] = valores;
   columnasGuias = await completarEncabezados(sheets, spreadsheetId, encabezados);
-  // La fila de datos N (0-indexed) corresponde a la fila real N+2 (por el encabezado).
-  return filas
-    .map((fila, i) => rowToGuia(fila, i + 2, columnasGuias))
-    .filter((g) => g.numero_guia !== '');
+  filasOcupadas = Math.max(1, valores.length);
+
+  const guias = [];
+  for (let i = 0; i < filas.length; i++) {
+    const numeroDeFila = i + 2; // por el encabezado
+    let fila = filas[i];
+    const corrida = desplazamiento(fila, columnasGuias);
+    if (corrida > 0) {
+      const arreglada = filaReacomodada(fila, corrida, columnasGuias);
+      try {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${SHEET_NAME}!A${numeroDeFila}:${letraColumna(arreglada.length)}${numeroDeFila}`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [arreglada] },
+        });
+        console.log(`Fila ${numeroDeFila} de la hoja devuelta a la columna A.`);
+      } catch (err) {
+        console.error(`No se pudo reacomodar la fila ${numeroDeFila}:`, err.message);
+      }
+      fila = arreglada;
+    }
+    const guia = rowToGuia(fila, numeroDeFila, columnasGuias);
+    if (guia.numero_guia !== '') guias.push(guia);
+  }
+  return guias;
 }
 
 /*
@@ -271,18 +364,33 @@ async function buscarPorNumero(numeroGuia, opciones) {
   );
 }
 
-/** Agrega una nueva fila (nueva guía). */
-async function crearGuia(guia) {
-  const sheets = await getSheetsClient();
-  const spreadsheetId = requireSheetId();
-  const mapa = await obtenerColumnas(sheets, spreadsheetId);
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${SHEET_NAME}!A1`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [guiaToRow(guia, mapa)] },
-  }).finally(invalidarCacheGuias);
+// Las guías nuevas se escriben de a una por instancia (cada una lee cuál
+// es la fila libre justo antes de escribir).
+let colaDeRegistro = Promise.resolve();
+
+/**
+ * Agrega una nueva guía en la fila siguiente a la última con datos,
+ * siempre desde la columna A. (No usa el "agregar al final" de Sheets:
+ * ese adivina dónde está la tabla y, con datos sueltos a la derecha,
+ * pegaba la fila corrida en otras columnas.)
+ */
+function crearGuia(guia) {
+  const tarea = colaDeRegistro.then(async () => {
+    const sheets = await getSheetsClient();
+    const spreadsheetId = requireSheetId();
+    await listarGuias({ fresco: true });
+    const mapa = columnasGuias || (await obtenerColumnas(sheets, spreadsheetId));
+    const fila = guiaToRow(guia, mapa);
+    const numeroDeFila = filasOcupadas + 1;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SHEET_NAME}!A${numeroDeFila}:${letraColumna(fila.length)}${numeroDeFila}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [fila] },
+    }).finally(invalidarCacheGuias);
+  });
+  colaDeRegistro = tarea.catch(() => {});
+  return tarea;
 }
 
 /**
