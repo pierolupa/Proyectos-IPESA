@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ipesa_guias/models/guia.dart';
 import 'package:ipesa_guias/screens/admin/admin_dashboard_screen.dart';
+import 'package:ipesa_guias/screens/admin/dashboard.dart';
 import 'package:ipesa_guias/screens/admin/transportistas.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
@@ -92,7 +93,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard'), findsWidgets);
-    expect(find.textContaining('Cumplimiento'), findsOneWidget);
+    expect(find.text('Cierre'), findsOneWidget);
+    expect(find.text('Eficiencia'), findsOneWidget);
     expect(find.text('Guías del periodo'), findsOneWidget);
     await tester.dragUntilVisible(
       find.text('Estado de las guías'),
@@ -269,4 +271,29 @@ void main() {
       expect(todo.guias, hasLength(3));
     },
   );
+
+  test('Un rechazo cierra la tarea pero no cuenta como entrega', () {
+    final ahora = DateTime(2026, 9, 29, 18);
+    Guia guia(String numero, String estado) => Guia.fromJson(
+      _guia(numero, estado, 'Juan Pérez')
+        ..['fecha_actualizacion'] = DateTime(
+          2026,
+          9,
+          29,
+          12,
+        ).toUtc().toIso8601String(),
+    );
+    final guias = [
+      for (var i = 0; i < 26; i++) guia('E$i', 'entregado'),
+      guia('R1', 'rechazado'),
+    ];
+    final datos = IndicadoresOperacion.calcular(
+      guias,
+      PeriodoResumen.hoy,
+      ahora: ahora,
+    );
+    expect(datos.total, 27);
+    expect((datos.cierre * 100).round(), 100);
+    expect((datos.eficiencia * 100).round(), 96);
+  });
 }

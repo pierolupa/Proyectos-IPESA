@@ -128,8 +128,12 @@ class IndicadoresOperacion {
 
   int get total => guias.length;
 
-  /// Entregadas sobre todas las del periodo.
-  double get cumplimiento => total == 0 ? 0 : entregadas / total;
+  /// Cierre: las que ya terminaron (entregadas o rechazadas) sobre todas.
+  double get cierre => total == 0 ? 0 : (entregadas + rechazadas) / total;
+
+  /// Eficiencia: solo las entregadas sobre todas (un rechazo cierra la
+  /// tarea, pero no es una entrega).
+  double get eficiencia => total == 0 ? 0 : entregadas / total;
 
   double get tasaRechazo => total == 0 ? 0 : rechazadas / total;
 
@@ -500,8 +504,57 @@ class _Cumplimiento extends StatelessWidget {
 
   final IndicadoresOperacion datos;
 
+  static const _verde = Color(0xFF7FD6C8);
+  static const _rojo = Color(0xFFF2A39B);
+
   @override
   Widget build(BuildContext context) {
+    final vacio = datos.total == 0;
+    Widget cifra(String etiqueta, double valor, String detalle) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            etiqueta,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Ipesa.suaveSobrePetroleo,
+            ),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              vacio ? '—' : _porcentaje(valor),
+              style: Ipesa.titulo(48, color: Colors.white),
+            ),
+          ),
+          Text(
+            detalle,
+            style: const TextStyle(fontSize: 14, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+    Widget muestra(Color color, String texto) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(texto, style: const TextStyle(fontSize: 13, color: Colors.white)),
+      ],
+    );
+    final cerradas = datos.entregadas + datos.rechazadas;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -517,40 +570,94 @@ class _Cumplimiento extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'Cumplimiento · ${datos.periodo.etiqueta.toLowerCase()}',
+            datos.periodo.etiqueta,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
               color: Ipesa.suaveSobrePetroleo,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            datos.total == 0 ? '—' : _porcentaje(datos.cumplimiento),
-            style: Ipesa.titulo(56, color: Colors.white),
-          ),
-          Text(
-            datos.total == 0
-                ? 'Aún no hay guías en este periodo.'
-                : '${datos.entregadas} de ${datos.total} guías entregadas',
-            style: const TextStyle(fontSize: 15, color: Colors.white),
-          ),
+          const SizedBox(height: 12),
+          if (vacio)
+            const Text(
+              'Aún no hay guías en este periodo.',
+              style: TextStyle(fontSize: 15, color: Colors.white),
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                cifra(
+                  'Cierre',
+                  datos.cierre,
+                  '$cerradas de ${datos.total} finalizadas',
+                ),
+                const SizedBox(width: 16),
+                cifra(
+                  'Eficiencia',
+                  datos.eficiencia,
+                  '${datos.entregadas} de ${datos.total} entregadas',
+                ),
+              ],
+            ),
           const SizedBox(height: 18),
+          // Entregadas y rechazadas llenan la barra; lo que falta sigue en
+          // ruta.
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: SizedBox(
               height: 8,
-              child: Stack(
+              child: Row(
                 children: [
-                  Container(color: Colors.white.withValues(alpha: 0.18)),
-                  FractionallySizedBox(
-                    widthFactor: datos.cumplimiento.clamp(0, 1),
-                    child: Container(color: const Color(0xFF7FD6C8)),
-                  ),
+                  if (datos.entregadas > 0)
+                    Expanded(
+                      flex: datos.entregadas,
+                      child: Container(color: _verde),
+                    ),
+                  if (datos.entregadas > 0 && datos.rechazadas > 0)
+                    const SizedBox(width: 2),
+                  if (datos.rechazadas > 0)
+                    Expanded(
+                      flex: datos.rechazadas,
+                      child: Container(color: _rojo),
+                    ),
+                  if (datos.pendientes > 0 || vacio)
+                    Expanded(
+                      flex: vacio ? 1 : datos.pendientes,
+                      child: Container(
+                        color: Colors.white.withValues(alpha: 0.18),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
+          if (!vacio) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                muestra(
+                  _verde,
+                  datos.entregadas == 1
+                      ? '1 entregada'
+                      : '${datos.entregadas} entregadas',
+                ),
+                muestra(
+                  _rojo,
+                  datos.rechazadas == 1
+                      ? '1 rechazada'
+                      : '${datos.rechazadas} rechazadas',
+                ),
+                muestra(
+                  Colors.white.withValues(alpha: 0.35),
+                  '${datos.pendientes} en ruta',
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
