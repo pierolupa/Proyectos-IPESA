@@ -4,6 +4,7 @@ const mockValores = {
   get: jest.fn(),
   append: jest.fn(),
   update: jest.fn(),
+  batchUpdate: jest.fn(),
 };
 
 jest.mock('googleapis', () => ({
@@ -39,6 +40,7 @@ describe('caché de guías', () => {
     });
     mockValores.append.mockReset().mockResolvedValue({});
     mockValores.update.mockReset().mockResolvedValue({});
+    mockValores.batchUpdate.mockReset().mockResolvedValue({});
     repo = require('./sheetsRepository');
   });
 
@@ -83,55 +85,75 @@ describe('caché de guías', () => {
   });
 });
 
-describe('encabezados de la hoja de guías', () => {
+describe('orden de la hoja de guías', () => {
   const { COLUMNS } = require('./columns');
   let repo;
+
+  // Lo que se escribió en la hoja en la única escritura de orden.
+  const escrito = () => {
+    const llamadas = mockValores.batchUpdate.mock.calls;
+    expect(llamadas).toHaveLength(1);
+    return llamadas[0][0].requestBody.data;
+  };
 
   beforeEach(() => {
     jest.resetModules();
     process.env.SHEET_ID = 'hoja-de-prueba';
     mockValores.update.mockReset().mockResolvedValue({});
+    mockValores.batchUpdate.mockReset().mockResolvedValue({});
     repo = require('./sheetsRepository');
   });
 
-  it('escribe en su lugar los encabezados que faltan (columnas vacías)', async () => {
-    const sinTransbordo = COLUMNS.filter((c) => !c.startsWith('transbordo_'));
+  it('escribe solo los encabezados de T a X, después de la S', async () => {
+    const propios = [...COLUMNS.slice(0, 12), 'Nro Pedido', 'Nro Entrega',
+      'Latitud entrega', 'Longitud entrega', 'fecha_entrega', 'Foto', 'Observacion'];
     mockValores.get.mockReset().mockResolvedValue({
-      data: { values: [sinTransbordo, ['T1', 'en_ruta']] },
+      data: { values: [propios, ['T1', 'en_ruta']] },
     });
     await repo.listarGuias({ fresco: true });
-    const rangos = mockValores.update.mock.calls.map((c) => c[0].range);
-    expect(rangos).toEqual(['Guias!V1', 'Guias!W1', 'Guias!X1']);
+    expect(escrito()).toEqual([
+      { range: 'Guias!T1:X1', values: [COLUMNS.slice(19)] },
+    ]);
   });
 
-  it('si otra columna del sistema ocupa su lugar, la agrega al final', async () => {
-    const encabezados = COLUMNS.slice(0, 21);
-    encabezados[18] = 'mi nota'; // donde iba motivo_rechazo
-    encabezados.push('motivo_rechazo'); // movida a la V
+  it('reemplaza encabezados de columnas retiradas', async () => {
+    const encabezados = [...COLUMNS.slice(0, 21), 'salida_lat', 'salida_lng', 'transbordo_de'];
     mockValores.get.mockReset().mockResolvedValue({
       data: { values: [encabezados, ['T1', 'en_ruta']] },
     });
     await repo.listarGuias({ fresco: true });
-    const pedidos = mockValores.update.mock.calls.map((c) => [
-      c[0].range,
-      c[0].requestBody.values,
-    ]);
-    expect(pedidos).toEqual([
-      ['Guias!W1', [['transbordo_a']]],
-      ['Guias!X1', [['transbordo_de']]],
-      ['Guias!Y1:Y1', [['transbordo_estado']]],
+    expect(escrito()).toEqual([
+      { range: 'Guias!V1:W1', values: [['transbordo_estado', 'transbordo_a']] },
     ]);
   });
 
-  it('una lista de encabezados escritos distinto se sigue leyendo por posición', async () => {
-    const distintos = COLUMNS.map((c) => `Col ${c}`);
+  it('una hoja en orden no se escribe', async () => {
     mockValores.get.mockReset().mockResolvedValue({
-      data: { values: [distintos, ['T1', 'entregado']] },
+      data: { values: [COLUMNS, ['T1', 'entregado']] },
     });
     const [guia] = await repo.listarGuias({ fresco: true });
-    expect(guia.numero_guia).toBe('T1');
     expect(guia.estado).toBe('entregado');
-    expect(mockValores.update).not.toHaveBeenCalled();
+    expect(mockValores.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it('devuelve cada dato a su columna y vacía las que se agregaron de más', async () => {
+    const movidos = [...COLUMNS.slice(0, 19), ...COLUMNS.slice(12)];
+    const fila = ['T2', 'entregado', ...Array(17).fill(''),
+      'P-2', 'E-2', '-9.5', '-77.5', '2026-09-29T10:00:00.000Z', 'drive:foto'];
+    mockValores.get.mockReset().mockResolvedValue({
+      data: { values: [movidos, fila] },
+    });
+    const [guia] = await repo.listarGuias({ fresco: true });
+    expect(guia.foto_entrega_url).toBe('drive:foto');
+    expect(guia.numero_pedido).toBe('P-2');
+    const [datos, encabezados] = escrito();
+    expect(datos.range).toBe('Guias!A2:Y2');
+    expect(datos.values[0][17]).toBe('drive:foto'); // R
+    expect(datos.values[0].slice(19)).toEqual(Array(6).fill(''));
+    expect(encabezados).toEqual({
+      range: 'Guias!T1:AE1',
+      values: [[...COLUMNS.slice(19), ...Array(7).fill('')]],
+    });
   });
 
   it('devuelve a la columna A una guía que quedó corrida a la derecha', async () => {
@@ -141,10 +163,11 @@ describe('encabezados de la hoja de guías', () => {
     });
     const guias = await repo.listarGuias({ fresco: true });
     expect(guias.map((g) => g.numero_guia)).toEqual(['T1', 'T035-7954']);
-    const arreglo = mockValores.update.mock.calls.find((c) => c[0].range.startsWith('Guias!A3:'));
-    const fila = arreglo[0].requestBody.values[0];
+    const [arreglo] = escrito();
+    expect(arreglo.range).toBe('Guias!A3:Y3');
+    const fila = arreglo.values[0];
     expect(fila.slice(0, 4)).toEqual(['T035-7954', 'en_ruta', 'cliente_final', 'Trp Callao']);
-    expect(fila.slice(21).every((v) => v === '')).toBe(true);
+    expect(fila.slice(4).every((v) => v === '')).toBe(true);
   });
 
   it('una guía nueva va en la fila siguiente a la última, desde la columna A', async () => {
@@ -153,7 +176,7 @@ describe('encabezados de la hoja de guías', () => {
     });
     await repo.crearGuia({ numero_guia: 'T9', estado: 'en_ruta' });
     const escritura = mockValores.update.mock.calls.at(-1)[0];
-    expect(escritura.range).toMatch(/^Guias!A4:/);
+    expect(escritura.range).toBe('Guias!A4:X4');
     expect(escritura.requestBody.values[0].slice(0, 2)).toEqual(['T9', 'en_ruta']);
   });
 
@@ -163,6 +186,6 @@ describe('encabezados de la hoja de guías', () => {
     });
     const guias = await repo.listarGuias({ fresco: true });
     expect(guias.map((g) => g.numero_guia)).toEqual(['T1']);
-    expect(mockValores.update).not.toHaveBeenCalled();
+    expect(mockValores.batchUpdate).not.toHaveBeenCalled();
   });
 });

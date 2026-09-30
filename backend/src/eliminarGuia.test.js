@@ -12,12 +12,9 @@ jest.mock('google-auth-library', () => ({
   GoogleAuth: jest.fn().mockImplementation(() => ({ getClient: async () => ({}) })),
 }));
 
-const { COLUMNS } = require('./columns');
 
-// La fila 1 (encabezados) o la fila que se va a borrar, según el rango.
-const hoja = (filaDeDatos) => async ({ range }) => ({
-  data: { values: [range.endsWith('1:ZZ1') ? COLUMNS : filaDeDatos] },
-});
+// La fila que se va a borrar.
+const hoja = (filaDeDatos) => async () => ({ data: { values: [filaDeDatos] } });
 
 const fila = (numero, creada) => [
   numero, 'en_ruta', 'cliente_final', 'Almacén', 'Destino', 'Juan', 'Cliente',

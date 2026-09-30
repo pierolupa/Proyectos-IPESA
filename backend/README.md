@@ -52,13 +52,20 @@ y esta fila de encabezados (columnas A a X):
 numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de
 ```
 
-El servidor busca cada columna **por el nombre de su encabezado**; si no lo
-encuentra (o está escrito distinto), usa su posición de siempre. Si el
-encabezado está vacío, lo escribe en su lugar; solo si ese lugar lo ocupa
-otra columna del sistema, lo agrega **al final** de la fila 1. Las guías
-nuevas se escriben siempre desde la columna A en la fila siguiente a la
-última con datos, y una guía que haya quedado corrida a la derecha se
-devuelve sola a su lugar. Las filas sin `numero_guia` se ignoran.
+Cada dato va **siempre en la misma columna** (la de la lista de arriba),
+sin importar cómo se llame su encabezado: A a S pueden tener tus propios
+nombres ("Nro Pedido", "Foto"...) y el servidor nunca los cambia. Solo
+escribe los encabezados de T a X si están vacíos, y nunca agrega columnas
+en medio de las que ya existen. Lo que haya después de la X se conserva
+tal cual. Las guías nuevas se escriben siempre desde la columna A en la
+fila siguiente a la última con datos, y una guía que haya quedado corrida
+a la derecha se devuelve sola a su lugar. Las filas sin `numero_guia` se
+ignoran.
+
+Si una versión anterior del servidor dejó datos después de la S con
+encabezados como `numero_pedido` o `foto_entrega_url` en T1 a AE1, el
+servidor los devuelve solo a su columna (la foto a la R, el pedido a la
+M...) la primera vez que lee la hoja, y vacía esas columnas sobrantes.
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,

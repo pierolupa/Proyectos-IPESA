@@ -2,7 +2,9 @@ const { google } = require('googleapis');
 const { GoogleAuth } = require('google-auth-library');
 const {
   COLUMNS,
+  ELIMINACION,
   ESTADOS,
+  ESTADOS_FINALES,
   SHEET_NAME,
   TRANSBORDO,
   USUARIOS_COLUMNS,
@@ -62,15 +64,19 @@ function requireSheetId() {
 }
 
 /*
- * Columnas de la hoja de guías. Cada dato se busca primero por el nombre de
- * su encabezado (fila 1); si ese encabezado no está (o está escrito
- * distinto), se usa su posición de siempre (A = numero_guia, B = estado...),
- * que es donde el servidor siempre lo escribió. Solo si esa posición la
- * ocupa otra columna del sistema, el encabezado que falta se agrega AL
- * FINAL. Las demás columnas de la fila se reescriben tal cual estaban.
+ * Columnas de la hoja de guías: posición fija, la del arreglo COLUMNS.
+ * A..S son las columnas de siempre y se leen por posición, se llame como se
+ * llame su encabezado ("Nro Pedido", "Foto"...): esos encabezados nunca se
+ * tocan. Las que se agregaron después van a continuación de la S (T..X), y
+ * el servidor solo escribe esos encabezados. Lo que haya después de la X
+ * se reescribe tal cual estaba.
  */
 const ULTIMA_COLUMNA = 'ZZ';
+const ANCHO = COLUMNS.length;
+const PRIMERA_NUEVA = COLUMNS.indexOf('eliminacion'); // T
+const POSICION = Object.fromEntries(COLUMNS.map((col, i) => [col, i]));
 const TRANSBORDOS_VALIDOS = new Set(Object.values(TRANSBORDO));
+const ELIMINACIONES_VALIDAS = new Set(Object.values(ELIMINACION));
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 const CONOCIDAS = new Set(COLUMNS);
 // Columnas que existieron un tiempo y ya no se usan: su lugar se reutiliza.
@@ -89,108 +95,14 @@ function letraColumna(numero) {
 }
 
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
+const vacia = (valor) => normalizar(valor) === '';
+const celda = (fila, i) => (fila[i] === undefined || fila[i] === null ? '' : fila[i]);
 
-/**
- * Posición de cada columna según la fila de encabezados, y qué encabezados
- * hay que escribir: `enSuLugar` (su posición de siempre estaba libre) y
- * `alFinal` (su posición la ocupa otra columna).
- */
-function mapearColumnas(encabezados) {
-  const nombres = (encabezados || []).map(normalizar);
-  const indices = {};
-  const ocupadas = new Set();
-  for (const col of COLUMNS) {
-    const i = nombres.indexOf(col);
-    if (i !== -1) {
-      indices[col] = i;
-      ocupadas.add(i);
-    }
-  }
-  const enSuLugar = [];
-  const alFinal = [];
-  COLUMNS.forEach((col, posicion) => {
-    if (indices[col] !== undefined) return;
-    const actual = nombres[posicion] || '';
-    // Su lugar de siempre, salvo que ahí esté otra columna del sistema.
-    if (!ocupadas.has(posicion) && !CONOCIDAS.has(actual)) {
-      indices[col] = posicion;
-      ocupadas.add(posicion);
-      // El encabezado se escribe si está vacío o era de una columna retirada;
-      // uno escrito distinto se respeta.
-      if (actual === '' || RETIRADAS.has(actual)) enSuLugar.push(col);
-    } else {
-      alFinal.push(col);
-    }
-  });
-  const usadas = [...ocupadas];
-  const ancho = Math.max(nombres.length, ...usadas.map((i) => i + 1));
-  return { indices, ancho, enSuLugar, alFinal };
-}
-
-// Las columnas de la última lectura (para escribir en las mismas).
-let columnasGuias = null;
-
-/**
- * Escribe en la fila 1 los encabezados que faltan: en su posición de
- * siempre si está libre, o al final. Si no se puede (sin permiso de
- * escritura), igual se lee y escribe en esas posiciones.
- */
-async function completarEncabezados(sheets, spreadsheetId, encabezados) {
-  const mapa = mapearColumnas(encabezados);
-  try {
-    for (const col of mapa.enSuLugar) {
-      const letra = letraColumna(mapa.indices[col] + 1);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${SHEET_NAME}!${letra}1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [[col]] },
-      });
-    }
-    if (mapa.alFinal.length > 0) {
-      const ultima = mapa.ancho;
-      const desde = letraColumna(ultima + 1);
-      const hasta = letraColumna(ultima + mapa.alFinal.length);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${SHEET_NAME}!${desde}1:${hasta}1`,
-        valueInputOption: 'RAW',
-        requestBody: { values: [mapa.alFinal] },
-      });
-      mapa.alFinal.forEach((col, k) => {
-        mapa.indices[col] = ultima + k;
-      });
-      mapa.ancho = ultima + mapa.alFinal.length;
-    }
-  } catch (err) {
-    console.error('No se pudieron escribir los encabezados de la hoja:', err.message);
-  }
-  mapa.enSuLugar = [];
-  mapa.alFinal = [];
-  return mapa;
-}
-
-/** Las columnas de la hoja (de la última lectura, o leyendo la fila 1). */
-async function obtenerColumnas(sheets, spreadsheetId) {
-  if (columnasGuias) return columnasGuias;
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${SHEET_NAME}!A1:${ULTIMA_COLUMNA}1`,
-  });
-  const encabezados = (res.data.values || [])[0] || [];
-  columnasGuias = await completarEncabezados(sheets, spreadsheetId, encabezados);
-  return columnasGuias;
-}
-
-const MAPA_POR_POSICION = mapearColumnas([]);
-
-function rowToGuia(row, rowNumber, mapa = MAPA_POR_POSICION) {
+function rowToGuia(row, rowNumber) {
   const guia = {};
-  for (const col of COLUMNS) {
-    const i = mapa.indices[col];
-    const valor = i === undefined ? '' : row[i];
-    guia[col] = valor === undefined || valor === null ? '' : valor;
-  }
+  COLUMNS.forEach((col, i) => {
+    guia[col] = celda(row, i);
+  });
   // Ver el comentario equivalente en rowToUsuario: Sheets puede devolver
   // "TRUE"/"FALSE" en mayúsculas para valores que reconoce como booleanos.
   guia.corregido_por_admin =
@@ -207,23 +119,144 @@ function rowToGuia(row, rowNumber, mapa = MAPA_POR_POSICION) {
     guia.transbordo_de = '';
   }
   guia._row = rowNumber; // fila real en la hoja (1-indexed), uso interno
-  // La fila tal cual, para no borrar columnas que el servidor no conoce
+  // La fila tal cual, para no borrar lo que haya después de la X
   // (uso interno, como _row: la API no la devuelve).
   guia._fila = row;
   return guia;
 }
 
-/** La fila a escribir: la original con las columnas conocidas al día. */
-function guiaToRow(guia, mapa = MAPA_POR_POSICION) {
+/** La fila a escribir: la original con A..X al día. */
+function guiaToRow(guia) {
   const fila = [...(guia._fila || [])];
-  while (fila.length < mapa.ancho) fila.push('');
-  for (const col of COLUMNS) {
-    const i = mapa.indices[col];
-    if (i === undefined) continue;
+  while (fila.length < ANCHO) fila.push('');
+  COLUMNS.forEach((col, i) => {
     const value = guia[col];
     fila[i] = value === undefined || value === null ? '' : value;
-  }
+  });
   return fila.map((v) => (v === undefined || v === null ? '' : v));
+}
+
+/**
+ * Los encabezados de T en adelante como deben quedar: T..X con su nombre
+ * (si están vacíos o tienen el nombre de otra columna del sistema) y,
+ * después de la X, sin los nombres de columnas del sistema que una versión
+ * anterior agregó ahí. Devuelve { desde, valores } o null si ya están bien.
+ * A..S no se tocan nunca.
+ */
+function encabezadosCorregidos(encabezados) {
+  const actuales = (encabezados || []).map((v) => (v === undefined || v === null ? '' : v));
+  const nuevos = [...actuales];
+  while (nuevos.length < ANCHO) nuevos.push('');
+  for (let i = PRIMERA_NUEVA; i < nuevos.length; i++) {
+    const nombre = normalizar(nuevos[i]);
+    if (i < ANCHO) {
+      if (nombre === '' || CONOCIDAS.has(nombre) || RETIRADAS.has(nombre)) {
+        nuevos[i] = COLUMNS[i];
+      }
+    } else if (CONOCIDAS.has(nombre)) {
+      nuevos[i] = '';
+    }
+  }
+  const cambiadas = [];
+  for (let i = PRIMERA_NUEVA; i < nuevos.length; i++) {
+    if (String(nuevos[i]) !== String(actuales[i] ?? '')) cambiadas.push(i);
+  }
+  if (cambiadas.length === 0) return null;
+  const desde = cambiadas[0];
+  const hasta = cambiadas[cambiadas.length - 1];
+  return { desde, valores: nuevos.slice(desde, hasta + 1) };
+}
+
+/**
+ * Columnas del sistema cuyo encabezado está (de T en adelante) en otra
+ * posición que la suya: así las dejó una versión anterior que leía por
+ * nombre de encabezado y agregó T..AE con numero_pedido, numero_entrega...
+ * Devuelve { columna: posición }; vacío si la hoja está en orden.
+ */
+function columnasMovidas(encabezados) {
+  const movidas = {};
+  (encabezados || []).forEach((valor, i) => {
+    const nombre = normalizar(valor);
+    if (i < PRIMERA_NUEVA || !CONOCIDAS.has(nombre)) return;
+    if (POSICION[nombre] !== i && movidas[nombre] === undefined) movidas[nombre] = i;
+  });
+  return movidas;
+}
+
+/**
+ * ¿El valor de la celda `i` es del dato que va en esa posición? Solo se
+ * pregunta por T..X, donde la versión anterior escribió otros datos
+ * (pedido, entrega, coordenadas y fecha de cierre).
+ */
+function esDeSuColumna(fila, i) {
+  const valor = normalizar(fila[i]);
+  switch (COLUMNS[i]) {
+    case 'eliminacion':
+      return ELIMINACIONES_VALIDAS.has(valor);
+    case 'motivo_eliminacion':
+      return ELIMINACIONES_VALIDAS.has(normalizar(fila[POSICION.eliminacion]));
+    case 'transbordo_estado':
+      return TRANSBORDOS_VALIDOS.has(valor);
+    case 'transbordo_a':
+    case 'transbordo_de':
+      return TRANSBORDOS_VALIDOS.has(normalizar(fila[POSICION.transbordo_estado]));
+    default:
+      return true;
+  }
+}
+
+/** Los datos movidos que de verdad están en la fila: { columna: valor }. */
+function datosMovidos(fila, movidas) {
+  const datos = {};
+  for (const [col, i] of Object.entries(movidas)) {
+    if (i < ANCHO && esDeSuColumna(fila, i)) continue;
+    datos[col] = celda(fila, i);
+  }
+  // Coordenadas de cierre sin fecha de cierre no son de una entrega (por
+  // ejemplo, restos de una columna retirada).
+  if (vacia(datos.fecha_cierre)) {
+    delete datos.cierre_lat;
+    delete datos.cierre_lng;
+  }
+  return datos;
+}
+
+/**
+ * La fila con cada dato movido de vuelta en su columna (A..X) y las celdas
+ * donde estaba, vacías. Un dato movido reemplaza al de su columna solo si
+ * no está vacío.
+ */
+function filaEnOrden(fila, movidas) {
+  const datos = {};
+  COLUMNS.forEach((col, i) => {
+    datos[col] = celda(fila, i);
+  });
+  const movidos = datosMovidos(fila, movidas);
+  for (const col of Object.keys(movidos)) {
+    const i = movidas[col];
+    if (i < ANCHO) datos[COLUMNS[i]] = '';
+  }
+  for (const [col, valor] of Object.entries(movidos)) {
+    if (!vacia(valor)) datos[col] = valor;
+  }
+  if (!ELIMINACIONES_VALIDAS.has(normalizar(datos.eliminacion))) {
+    datos.eliminacion = '';
+    datos.motivo_eliminacion = '';
+  }
+  if (!TRANSBORDOS_VALIDOS.has(normalizar(datos.transbordo_estado))) {
+    datos.transbordo_estado = '';
+    datos.transbordo_a = '';
+    datos.transbordo_de = '';
+  }
+  const nueva = fila.map((v) => (v === undefined || v === null ? '' : v));
+  while (nueva.length < ANCHO) nueva.push('');
+  COLUMNS.forEach((col, i) => {
+    nueva[i] = datos[col];
+  });
+  for (const i of Object.values(movidas)) {
+    if (i >= ANCHO && i < nueva.length) nueva[i] = '';
+  }
+  return nueva;
 }
 
 /**
@@ -232,26 +265,91 @@ function guiaToRow(guia, mapa = MAPA_POR_POSICION) {
  * número de guía y en la celda siguiente un estado válido. Devuelve cuántas
  * columnas está corrida, o 0 si la fila está bien.
  */
-function desplazamiento(fila, mapa) {
-  const numero = fila[mapa.indices.numero_guia];
-  if (numero !== undefined && String(numero).trim() !== '') return 0;
-  const inicio = fila.findIndex((v) => String(v ?? '').trim() !== '');
+function desplazamiento(fila) {
+  if (!vacia(fila[0])) return 0;
+  const inicio = fila.findIndex((v) => !vacia(v));
   if (inicio <= 0) return 0;
-  const estado = normalizar(fila[inicio + 1]);
-  return ESTADOS_VALIDOS.has(estado) ? inicio : 0;
+  return ESTADOS_VALIDOS.has(normalizar(fila[inicio + 1])) ? inicio : 0;
+}
+
+/** La fila corrida, desde la columna A (las celdas donde estaba, vacías). */
+function filaDesdeA(fila, corrida) {
+  return [...fila.slice(corrida), ...Array(corrida).fill('')];
+}
+
+function mismaFila(a, b) {
+  const largo = Math.max(a.length, b.length);
+  for (let i = 0; i < largo; i++) {
+    if (String(a[i] ?? '') !== String(b[i] ?? '')) return false;
+  }
+  return true;
 }
 
 /**
- * La fila corrida, puesta en su lugar: los datos (en el orden de siempre)
- * en sus columnas y las celdas donde estaban, vacías.
+ * Restos sueltos de una entrega (coordenadas, fecha y foto, sin número de
+ * guía) que la versión anterior escribió en una fila vacía: se pasan a la
+ * guía entregada sin foto cuya última actualización es esa misma fecha de
+ * cierre, si hay exactamente una. Si no, la fila queda como está.
  */
-function filaReacomodada(fila, corrida, mapa) {
-  const bloque = fila.slice(corrida, corrida + COLUMNS.length);
-  const guia = rowToGuia(bloque, 0);
-  const limpia = [...fila];
-  for (let k = corrida; k < corrida + bloque.length; k++) limpia[k] = '';
-  guia._fila = limpia;
-  return guiaToRow(guia, mapa);
+function unirRestoDeEntrega(filas, k, movidas) {
+  const movidos = datosMovidos(filas[k], movidas);
+  const fecha = String(movidos.fecha_cierre ?? '').trim();
+  if (fecha === '' || vacia(movidos.foto_entrega_url)) return false;
+  const candidatas = [];
+  filas.forEach((fila, i) => {
+    if (i === k || vacia(fila[0])) return;
+    const entregada = ESTADOS_FINALES.has(normalizar(fila[POSICION.estado]));
+    const sinFoto = vacia(fila[POSICION.foto_entrega_url]);
+    const mismaFecha = [fila[POSICION.fecha_actualizacion], fila[POSICION.fecha_cierre]]
+      .some((v) => String(v ?? '').trim() === fecha);
+    if (entregada && sinFoto && mismaFecha) candidatas.push(i);
+  });
+  if (candidatas.length !== 1) return false;
+  const destino = [...filas[candidatas[0]]];
+  while (destino.length < ANCHO) destino.push('');
+  for (const col of ['cierre_lat', 'cierre_lng', 'fecha_cierre', 'foto_entrega_url']) {
+    const valor = movidos[col];
+    if (valor !== undefined && !vacia(valor) && vacia(destino[POSICION[col]])) {
+      destino[POSICION[col]] = valor;
+    }
+  }
+  filas[candidatas[0]] = destino;
+  const resto = [...filas[k]];
+  for (const col of Object.keys(movidos)) resto[movidas[col]] = '';
+  filas[k] = resto;
+  return true;
+}
+
+/**
+ * Pone la hoja en orden: guías corridas a la derecha de vuelta a la
+ * columna A y, si una versión anterior dejó datos en otras columnas (ver
+ * columnasMovidas), cada uno de vuelta en la suya. Devuelve las filas en
+ * orden, los índices de las que cambiaron y los encabezados a corregir.
+ */
+function ordenarHoja(encabezados, filasLeidas) {
+  const movidas = columnasMovidas(encabezados);
+  const hayMovidas = Object.keys(movidas).length > 0;
+  const filas = filasLeidas.map((f) => [...(f || [])]);
+  const sueltas = [];
+  filas.forEach((fila, i) => {
+    let nueva = fila;
+    const corrida = desplazamiento(nueva);
+    if (corrida > 0) nueva = filaDesdeA(nueva, corrida);
+    if (hayMovidas) {
+      if (vacia(nueva[0])) {
+        sueltas.push(i);
+        return;
+      }
+      nueva = filaEnOrden(nueva, movidas);
+    }
+    filas[i] = nueva;
+  });
+  for (const i of sueltas) unirRestoDeEntrega(filas, i, movidas);
+  const cambiadas = [];
+  filas.forEach((fila, i) => {
+    if (!mismaFila(fila, filasLeidas[i] || [])) cambiadas.push(i);
+  });
+  return { filas, cambiadas, encabezados: encabezadosCorregidos(encabezados) };
 }
 
 // Filas de la hoja (con encabezado) en la última lectura: la próxima guía
@@ -259,9 +357,9 @@ function filaReacomodada(fila, corrida, mapa) {
 let filasOcupadas = 1;
 
 /**
- * Lee todas las guías directamente de la hoja (sin caché). Las filas sin
- * número de guía (vacías o a medio llenar) se saltan; las que quedaron
- * corridas a la derecha se devuelven a su lugar.
+ * Lee todas las guías directamente de la hoja (sin caché). Si la hoja no
+ * está en orden (ver ordenarHoja), la ordena con una sola escritura. Las
+ * filas sin número de guía (vacías o a medio llenar) se saltan.
  */
 async function leerGuiasDeHoja() {
   const sheets = await getSheetsClient();
@@ -271,33 +369,46 @@ async function leerGuiasDeHoja() {
     range: `${SHEET_NAME}!A1:${ULTIMA_COLUMNA}`,
   });
   const valores = res.data.values || [];
-  const [encabezados = [], ...filas] = valores;
-  columnasGuias = await completarEncabezados(sheets, spreadsheetId, encabezados);
+  const [encabezados = [], ...filasLeidas] = valores;
   filasOcupadas = Math.max(1, valores.length);
 
-  const guias = [];
-  for (let i = 0; i < filas.length; i++) {
+  const orden = ordenarHoja(encabezados, filasLeidas);
+  const data = orden.cambiadas.map((i) => {
     const numeroDeFila = i + 2; // por el encabezado
-    let fila = filas[i];
-    const corrida = desplazamiento(fila, columnasGuias);
-    if (corrida > 0) {
-      const arreglada = filaReacomodada(fila, corrida, columnasGuias);
-      try {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range: `${SHEET_NAME}!A${numeroDeFila}:${letraColumna(arreglada.length)}${numeroDeFila}`,
-          valueInputOption: 'RAW',
-          requestBody: { values: [arreglada] },
-        });
-        console.log(`Fila ${numeroDeFila} de la hoja devuelta a la columna A.`);
-      } catch (err) {
-        console.error(`No se pudo reacomodar la fila ${numeroDeFila}:`, err.message);
-      }
-      fila = arreglada;
-    }
-    const guia = rowToGuia(fila, numeroDeFila, columnasGuias);
-    if (guia.numero_guia !== '') guias.push(guia);
+    const fila = orden.filas[i];
+    return {
+      range: `${SHEET_NAME}!A${numeroDeFila}:${letraColumna(fila.length)}${numeroDeFila}`,
+      values: [fila],
+    };
+  });
+  if (orden.encabezados) {
+    const { desde, valores: nombres } = orden.encabezados;
+    data.push({
+      range: `${SHEET_NAME}!${letraColumna(desde + 1)}1:${letraColumna(desde + nombres.length)}1`,
+      values: [nombres],
+    });
   }
+  if (data.length > 0) {
+    try {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: { valueInputOption: 'RAW', data },
+      });
+      if (orden.cambiadas.length > 0) {
+        console.log(
+          `Hoja de guías ordenada: filas ${orden.cambiadas.map((i) => i + 2).join(', ')}.`,
+        );
+      }
+    } catch (err) {
+      console.error('No se pudo ordenar la hoja de guías:', err.message);
+    }
+  }
+
+  const guias = [];
+  orden.filas.forEach((fila, i) => {
+    const guia = rowToGuia(fila, i + 2);
+    if (guia.numero_guia !== '') guias.push(guia);
+  });
   return guias;
 }
 
@@ -379,8 +490,7 @@ function crearGuia(guia) {
     const sheets = await getSheetsClient();
     const spreadsheetId = requireSheetId();
     await listarGuias({ fresco: true });
-    const mapa = columnasGuias || (await obtenerColumnas(sheets, spreadsheetId));
-    const fila = guiaToRow(guia, mapa);
+    const fila = guiaToRow(guia);
     const numeroDeFila = filasOcupadas + 1;
     await sheets.spreadsheets.values.update({
       spreadsheetId,
@@ -394,14 +504,13 @@ function crearGuia(guia) {
 }
 
 /**
- * Sobrescribe la fila de una guía existente: las columnas conocidas con
- * sus datos, las demás con lo que ya tenían.
+ * Sobrescribe la fila de una guía existente: A..X con sus datos, las
+ * columnas siguientes con lo que ya tenían.
  */
 async function actualizarGuia(rowNumber, guia) {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
-  const mapa = await obtenerColumnas(sheets, spreadsheetId);
-  const fila = guiaToRow(guia, mapa);
+  const fila = guiaToRow(guia);
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${SHEET_NAME}!A${rowNumber}:${letraColumna(fila.length)}${rowNumber}`,
@@ -565,12 +674,11 @@ async function eliminarGuia(guia) {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
   const rowNumber = guia._row;
-  const mapa = await obtenerColumnas(sheets, spreadsheetId);
   const actual = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${SHEET_NAME}!A${rowNumber}:${ULTIMA_COLUMNA}${rowNumber}`,
   });
-  const fila = rowToGuia(((actual.data.values || [])[0]) || [], rowNumber, mapa);
+  const fila = rowToGuia(((actual.data.values || [])[0]) || [], rowNumber);
   if (
     fila.numero_guia !== guia.numero_guia ||
     fila.fecha_creacion !== guia.fecha_creacion
@@ -626,6 +734,6 @@ module.exports = {
   rowToUsuario,
   rowToGuia,
   guiaToRow,
-  mapearColumnas,
+  ordenarHoja,
   letraColumna,
 };
