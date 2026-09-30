@@ -323,7 +323,14 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: _Dato('Transportista', guia.transportista),
+                        child: _Dato(
+                          'Transportista',
+                          guia.transbordoAceptado &&
+                                  guia.transbordoDe.isNotEmpty
+                              ? '${guia.transportista} (transbordo de '
+                                    '${guia.transbordoDe})'
+                              : guia.transportista,
+                        ),
                       ),
                     ],
                   ),

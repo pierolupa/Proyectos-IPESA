@@ -181,6 +181,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             'Punto de partida: ${guia.origen}\n'
             'Destino: ${guia.destino}\n'
             'Transportista: ${guia.transportista}'
+            '${guia.resumenTransbordo.isNotEmpty ? '\n${guia.resumenTransbordo}' : ''}'
             '${guia.numeroPedido.isNotEmpty ? '\nN° de pedido: ${guia.numeroPedido}' : ''}'
             '${guia.numeroEntrega.isNotEmpty ? '\nN° de entrega: ${guia.numeroEntrega}' : ''}',
             style: TextStyle(color: Colors.grey[700]),

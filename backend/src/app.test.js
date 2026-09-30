@@ -11,7 +11,7 @@ const request = require('supertest');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
 const fotos = require('./fotos');
-const { ESTADOS, TIPOS_ENTREGA, ROLES } = require('./columns');
+const { ESTADOS, TIPOS_ENTREGA, ROLES, TRANSBORDO } = require('./columns');
 
 const app = require('./app');
 
@@ -739,3 +739,118 @@ describe('Sucursal por GPS', () => {
     expect(res.body.destino).toBe('Av. Siempre Viva 742');
   });
 });
+
+describe('Transbordo entre transportistas', () => {
+  const usuarios = [
+    { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA, pin: '1111', activo: true },
+    { nombre: 'Ana Díaz', rol: ROLES.TRANSPORTISTA, pin: '2222', activo: true },
+    { nombre: 'Luis Baja', rol: ROLES.TRANSPORTISTA, pin: '3333', activo: false },
+    { nombre: 'Admin', rol: ROLES.ADMINISTRADOR, pin: '9999', activo: true },
+  ];
+
+  it('lista solo transportistas activos y sin PIN', async () => {
+    repo.listarUsuarios.mockResolvedValue(usuarios);
+    const res = await request(app).get('/transportistas');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ nombre: 'Ana Díaz' }, { nombre: 'Juan Pérez' }]);
+  });
+
+  it('pasa la tarea a otro: queda pendiente y sigue siendo de quien la envía', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    repo.listarUsuarios.mockResolvedValue(usuarios);
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo')
+      .send({ de: 'Juan Pérez', a: 'ana díaz' });
+    expect(res.status).toBe(200);
+    expect(res.body.transbordo_estado).toBe(TRANSBORDO.PENDIENTE);
+    expect(res.body.transbordo_a).toBe('Ana Díaz');
+    expect(res.body.transportista).toBe('Juan Pérez');
+  });
+
+  it('no acepta inactivos, a uno mismo ni tareas que no están en ruta', async () => {
+    repo.listarUsuarios.mockResolvedValue(usuarios);
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const inactivo = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo')
+      .send({ de: 'Juan Pérez', a: 'Luis Baja' });
+    expect(inactivo.status).toBe(400);
+    const mismo = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo')
+      .send({ de: 'Juan Pérez', a: 'Juan Pérez' });
+    expect(mismo.status).toBe(400);
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const cerrada = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo')
+      .send({ de: 'Juan Pérez', a: 'Ana Díaz' });
+    expect(cerrada.status).toBe(409);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('el que recibe la ve en su lista mientras está pendiente', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+      guia({ numero_guia: 'OTRA', transportista: 'Pedro' }),
+    ]);
+    const res = await request(app).get('/guias/transportista/Ana%20D%C3%ADaz');
+    expect(res.body.map((g) => g.numero_guia)).toEqual(['IPE-2026-000123']);
+  });
+
+  it('al aceptar, la tarea pasa a quien la recibe y guarda de quién vino', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+    );
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo/respuesta')
+      .send({ quien: 'Ana Díaz', acepta: true });
+    expect(res.status).toBe(200);
+    expect(res.body.transportista).toBe('Ana Díaz');
+    expect(res.body.transbordo_de).toBe('Juan Pérez');
+    expect(res.body.transbordo_estado).toBe(TRANSBORDO.ACEPTADO);
+    expect(res.body.origen).toBe('Almacén Callao');
+  });
+
+  it('al rechazar, la tarea sigue con quien la envió', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+    );
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo/respuesta')
+      .send({ quien: 'Ana Díaz', acepta: false });
+    expect(res.body.transportista).toBe('Juan Pérez');
+    expect(res.body.transbordo_estado).toBe(TRANSBORDO.RECHAZADO);
+    expect(res.body.transbordo_a).toBe('Ana Díaz');
+  });
+
+  it('solo responde a quien va dirigido', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+    );
+    const res = await request(app)
+      .post('/guias/IPE-2026-000123/transbordo/respuesta')
+      .send({ quien: 'Pedro', acepta: true });
+    expect(res.status).toBe(403);
+  });
+
+  it('quien lo envió puede cancelarlo', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+    );
+    const res = await request(app).delete('/guias/IPE-2026-000123/transbordo');
+    expect(res.status).toBe(200);
+    expect(res.body.transbordo_estado).toBe('');
+    expect(res.body.transbordo_a).toBe('');
+  });
+
+  it('si la entrega quien la envió, el transbordo pendiente se anula', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+    );
+    repo.listarSucursales.mockResolvedValue([]);
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 } });
+    expect(res.body.transbordo_estado).toBe('');
+    expect(res.body.transportista).toBe('Juan Pérez');
+  });
+});
+

@@ -822,6 +822,36 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     : detalle,
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              if (guia.resumenTransbordo.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.swap_horiz_rounded,
+                        size: 16,
+                        color: guia.transbordoRechazado
+                            ? EstadoGuia.rechazado.color
+                            : EstadoGuia.enRuta.color,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          guia.resumenTransbordo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: guia.transbordoRechazado
+                                ? EstadoGuia.rechazado.color
+                                : EstadoGuia.enRuta.color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (guia.eliminacionPendiente)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),

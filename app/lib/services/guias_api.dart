@@ -417,6 +417,64 @@ class GuiasApi {
     return Guia.fromJson(_decodeBody(res));
   }
 
+  /// Los transportistas activos (para elegir a quién pasar una tarea).
+  Future<List<String>> listarTransportistas() async {
+    final res = await _client.get(Uri.parse('$apiBaseUrl/transportistas'));
+    if (res.statusCode != 200) _lanzarError(res);
+    final lista = jsonDecode(res.body) as List<dynamic>;
+    return [
+      for (final e in lista) (e as Map<String, dynamic>)['nombre'] as String,
+    ];
+  }
+
+  /// [de] pasa la tarea a [a]; queda pendiente hasta que [a] responda.
+  Future<Guia> pedirTransbordo(
+    Guia guia, {
+    required String de,
+    required String a,
+  }) async {
+    final res = await _client.post(
+      Uri.parse(_rutaGuia(guia, '/transbordo')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'de': de,
+        'a': a,
+        'fechaCreacion': _fechaCreacion(guia),
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// Quien envió el transbordo lo cancela.
+  Future<Guia> cancelarTransbordo(Guia guia) async {
+    final res = await _client.delete(
+      Uri.parse(_rutaGuia(guia, '/transbordo'))
+          .replace(queryParameters: {'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// [quien] acepta o rechaza el transbordo que le enviaron.
+  Future<Guia> responderTransbordo(
+    Guia guia, {
+    required String quien,
+    required bool acepta,
+  }) async {
+    final res = await _client.post(
+      Uri.parse(_rutaGuia(guia, '/transbordo/respuesta')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'quien': quien,
+        'acepta': acepta,
+        'fechaCreacion': _fechaCreacion(guia),
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
   /// Borra la tarea de la hoja (administrador; solo en ruta).
   Future<void> eliminarGuia(Guia guia) async {
     final res = await _client.delete(

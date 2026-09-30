@@ -10,6 +10,13 @@ import '../theme.dart';
 extension PresentacionNovedad on CambioGuia {
   String get titulo {
     if (nueva) return 'Nueva guía registrada';
+    if (esTransbordo) {
+      return guia.transbordoAceptado
+          ? 'Transbordo aceptado'
+          : guia.transbordoRechazado
+          ? 'Transbordo rechazado'
+          : 'Transbordo solicitado';
+    }
     if (pideEliminar) return 'Pide eliminar una tarea';
     return switch (guia.estado) {
       EstadoGuia.enRuta => 'Guía de vuelta en ruta',
@@ -27,6 +34,13 @@ extension PresentacionNovedad on CambioGuia {
         ? 'Sin transportista'
         : guia.transportista.trim();
     if (nueva) return '$quien · ${guia.tipoEntrega.etiqueta}';
+    if (esTransbordo) {
+      if (guia.transbordoAceptado) return '${guia.transbordoDe} → $quien';
+      if (guia.transbordoRechazado) {
+        return '${guia.transbordoA} no la aceptó · sigue con $quien';
+      }
+      return '$quien → ${guia.transbordoA}';
+    }
     if (pideEliminar) {
       final motivo = guia.motivoEliminacion.trim();
       return motivo.isEmpty ? quien : '$quien · $motivo';
@@ -44,6 +58,7 @@ extension PresentacionNovedad on CambioGuia {
 
   IconData get icono {
     if (nueva) return Icons.post_add_rounded;
+    if (esTransbordo) return Icons.swap_horiz_rounded;
     if (pideEliminar) return Icons.delete_outline_rounded;
     return switch (guia.estado) {
       EstadoGuia.enRuta => Icons.local_shipping_outlined,
@@ -56,6 +71,12 @@ extension PresentacionNovedad on CambioGuia {
 
   Color get color => nueva
       ? Ipesa.turquesa
+      : esTransbordo
+      ? (guia.transbordoRechazado
+            ? const Color(0xFFB42318)
+            : guia.transbordoAceptado
+            ? Ipesa.turquesa
+            : const Color(0xFF2459A8))
       : pideEliminar
       ? const Color(0xFFB42318)
       : guia.estado.color;

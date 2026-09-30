@@ -14,8 +14,13 @@ const _prefNombre = 'sesion_nombre';
 
 /// Novedad detectada al actualizar en segundo plano (para notificar al admin).
 class CambioGuia {
-  CambioGuia(this.guia, this.mensaje, {this.anterior, DateTime? momento})
-    : momento = momento ?? DateTime.now();
+  CambioGuia(
+    this.guia,
+    this.mensaje, {
+    this.anterior,
+    this.transbordoAntes,
+    DateTime? momento,
+  }) : momento = momento ?? DateTime.now();
   final Guia guia;
   final String mensaje;
 
@@ -23,11 +28,24 @@ class CambioGuia {
   final EstadoGuia? anterior;
   final DateTime momento;
 
+  /// Cómo estaba el transbordo antes ('' si no había).
+  final String? transbordoAntes;
+
   bool get nueva => anterior == null;
+
+  /// Se pidió, aceptó o rechazó un transbordo (el estado no cambió).
+  bool get esTransbordo =>
+      anterior != null &&
+      anterior == guia.estado &&
+      guia.transbordoEstado.isNotEmpty &&
+      guia.transbordoEstado != (transbordoAntes ?? '');
 
   /// El transportista pide borrar la tarea (el estado no cambió).
   bool get pideEliminar =>
-      anterior != null && anterior == guia.estado && guia.eliminacionPendiente;
+      anterior != null &&
+      anterior == guia.estado &&
+      !esTransbordo &&
+      guia.eliminacionPendiente;
 }
 
 const _prefRol = 'sesion_rol';
@@ -210,7 +228,12 @@ class AppState extends ChangeNotifier {
     final cambios = <CambioGuia>[
       for (final g in nuevas)
         if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
-          CambioGuia(g, mensaje, anterior: anteriores[g.clave]?.estado),
+          CambioGuia(
+            g,
+            mensaje,
+            anterior: anteriores[g.clave]?.estado,
+            transbordoAntes: anteriores[g.clave]?.transbordoEstado,
+          ),
     ];
     _guias = nuevas;
     error = null;
@@ -225,6 +248,18 @@ class AppState extends ChangeNotifier {
       return '$quien registró la guía $n (${ahora.tipoEntrega.etiqueta}).';
     }
     if (antes.estado == ahora.estado) {
+      if (ahora.transbordoEstado != antes.transbordoEstado) {
+        if (ahora.transbordoPendiente) {
+          return '$quien quiere pasar la guía $n a ${ahora.transbordoA}.';
+        }
+        if (ahora.transbordoAceptado) {
+          return '$quien aceptó la guía $n que le pasó ${ahora.transbordoDe}.';
+        }
+        if (ahora.transbordoRechazado) {
+          return '${ahora.transbordoA} no aceptó la guía $n que le pasaba '
+              '$quien.';
+        }
+      }
       if (ahora.eliminacionPendiente && !antes.eliminacionPendiente) {
         return '$quien pide eliminar la guía $n: ${ahora.motivoEliminacion}';
       }
@@ -286,6 +321,44 @@ class AppState extends ChangeNotifier {
   List<Guia> guiasDelTransportista(String nombre) {
     return _guias.where((g) => g.transportista == nombre).toList()
       ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));
+  }
+
+  /// Tareas que otro transportista le quiere pasar a [nombre] (esperan que
+  /// acepte o rechace).
+  List<Guia> transbordosPara(String nombre) => [
+    for (final g in _guias)
+      if (g.transportista != nombre && g.esTransbordoPara(nombre)) g,
+  ];
+
+  /// Transportistas activos a quienes se puede pasar una tarea.
+  Future<List<String>> listarTransportistas() => _api.listarTransportistas();
+
+  Future<Guia> pedirTransbordo(Guia guia, String a) async {
+    final nueva = await _api.pedirTransbordo(
+      guia,
+      de: guia.transportista,
+      a: a,
+    );
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<Guia> cancelarTransbordo(Guia guia) async {
+    final nueva = await _api.cancelarTransbordo(guia);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  /// El transportista actual acepta o rechaza el transbordo que le pasaron.
+  /// Si lo rechaza, la tarea sale de su vista (vuelve a quien la envió).
+  Future<Guia> responderTransbordo(Guia guia, {required bool acepta}) async {
+    final nueva = await _api.responderTransbordo(
+      guia,
+      quien: transportistaActual,
+      acepta: acepta,
+    );
+    _reemplazar(guia, nueva);
+    return nueva;
   }
 
   /// Posición del registro más reciente con ese número (-1 si no hay).

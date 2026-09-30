@@ -1,7 +1,7 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..U.
+ * El orden de este arreglo es el orden real de las columnas A..X.
  * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
  * el transportista la cerró (entregado/finalizado), para el mapa del admin.
  * foto_entrega_url = dónde quedó la foto de la entrega en Vercel Blob
@@ -11,6 +11,10 @@
  * eliminacion = el transportista pidió borrar la tarea ('pendiente') y
  * espera que el administrador lo apruebe; 'rechazada' si el administrador
  * no lo aprobó. motivo_eliminacion = por qué lo pidió.
+ * transbordo_estado = el transportista pasó la tarea a otro: 'pendiente'
+ * (espera que transbordo_a acepte), 'rechazado' (transbordo_a no aceptó;
+ * la tarea sigue con quien la envió) o 'aceptado' (transbordo_de la envió
+ * y ahora la tiene el transportista actual).
  */
 const COLUMNS = [
   'numero_guia',
@@ -34,11 +38,20 @@ const COLUMNS = [
   'motivo_rechazo',
   'eliminacion',
   'motivo_eliminacion',
+  'transbordo_estado',
+  'transbordo_a',
+  'transbordo_de',
 ];
 
 const ELIMINACION = Object.freeze({
   PENDIENTE: 'pendiente',
   RECHAZADA: 'rechazada',
+});
+
+const TRANSBORDO = Object.freeze({
+  PENDIENTE: 'pendiente',
+  RECHAZADO: 'rechazado',
+  ACEPTADO: 'aceptado',
 });
 
 const SHEET_NAME = 'Guias';
@@ -114,4 +127,5 @@ module.exports = {
   SUCURSALES_SHEET_NAME,
   SUCURSALES_DATA_RANGE,
   ROLES,
+  TRANSBORDO,
 };

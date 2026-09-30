@@ -11,6 +11,7 @@ import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
+import '../../widgets/transbordo.dart';
 import 'capture_flow_screen.dart';
 import 'entrega_flow_screen.dart';
 import 'guia_detail_screen.dart';
@@ -26,6 +27,26 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   bool _verEntregadas = false;
   final _busqueda = TextEditingController();
+
+  /// Transbordos recibidos ya anunciados en esta sesión (uno por tarea).
+  final _anunciados = <String>{};
+  bool _anunciando = false;
+
+  /// Al entrar (o al llegar uno nuevo), anuncia el primer transbordo que
+  /// otro transportista le pasa y aún no vio.
+  void _anunciarTransbordos(List<Guia> recibidos) {
+    if (_anunciando) return;
+    final nuevo = recibidos.where((g) => !_anunciados.contains(g.clave));
+    if (nuevo.isEmpty) return;
+    final guia = nuevo.first;
+    _anunciados.add(guia.clave);
+    _anunciando = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) await mostrarAnuncioTransbordo(context, guia);
+      _anunciando = false;
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
@@ -67,6 +88,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final appState = context.watch<AppState>();
     final nombre = appState.transportistaActual;
     final todas = appState.guiasDelTransportista(nombre);
+    final recibidos = appState.transbordosPara(nombre);
+    _anunciarTransbordos(recibidos);
     // Las entregadas desaparecen de "Pendientes"; las de hoy quedan a la
     // vista en la otra pestaña.
     final pendientes = todas.where((g) => !g.estado.esCerrada).toList();
@@ -124,6 +147,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 guias,
                 sinPendientes: !_verEntregadas && pendientes.isEmpty,
                 entregadasHoy: entregadasHoy.length,
+                recibidos: _verEntregadas ? const [] : recibidos,
               ),
             ),
           ],
@@ -160,6 +184,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     List<Guia> guias, {
     required bool sinPendientes,
     required int entregadasHoy,
+    required List<Guia> recibidos,
   }) {
     if (appState.cargando && appState.guias.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -241,6 +266,27 @@ class _TaskListScreenState extends State<TaskListScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
         children: [
+          // Lo que otro transportista le quiere pasar va primero.
+          if (recibidos.isNotEmpty) ...[
+            Text(
+              recibidos.length == 1
+                  ? 'Te pasaron 1 tarea'
+                  : 'Te pasaron ${recibidos.length} tareas',
+              style: Ipesa.titulo(15, color: Ipesa.texto),
+            ),
+            const SizedBox(height: 10),
+            for (final g in recibidos) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: TarjetaTransbordoRecibido(guia: g),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 6),
+          ],
           if (!sinPendientes) ...[
             Align(
               alignment: Alignment.centerLeft,
@@ -653,6 +699,31 @@ class _TarjetaTarea extends StatelessWidget {
             const SnackBar(content: Text('Tipo de entrega actualizado.')),
           );
         }
+      case _Opcion.transbordo:
+        if (await mostrarTransbordo(context, guia)) {
+          final actual = context.mounted
+              ? context.read<AppState>().guiaActual(guia)
+              : null;
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Transbordo enviado a ${actual?.transbordoA ?? 'otro transportista'}'
+                '. Sigue siendo tuya hasta que la acepte.',
+              ),
+            ),
+          );
+        }
+      case _Opcion.cancelarTransbordo:
+        try {
+          await context.read<AppState>().cancelarTransbordo(guia);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Cancelaste el transbordo.')),
+          );
+        } catch (e) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('No se pudo cancelar: $e')),
+          );
+        }
       case _Opcion.rechazar:
         if (await mostrarRechazo(context, guia)) {
           messenger.showSnackBar(
@@ -799,6 +870,12 @@ class _TarjetaTarea extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (!entregada &&
+                  AvisoTransbordo.hayQueMostrar(
+                    g,
+                    context.read<AppState>().transportistaActual,
+                  ))
+                AvisoTransbordo(guia: g),
               if (g.eliminacionPendiente || g.eliminacionRechazada)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -869,6 +946,21 @@ class _TarjetaTarea extends StatelessWidget {
                               contentPadding: EdgeInsets.zero,
                             ),
                           ),
+                        if (g.esEditablePorTransportista)
+                          PopupMenuItem(
+                            value: g.transbordoPendiente
+                                ? _Opcion.cancelarTransbordo
+                                : _Opcion.transbordo,
+                            child: ListTile(
+                              leading: const Icon(Icons.swap_horiz_rounded),
+                              title: Text(
+                                g.transbordoPendiente
+                                    ? 'Cancelar transbordo'
+                                    : 'Transbordo',
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         const PopupMenuItem(
                           value: _Opcion.rechazar,
                           child: ListTile(
@@ -923,4 +1015,11 @@ class _TarjetaTarea extends StatelessWidget {
   }
 }
 
-enum _Opcion { tipo, rechazar, eliminar, retirar }
+enum _Opcion {
+  tipo,
+  transbordo,
+  cancelarTransbordo,
+  rechazar,
+  eliminar,
+  retirar,
+}

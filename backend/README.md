@@ -46,16 +46,17 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a U):
+y esta fila de encabezados (columnas A a X):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de
 ```
 
 Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
-`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1)
+`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
+`transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1)
 — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
@@ -67,6 +68,14 @@ administrador no las llena.
 `eliminacion` queda en `pendiente` cuando el transportista pide borrar una
 tarea en ruta (con su `motivo_eliminacion`); si el administrador lo aprueba,
 la fila se borra de la hoja, y si no, queda en `rechazada`.
+
+`transbordo_*`: el transportista puede pasar una tarea en ruta a otro
+transportista. Queda `transbordo_estado: pendiente` con `transbordo_a` = a
+quién se la pasa (sigue siendo suya hasta que el otro acepte). Si el otro
+acepta, `transportista` pasa a ser él, `transbordo_de` = quien la envió y
+`transbordo_estado: aceptado`; si la rechaza, `transbordo_estado: rechazado`
+y sigue con quien la envió. Si la tarea se entrega o se rechaza antes, un
+transbordo pendiente o rechazado se borra.
 
 `foto_entrega_url` guarda dónde quedó la foto de la entrega (la guía
 firmada por el cliente, o el comprobante de agencia): `drive:<id>` si está
@@ -253,6 +262,10 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista pide borrar una tarea `en_ruta` (`motivo` obligatorio). Queda `eliminacion: pendiente` hasta que el administrador decida. |
 | `DELETE` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista retira su pedido. |
 | `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion/rechazo` | El administrador no aprueba el pedido (`eliminacion: rechazada`). |
+| `GET` | `/api/transportistas` | Nombres de los transportistas activos (para el transbordo; nunca el PIN). |
+| `POST` | `/api/guias/:numeroGuia/transbordo` | El transportista (`de`) pasa una tarea `en_ruta` a otro transportista activo (`a`). Queda pendiente hasta que el otro responda. |
+| `DELETE` | `/api/guias/:numeroGuia/transbordo` | Quien lo envió cancela un transbordo pendiente. |
+| `POST` | `/api/guias/:numeroGuia/transbordo/respuesta` | Quien lo recibe (`quien`) acepta (`acepta: true`, la tarea pasa a ser suya) o rechaza (`acepta: false`). |
 | `DELETE` | `/api/guias/:numeroGuia` | Borra la fila de la tarea (administrador). Solo si está `en_ruta`; 409 si no. |
 | `GET` | `/api/fotos/estado` | `{configurado}`: si el almacenamiento de fotos está conectado. |
 | `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |
@@ -260,7 +273,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | `PUT` | `/api/sucursales/:nombre` | Crea o actualiza el perímetro de una sucursal (`lat`, `lng`, `radioM` entre 20 y 5000). |
 | `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
 | `GET` | `/api/guias?estado=en_ruta&desde=…&hasta=…` | Lista de guías; filtros opcionales por estado y por fecha de la tarea (`fecha_creacion`, ISO, `desde` incluido y `hasta` excluido). |
-| `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista. |
+| `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista, más las que otro le quiere pasar (transbordo pendiente). |
 
 Las rutas que actúan sobre una guía aceptan `fechaCreacion` (en el body o en
 la query) para elegir el registro exacto cuando el mismo número se registró

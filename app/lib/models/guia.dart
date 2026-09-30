@@ -43,6 +43,13 @@ class Guia {
   final String eliminacion;
   final String motivoEliminacion;
 
+  /// Transbordo a otro transportista: 'pendiente' mientras [transbordoA]
+  /// decide, 'rechazado' si no la aceptó (sigue con quien la envió),
+  /// 'aceptado' si la tomó ([transbordoDe] es quien se la pasó); vacío si no.
+  final String transbordoEstado;
+  final String transbordoA;
+  final String transbordoDe;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -65,12 +72,37 @@ class Guia {
     this.motivoRechazo = '',
     this.eliminacion = '',
     this.motivoEliminacion = '',
+    this.transbordoEstado = '',
+    this.transbordoA = '',
+    this.transbordoDe = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
   bool get eliminacionPendiente => eliminacion == 'pendiente';
   bool get eliminacionRechazada => eliminacion == 'rechazada';
+
+  bool get transbordoPendiente => transbordoEstado == 'pendiente';
+  bool get transbordoRechazado => transbordoEstado == 'rechazado';
+  bool get transbordoAceptado => transbordoEstado == 'aceptado';
+
+  /// El transbordo en una línea, para el administrador y el rastreo (vacío
+  /// si no hubo).
+  String get resumenTransbordo {
+    if (transbordoPendiente) {
+      return 'Transbordo a $transbordoA · esperando que acepte';
+    }
+    if (transbordoRechazado) return '$transbordoA no aceptó el transbordo';
+    if (transbordoAceptado && transbordoDe.isNotEmpty) {
+      return 'Transbordo: $transbordoDe → $transportista';
+    }
+    return '';
+  }
+
+  /// Otro transportista le quiere pasar esta tarea a [nombre].
+  bool esTransbordoPara(String nombre) =>
+      transbordoPendiente &&
+      transbordoA.trim().toLowerCase() == nombre.trim().toLowerCase();
 
   /// Solo una tarea en ruta se puede borrar (o cambiar de tipo).
   bool get esEditablePorTransportista => estado == EstadoGuia.enRuta;
@@ -111,6 +143,9 @@ class Guia {
       motivoRechazo: json['motivo_rechazo'] as String? ?? '',
       eliminacion: (json['eliminacion'] as String? ?? '').trim(),
       motivoEliminacion: json['motivo_eliminacion'] as String? ?? '',
+      transbordoEstado: (json['transbordo_estado'] as String? ?? '').trim(),
+      transbordoA: (json['transbordo_a'] as String? ?? '').trim(),
+      transbordoDe: (json['transbordo_de'] as String? ?? '').trim(),
     );
   }
 
@@ -157,6 +192,9 @@ class Guia {
       motivoRechazo: motivoRechazo,
       eliminacion: eliminacion,
       motivoEliminacion: motivoEliminacion,
+      transbordoEstado: transbordoEstado,
+      transbordoA: transbordoA,
+      transbordoDe: transbordoDe,
     );
   }
 }

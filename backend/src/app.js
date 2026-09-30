@@ -7,6 +7,7 @@ const {
   ELIMINACION,
   TIPOS_ENTREGA,
   ROLES,
+  TRANSBORDO,
 } = require('./columns');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA } = require('./ocrAgente');
@@ -111,6 +112,26 @@ function motivoValido(motivo) {
   if (limpio.length < 3) return { error: 'Indica el motivo.' };
   if (limpio.length > 300) return { error: 'El motivo es muy largo (máx. 300 caracteres).' };
   return { motivo: limpio };
+}
+
+/** Quita un transbordo pendiente o rechazado; el aceptado queda como historia. */
+function limpiarTransbordoAbierto(guia) {
+  if (guia.transbordo_estado && guia.transbordo_estado !== TRANSBORDO.ACEPTADO) {
+    guia.transbordo_estado = '';
+    guia.transbordo_a = '';
+  }
+}
+
+const mismoNombre = (a, b) =>
+  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+/** Transportistas activos de la hoja "Usuarios" (solo el nombre, nunca el PIN). */
+async function transportistasActivos() {
+  const usuarios = await repo.listarUsuarios();
+  return usuarios
+    .filter((u) => u.activo && u.rol === ROLES.TRANSPORTISTA && u.nombre.trim())
+    .map((u) => u.nombre.trim())
+    .sort((a, b) => a.localeCompare(b, 'es'));
 }
 
 function sinCamposInternos(guia) {
@@ -297,7 +318,14 @@ app.get('/guias', async (req, res, next) => {
 app.get('/guias/transportista/:nombre', async (req, res, next) => {
   try {
     const guias = await repo.listarGuias();
-    const propias = guias.filter((g) => g.transportista === req.params.nombre);
+    const { nombre } = req.params;
+    // Sus tareas y las que otro transportista le quiere pasar (transbordo
+    // pendiente de su respuesta).
+    const propias = guias.filter(
+      (g) =>
+        g.transportista === nombre
+        || (g.transbordo_estado === TRANSBORDO.PENDIENTE && g.transbordo_a === nombre),
+    );
     res.json(propias.map(sinCamposInternos));
   } catch (err) {
     next(err);
@@ -443,10 +471,12 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 
     guia.estado = estado;
     guia.fecha_actualizacion = new Date().toISOString();
-    // Si ya avanzó, un pedido de eliminación pendiente deja de valer.
+    // Si ya avanzó, un pedido de eliminación pendiente deja de valer, y un
+    // transbordo sin aceptar también (el aceptado queda como historia).
     if (estado !== ESTADOS.EN_RUTA) {
       guia.eliminacion = '';
       guia.motivo_eliminacion = '';
+      limpiarTransbordoAbierto(guia);
     }
     if (geo) {
       guia.geo_lat = geo.lat;
@@ -506,6 +536,7 @@ app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
     guia.motivo_rechazo = motivoLimpio;
     guia.eliminacion = '';
     guia.motivo_eliminacion = '';
+    limpiarTransbordoAbierto(guia);
     guia.fecha_actualizacion = new Date().toISOString();
     if (geo && typeof geo.lat === 'number' && typeof geo.lng === 'number') {
       guia.geo_lat = geo.lat;
@@ -661,6 +692,124 @@ app.post('/guias/:numeroGuia/solicitud-eliminacion/rechazo', async (req, res, ne
       return res.status(409).json({ error: 'Esta guía no tiene un pedido de eliminación pendiente.' });
     }
     guia.eliminacion = ELIMINACION.RECHAZADA;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Los transportistas activos, para elegir a quién pasar una tarea.
+app.get('/transportistas', async (_req, res, next) => {
+  try {
+    res.json((await transportistasActivos()).map((nombre) => ({ nombre })));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Transbordo: el transportista pasa una tarea en ruta a otro transportista.
+// No cambia de dueño hasta que el otro acepte; mientras tanto sigue en la
+// lista de quien la envió, que puede cancelarlo o entregarla él mismo.
+app.post('/guias/:numeroGuia/transbordo', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const { fechaCreacion, de, a } = req.body || {};
+    if (!String(a ?? '').trim()) {
+      return res.status(400).json({ error: 'Elige a qué transportista pasar la tarea.' });
+    }
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.estado !== ESTADOS.EN_RUTA) {
+      return res.status(409).json({
+        error: 'Solo se puede hacer transbordo de una tarea que está en ruta.',
+      });
+    }
+    if (de && !mismoNombre(de, guia.transportista)) {
+      return res.status(403).json({ error: 'Esta tarea no es tuya.' });
+    }
+    if (guia.transbordo_estado === TRANSBORDO.PENDIENTE) {
+      return res.status(409).json({
+        error: `Ya estás esperando que ${guia.transbordo_a} acepte esta tarea.`,
+      });
+    }
+    const destino = (await transportistasActivos()).find((n) => mismoNombre(n, a));
+    if (!destino) {
+      return res.status(400).json({ error: `"${a}" no es un transportista activo.` });
+    }
+    if (mismoNombre(destino, guia.transportista)) {
+      return res.status(400).json({ error: 'No puedes pasarte la tarea a ti mismo.' });
+    }
+    guia.transbordo_estado = TRANSBORDO.PENDIENTE;
+    guia.transbordo_a = destino;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Quien envió el transbordo lo cancela antes de que el otro responda.
+app.delete('/guias/:numeroGuia/transbordo', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.transbordo_estado !== TRANSBORDO.PENDIENTE) {
+      return res.status(409).json({ error: 'Esta tarea no tiene un transbordo pendiente.' });
+    }
+    guia.transbordo_estado = '';
+    guia.transbordo_a = '';
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// El transportista que recibe el transbordo lo acepta (la tarea pasa a ser
+// suya; sale de donde salió originalmente) o lo rechaza (vuelve a quien la
+// envió, que ve que no la aceptó).
+app.post('/guias/:numeroGuia/transbordo/respuesta', async (req, res, next) => {
+  try {
+    const { numeroGuia } = req.params;
+    const { fechaCreacion, quien, acepta } = req.body || {};
+    if (typeof acepta !== 'boolean') {
+      return res.status(400).json({ error: 'Indica si aceptas o rechazas el transbordo.' });
+    }
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    }
+    if (guia.transbordo_estado !== TRANSBORDO.PENDIENTE) {
+      return res.status(409).json({
+        error: 'Este transbordo ya no está pendiente (lo cancelaron o ya se respondió).',
+      });
+    }
+    if (!mismoNombre(quien, guia.transbordo_a)) {
+      return res.status(403).json({ error: 'Este transbordo no es para ti.' });
+    }
+    if (guia.estado !== ESTADOS.EN_RUTA) {
+      limpiarTransbordoAbierto(guia);
+      await repo.actualizarGuia(guia._row, guia);
+      return res.status(409).json({ error: 'Esta tarea ya no está en ruta.' });
+    }
+    if (acepta) {
+      guia.transbordo_de = guia.transportista;
+      guia.transportista = guia.transbordo_a;
+      guia.transbordo_estado = TRANSBORDO.ACEPTADO;
+      guia.transbordo_a = '';
+      // El pedido de eliminación era de quien la envió.
+      guia.eliminacion = '';
+      guia.motivo_eliminacion = '';
+      guia.fecha_actualizacion = new Date().toISOString();
+    } else {
+      guia.transbordo_estado = TRANSBORDO.RECHAZADO;
+    }
     await repo.actualizarGuia(guia._row, guia);
     res.json(sinCamposInternos(guia));
   } catch (err) {

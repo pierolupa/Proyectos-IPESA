@@ -7,6 +7,7 @@ import '../../state/app_state.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
+import '../../widgets/transbordo.dart';
 import 'entrega_flow_screen.dart';
 import 'rechazo_sheet.dart';
 
@@ -89,6 +90,13 @@ class GuiaDetailScreen extends StatelessWidget {
             value: guia.fechaActualizacion.toString().substring(0, 16),
           ),
           const SizedBox(height: 24),
+          if (AvisoTransbordo.hayQueMostrar(
+            guia,
+            appState.transportistaActual,
+          )) ...[
+            AvisoTransbordo(guia: guia),
+            const SizedBox(height: 16),
+          ],
           if (guia.eliminacionPendiente || guia.eliminacionRechazada) ...[
             AvisoEliminacion(guia: guia),
             const SizedBox(height: 16),
