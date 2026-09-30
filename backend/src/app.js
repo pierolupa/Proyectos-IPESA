@@ -135,7 +135,7 @@ async function transportistasActivos() {
 }
 
 function sinCamposInternos(guia) {
-  const { _row, ...resto } = guia;
+  const { _row, _fila, ...resto } = guia;
   return resto;
 }
 

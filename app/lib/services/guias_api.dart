@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/estado_guia.dart';
@@ -176,6 +176,21 @@ class GuiasApi {
 
   /// [desde]/[hasta]: solo las tareas creadas en ese lapso (desde
   /// incluido, hasta excluido).
+  /// Las guías de una lista. Una fila de la hoja con datos incompletos o
+  /// raros (sin estado, un tipo desconocido...) se salta: nunca impide ver
+  /// las demás.
+  static List<Guia> _guiasValidas(List<dynamic> lista) {
+    final guias = <Guia>[];
+    for (final e in lista) {
+      try {
+        guias.add(Guia.fromJson(e as Map<String, dynamic>));
+      } catch (err) {
+        debugPrint('Guía omitida por datos incompletos: $err · $e');
+      }
+    }
+    return guias;
+  }
+
   Future<List<Guia>> listarGuias({
     EstadoGuia? estado,
     DateTime? desde,
@@ -193,7 +208,7 @@ class GuiasApi {
     final res = await _client.get(uri);
     if (res.statusCode != 200) _lanzarError(res);
     final lista = jsonDecode(res.body) as List<dynamic>;
-    return lista.map((e) => Guia.fromJson(e as Map<String, dynamic>)).toList();
+    return _guiasValidas(lista);
   }
 
   Future<List<Guia>> guiasDelTransportista(String nombre) async {
@@ -204,7 +219,7 @@ class GuiasApi {
     );
     if (res.statusCode != 200) _lanzarError(res);
     final lista = jsonDecode(res.body) as List<dynamic>;
-    return lista.map((e) => Guia.fromJson(e as Map<String, dynamic>)).toList();
+    return _guiasValidas(lista);
   }
 
   /// Manda la foto a la IA (backend → Claude con visión, ver

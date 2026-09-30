@@ -13,6 +13,8 @@ jest.mock('google-auth-library', () => ({
   GoogleAuth: jest.fn().mockImplementation(() => ({ getClient: async () => ({}) })),
 }));
 
+const { COLUMNS } = require('./columns');
+
 const fila = (numero, creada) => [
   numero, 'en_ruta', 'cliente_final', 'Almacén', 'Destino', 'Juan', 'Cliente',
   '', '', 'FALSE', creada, creada,
@@ -28,6 +30,7 @@ describe('caché de guías', () => {
     mockValores.get.mockReset().mockResolvedValue({
       data: {
         values: [
+          COLUMNS,
           fila('T1', '2026-09-28T10:00:00.000Z'),
           fila('T1', '2026-09-28T14:00:00.000Z'),
           fila('T2', '2026-09-28T11:00:00.000Z'),
@@ -77,5 +80,40 @@ describe('caché de guías', () => {
     const guia = await repo.buscarPorNumero('T1');
     expect(guia.fecha_creacion).toBe('2026-09-28T14:00:00.000Z');
     expect(guia._row).toBe(3);
+  });
+});
+
+describe('encabezados de la hoja de guías', () => {
+  const { COLUMNS } = require('./columns');
+  let repo;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.SHEET_ID = 'hoja-de-prueba';
+    mockValores.update.mockReset().mockResolvedValue({});
+    repo = require('./sheetsRepository');
+  });
+
+  it('agrega al final las columnas que faltan, nunca en medio', async () => {
+    const sinTransbordo = COLUMNS.filter((c) => !c.startsWith('transbordo_'));
+    mockValores.get.mockReset().mockResolvedValue({
+      data: { values: [[...sinTransbordo, 'Mi nota'], ['T1', 'en_ruta']] },
+    });
+    await repo.listarGuias({ fresco: true });
+    const pedido = mockValores.update.mock.calls[0][0];
+    // Después de "Mi nota" (columna V): W, X e Y.
+    expect(pedido.range).toBe('Guias!W1:Y1');
+    expect(pedido.requestBody.values).toEqual([
+      ['transbordo_estado', 'transbordo_a', 'transbordo_de'],
+    ]);
+  });
+
+  it('salta las filas sin número de guía', async () => {
+    mockValores.get.mockReset().mockResolvedValue({
+      data: { values: [COLUMNS, ['T1', 'en_ruta'], [], ['', '', '', 'algo suelto']] },
+    });
+    const guias = await repo.listarGuias({ fresco: true });
+    expect(guias.map((g) => g.numero_guia)).toEqual(['T1']);
+    expect(mockValores.update).not.toHaveBeenCalled();
   });
 });
