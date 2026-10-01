@@ -50,6 +50,10 @@ class Guia {
   final String transbordoA;
   final String transbordoDe;
 
+  /// Código del Despacho Corte en que salió (ej. DC-261001-1542-K7); vacío
+  /// si es una tarea suelta. Las de un mismo corte llegan juntas.
+  final String despachoCorte;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -75,9 +79,12 @@ class Guia {
     this.transbordoEstado = '',
     this.transbordoA = '',
     this.transbordoDe = '',
+    this.despachoCorte = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
+
+  bool get enDespachoCorte => despachoCorte.isNotEmpty;
 
   bool get eliminacionPendiente => eliminacion == 'pendiente';
   bool get eliminacionRechazada => eliminacion == 'rechazada';
@@ -146,6 +153,7 @@ class Guia {
       transbordoEstado: (json['transbordo_estado'] as String? ?? '').trim(),
       transbordoA: (json['transbordo_a'] as String? ?? '').trim(),
       transbordoDe: (json['transbordo_de'] as String? ?? '').trim(),
+      despachoCorte: (json['despacho_corte'] as String? ?? '').trim(),
     );
   }
 
@@ -195,6 +203,7 @@ class Guia {
       transbordoEstado: transbordoEstado,
       transbordoA: transbordoA,
       transbordoDe: transbordoDe,
+      despachoCorte: despachoCorte,
     );
   }
 }

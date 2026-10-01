@@ -111,6 +111,117 @@ describe('POST /guias (asignación)', () => {
   });
 });
 
+describe('Despacho Corte', () => {
+  const datos = (numero, extra = {}) => ({
+    numeroGuia: numero,
+    tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+    origen: 'Almacén Callao',
+    destino: 'Av. Siempre Viva 742',
+    transportista: 'Juan Pérez',
+    destinatario: 'María Torres',
+    geo: { lat: -12.05, lng: -77.04 },
+    ...extra,
+  });
+
+  it('registra todas las guías con un mismo código de corte', async () => {
+    const res = await request(app)
+      .post('/despachos-corte')
+      .send({ guias: [datos('T1'), datos('T2'), datos('T3', { geo: undefined })] });
+    expect(res.status).toBe(200);
+    expect(res.body.despacho_corte).toMatch(/^DC-\d{6}-\d{4}-[A-Z0-9]{2}$/);
+    const creadas = repo.crearGuias.mock.calls[0][0];
+    expect(creadas.map((g) => g.numero_guia)).toEqual(['T1', 'T2']);
+    expect(creadas.every((g) => g.despacho_corte === res.body.despacho_corte)).toBe(true);
+    expect(res.body.resultados[2].error).toMatch(/GPS obligatorio/);
+    expect(repo.listarGuias).toHaveBeenCalledTimes(1);
+  });
+
+  it('con el código de un corte en camino, las suma a ese corte', async () => {
+    repo.listarGuias.mockResolvedValue([guia({ numero_guia: 'T0', despacho_corte: 'DC-1' })]);
+    const res = await request(app)
+      .post('/despachos-corte')
+      .send({ guias: [datos('T5')], despachoCorte: 'DC-1' });
+    expect(res.body.despacho_corte).toBe('DC-1');
+    expect(repo.crearGuias.mock.calls[0][0][0].despacho_corte).toBe('DC-1');
+  });
+
+  it('no suma guías a un corte que ya llegó', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ despacho_corte: 'DC-1', estado: ESTADOS.ENTREGADO }),
+    ]);
+    const res = await request(app)
+      .post('/despachos-corte')
+      .send({ guias: [datos('T5')], despachoCorte: 'DC-1' });
+    expect(res.status).toBe(409);
+    expect(repo.crearGuias).not.toHaveBeenCalled();
+  });
+
+  it('al llegar, todas las guías en camino pasan a entregado de una vez', async () => {
+    const corte = 'DC-261001-1542-K7';
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T1', despacho_corte: corte, _row: 2 }),
+      guia({ numero_guia: 'T2', despacho_corte: corte, _row: 3 }),
+      guia({ numero_guia: 'T3', despacho_corte: corte, estado: ESTADOS.RECHAZADO, _row: 4 }),
+      guia({ numero_guia: 'T4', despacho_corte: '', _row: 5 }),
+    ]);
+    const res = await request(app)
+      .post(`/despachos-corte/${corte}/llegada`)
+      .send({ geo: { lat: -12.1, lng: -77.0 }, transportista: 'Juan Pérez' });
+    expect(res.status).toBe(200);
+    expect(repo.actualizarGuias).toHaveBeenCalledTimes(1);
+    const actualizadas = repo.actualizarGuias.mock.calls[0][0];
+    expect(actualizadas.map((g) => g.numero_guia)).toEqual(['T1', 'T2']);
+    for (const g of actualizadas) {
+      expect(g.estado).toBe(ESTADOS.ENTREGADO);
+      expect(g.cierre_lat).toBe(-12.1);
+      expect(g.fecha_cierre).toBe(g.fecha_actualizacion);
+    }
+    expect(res.body.guias).toHaveLength(2);
+    expect(res.body.guias[0]._row).toBeUndefined();
+  });
+
+  it('la llegada exige GPS y que el corte tenga guías en camino', async () => {
+    let res = await request(app).post('/despachos-corte/DC-X/llegada').send({});
+    expect(res.status).toBe(400);
+    res = await request(app)
+      .post('/despachos-corte/DC-X/llegada')
+      .send({ geo: { lat: -12.1, lng: -77.0 } });
+    expect(res.status).toBe(404);
+    expect(repo.actualizarGuias).not.toHaveBeenCalled();
+  });
+
+  it('otro transportista no puede marcar la llegada', async () => {
+    repo.listarGuias.mockResolvedValue([guia({ despacho_corte: 'DC-1' })]);
+    const res = await request(app)
+      .post('/despachos-corte/DC-1/llegada')
+      .send({ geo: { lat: -12.1, lng: -77.0 }, transportista: 'Diego' });
+    expect(res.status).toBe(403);
+    expect(repo.actualizarGuias).not.toHaveBeenCalled();
+  });
+
+  it('quitar una guía del corte la deja como tarea normal', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ despacho_corte: 'DC-1' }));
+    const res = await request(app)
+      .post('/despachos-corte/DC-1/quitar')
+      .send({ numeroGuia: 'IPE-2026-000123' });
+    expect(res.status).toBe(200);
+    expect(res.body.despacho_corte).toBe('');
+    expect(repo.actualizarGuia).toHaveBeenCalledWith(
+      2,
+      expect.objectContaining({ despacho_corte: '' }),
+    );
+  });
+
+  it('no quita una guía de otro corte', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ despacho_corte: 'DC-2' }));
+    const res = await request(app)
+      .post('/despachos-corte/DC-1/quitar')
+      .send({ numeroGuia: 'IPE-2026-000123' });
+    expect(res.status).toBe(404);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /guias/lote (carga masiva)', () => {
   const datos = (numero, extra = {}) => ({
     numeroGuia: numero,
@@ -893,13 +1004,19 @@ describe('Transbordo entre transportistas', () => {
 
   it('al aceptar, la tarea pasa a quien la recibe y guarda de quién vino', async () => {
     repo.buscarPorNumero.mockResolvedValue(
-      guia({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Ana Díaz' }),
+      guia({
+        transbordo_estado: TRANSBORDO.PENDIENTE,
+        transbordo_a: 'Ana Díaz',
+        despacho_corte: 'DC-1',
+      }),
     );
     const res = await request(app)
       .post('/guias/IPE-2026-000123/transbordo/respuesta')
       .send({ quien: 'Ana Díaz', acepta: true });
     expect(res.status).toBe(200);
     expect(res.body.transportista).toBe('Ana Díaz');
+    // Sale del Despacho Corte de quien la envió.
+    expect(res.body.despacho_corte).toBe('');
     expect(res.body.transbordo_de).toBe('Juan Pérez');
     expect(res.body.transbordo_estado).toBe(TRANSBORDO.ACEPTADO);
     expect(res.body.origen).toBe('Almacén Callao');

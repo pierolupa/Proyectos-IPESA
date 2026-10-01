@@ -200,6 +200,8 @@ function esDeSuColumna(fila, i) {
     case 'transbordo_a':
     case 'transbordo_de':
       return TRANSBORDOS_VALIDOS.has(normalizar(fila[POSICION.transbordo_estado]));
+    case 'despacho_corte':
+      return valor === '' || valor.startsWith('dc-');
     default:
       return true;
   }
@@ -520,6 +522,27 @@ function crearGuia(guia) {
 }
 
 /**
+ * Sobrescribe varias guías existentes con una sola escritura (cada una
+ * en su fila, como actualizarGuia).
+ */
+async function actualizarGuias(guias) {
+  if (guias.length === 0) return;
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const data = guias.map((guia) => {
+    const fila = guiaToRow(guia);
+    return {
+      range: `${SHEET_NAME}!A${guia._row}:${letraColumna(fila.length)}${guia._row}`,
+      values: [fila],
+    };
+  });
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: 'RAW', data },
+  }).finally(invalidarCacheGuias);
+}
+
+/**
  * Sobrescribe la fila de una guía existente: A..X con sus datos, las
  * columnas siguientes con lo que ya tenían.
  */
@@ -744,6 +767,7 @@ module.exports = {
   crearGuia,
   crearGuias,
   actualizarGuia,
+  actualizarGuias,
   eliminarGuia,
   listarUsuarios,
   crearUsuario,

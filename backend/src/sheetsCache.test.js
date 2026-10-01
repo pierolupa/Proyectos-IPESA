@@ -108,7 +108,7 @@ describe('orden de la hoja de guías', () => {
     repo = require('./sheetsRepository');
   });
 
-  it('escribe solo los encabezados de T a X, después de la S', async () => {
+  it('escribe solo los encabezados de T en adelante, después de la S', async () => {
     const propios = [...COLUMNS.slice(0, 12), 'Nro Pedido', 'Nro Entrega',
       'Latitud entrega', 'Longitud entrega', 'fecha_entrega', 'Foto', 'Observacion'];
     mockValores.get.mockReset().mockResolvedValue({
@@ -116,7 +116,7 @@ describe('orden de la hoja de guías', () => {
     });
     await repo.listarGuias({ fresco: true });
     expect(escrito()).toEqual([
-      { range: 'Guias!T1:X1', values: [COLUMNS.slice(19)] },
+      { range: 'Guias!T1:Y1', values: [COLUMNS.slice(19)] },
     ]);
   });
 
@@ -127,7 +127,10 @@ describe('orden de la hoja de guías', () => {
     });
     await repo.listarGuias({ fresco: true });
     expect(escrito()).toEqual([
-      { range: 'Guias!V1:W1', values: [['transbordo_estado', 'transbordo_a']] },
+      {
+        range: 'Guias!V1:Y1',
+        values: [['transbordo_estado', 'transbordo_a', 'transbordo_de', 'despacho_corte']],
+      },
     ]);
   });
 
@@ -141,7 +144,7 @@ describe('orden de la hoja de guías', () => {
   });
 
   it('devuelve cada dato a su columna y vacía las que se agregaron de más', async () => {
-    const movidos = [...COLUMNS.slice(0, 19), ...COLUMNS.slice(12)];
+    const movidos = [...COLUMNS.slice(0, 19), ...COLUMNS.slice(12, 24)];
     const fila = ['T2', 'entregado', ...Array(17).fill(''),
       'P-2', 'E-2', '-9.5', '-77.5', '2026-09-29T10:00:00.000Z', 'drive:foto'];
     mockValores.get.mockReset().mockResolvedValue({
@@ -156,7 +159,7 @@ describe('orden de la hoja de guías', () => {
     expect(datos.values[0].slice(19)).toEqual(Array(6).fill(''));
     expect(encabezados).toEqual({
       range: 'Guias!T1:AE1',
-      values: [[...COLUMNS.slice(19), ...Array(7).fill('')]],
+      values: [[...COLUMNS.slice(19), ...Array(6).fill('')]],
     });
   });
 

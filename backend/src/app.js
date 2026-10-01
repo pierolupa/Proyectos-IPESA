@@ -494,6 +494,146 @@ app.post('/guias/lote', async (req, res, next) => {
   }
 });
 
+/**
+ * Código de un Despacho Corte: DC-AAMMDD-HHMM-XX (hora de Perú y dos
+ * caracteres al azar para que dos cortes del mismo minuto no choquen).
+ */
+function nuevoCodigoCorte(ahora = new Date()) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'America/Lima',
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+      .formatToParts(ahora)
+      .map((x) => [x.type, x.value]),
+  );
+  const azar = Math.random().toString(36).slice(2, 4).toUpperCase().padEnd(2, '0');
+  return `DC-${p.year}${p.month}${p.day}-${p.hour}${p.minute}-${azar}`;
+}
+
+/** Las guías de un corte que siguen en camino (no cerradas). */
+function abiertasDelCorte(guias, codigo) {
+  return guias.filter(
+    (g) => g.despacho_corte === codigo && !ESTADOS_CERRADOS.has(g.estado),
+  );
+}
+
+// Despacho Corte: como la carga masiva (POST /guias/lote), pero todas las
+// guías quedan unidas en un corte con un mismo código; salen juntas y
+// llegan juntas (POST /despachos-corte/:codigo/llegada). Con
+// `despachoCorte` (el código de uno que sigue en camino) las suma a ese
+// corte en vez de crear otro. Responde { despacho_corte, resultados }.
+app.post('/despachos-corte', async (req, res, next) => {
+  try {
+    const { guias, despachoCorte } = req.body || {};
+    if (!Array.isArray(guias) || guias.length === 0) {
+      return res.status(400).json({ error: 'Faltan las guías del despacho.' });
+    }
+    if (guias.length > MAX_GUIAS_POR_LOTE) {
+      return res.status(400).json({
+        error: `Máximo ${MAX_GUIAS_POR_LOTE} guías por despacho.`,
+      });
+    }
+    const existentes = await repo.listarGuias({ fresco: true });
+    if (
+      despachoCorte
+      && !abiertasDelCorte(existentes, despachoCorte).some((g) =>
+        mismoNombre(g.transportista, guias[0] && guias[0].transportista))
+    ) {
+      return res.status(409).json({
+        error: `El despacho ${despachoCorte} ya llegó o no es tuyo.`,
+      });
+    }
+    const codigo = despachoCorte || nuevoCodigoCorte();
+    const sucursales = await sucursalesParaRegistro();
+    const resultados = [];
+    const nuevas = [];
+    for (const datos of guias) {
+      const preparada = prepararGuia(datos, [...existentes, ...nuevas], sucursales);
+      if (preparada.error) {
+        resultados.push({ error: preparada.error });
+      } else {
+        preparada.guia.despacho_corte = codigo;
+        nuevas.push(preparada.guia);
+        resultados.push({ guia: preparada.guia });
+      }
+    }
+    if (nuevas.length > 0) await repo.crearGuias(nuevas);
+    res.json({ despacho_corte: nuevas.length > 0 ? codigo : null, resultados });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Llegada del Despacho Corte: todas las guías del corte que siguen en
+// camino pasan a "entregado" a la vez, sin foto, con la hora y el GPS de
+// la llegada. Las quitadas o rechazadas antes no se tocan.
+app.post('/despachos-corte/:codigo/llegada', async (req, res, next) => {
+  try {
+    const { codigo } = req.params;
+    const { geo, transportista } = req.body || {};
+    if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
+      return res.status(400).json({ error: 'GPS obligatorio para registrar la llegada.' });
+    }
+    const guias = abiertasDelCorte(await repo.listarGuias({ fresco: true }), codigo);
+    if (guias.length === 0) {
+      return res.status(404).json({
+        error: `El despacho ${codigo} no tiene guías en camino.`,
+      });
+    }
+    if (transportista && guias.some((g) => !mismoNombre(g.transportista, transportista))) {
+      return res.status(403).json({ error: 'Este despacho es de otro transportista.' });
+    }
+    const ahora = new Date().toISOString();
+    for (const guia of guias) {
+      guia.estado = ESTADOS.ENTREGADO;
+      guia.fecha_actualizacion = ahora;
+      guia.fecha_cierre = ahora;
+      guia.geo_lat = geo.lat;
+      guia.geo_lng = geo.lng;
+      guia.cierre_lat = geo.lat;
+      guia.cierre_lng = geo.lng;
+      guia.eliminacion = '';
+      guia.motivo_eliminacion = '';
+      limpiarTransbordoAbierto(guia);
+    }
+    await repo.actualizarGuias(guias);
+    res.json({ despacho_corte: codigo, guias: guias.map(sinCamposInternos) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Quita una guía de su Despacho Corte (por ejemplo, mal escaneada): sigue
+// como una tarea normal del transportista, que puede entregarla aparte o
+// pedir que se elimine.
+app.post('/despachos-corte/:codigo/quitar', async (req, res, next) => {
+  try {
+    const { codigo } = req.params;
+    const { numeroGuia, fechaCreacion } = req.body || {};
+    if (!numeroGuia) return res.status(400).json({ error: 'Falta numeroGuia.' });
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+    if (!guia || guia.despacho_corte !== codigo) {
+      return res.status(404).json({
+        error: `La guía ${numeroGuia} no está en el despacho ${codigo}.`,
+      });
+    }
+    if (ESTADOS_CERRADOS.has(guia.estado)) {
+      return res.status(409).json({ error: 'La guía ya está cerrada.' });
+    }
+    guia.despacho_corte = '';
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Actualiza el estado de una guía (entrega, trasbordo, recepción, o
 // corrección manual de administrador). GPS obligatorio salvo cuando lo
 // hace un administrador desde el panel (porAdmin: true).
@@ -882,6 +1022,8 @@ app.post('/guias/:numeroGuia/transbordo/respuesta', async (req, res, next) => {
       // El pedido de eliminación era de quien la envió.
       guia.eliminacion = '';
       guia.motivo_eliminacion = '';
+      // Ya no viaja en el Despacho Corte de quien la envió.
+      guia.despacho_corte = '';
       guia.fecha_actualizacion = new Date().toISOString();
     } else {
       guia.transbordo_estado = TRANSBORDO.RECHAZADO;

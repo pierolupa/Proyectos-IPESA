@@ -72,8 +72,9 @@ describe('columnas por posición (hoja de guías)', () => {
     'Nro Pedido', 'Nro Entrega', 'Latitud entrega', 'Longitud entrega',
     'fecha_entrega', 'Foto', 'Observacion',
   ];
-  // Los que agregó la versión que leía por nombre: T..AE.
-  const MOVIDOS = [...PROPIOS, ...COLUMNS.slice(12)];
+  // Los que agregó la versión que leía por nombre: T..AE (sin despacho_corte,
+  // que llegó después).
+  const MOVIDOS = [...PROPIOS, ...COLUMNS.slice(12, 24)];
 
   const base = (numero, estado = 'en_ruta', actualizada = '2026-09-29T10:00:00.000Z') => [
     numero, estado, 'cliente_final', 'Trp Callao', 'Huaraz', 'Diego', 'Cliente',
@@ -146,10 +147,10 @@ describe('columnas por posición (hoja de guías)', () => {
       expect(g.transbordo_estado).toBe('');
       expect(orden.filas[0].slice(24).every((v) => v === '')).toBe(true);
       expect(orden.cambiadas).toEqual([0]);
-      // Encabezados: T..X correctos y los de más allá, vacíos.
+      // Encabezados: T..Y correctos y los de más allá, vacíos.
       expect(orden.encabezados).toEqual({
         desde: 19,
-        valores: [...COLUMNS.slice(19), '', '', '', '', '', '', ''],
+        valores: [...COLUMNS.slice(19), '', '', '', '', '', ''],
       });
     });
 

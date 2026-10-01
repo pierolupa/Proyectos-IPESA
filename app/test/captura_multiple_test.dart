@@ -38,6 +38,7 @@ void main() {
   late List<String> origenes;
   late int pedidosDeRegistro;
   late int ocupadaVeces;
+  late List<Map<String, dynamic>> cuerposCorte;
   var sucursales = '[]';
 
   setUp(() {
@@ -50,6 +51,7 @@ void main() {
     origenes = [];
     pedidosDeRegistro = 0;
     ocupadaVeces = 0;
+    cuerposCorte = [];
     sucursales = '[]';
     Ubicacion.olvidarUltima();
     Ubicacion.permisoConcedido = () async => false;
@@ -72,7 +74,11 @@ void main() {
     ];
   });
 
-  Future<void> abrir(WidgetTester tester) async {
+  Future<void> abrir(
+    WidgetTester tester, {
+    bool corte = false,
+    String? codigo,
+  }) async {
     // T100 la registró él hace 10 min: no se puede registrar otra vez aún.
     final hace10 = DateTime.now().subtract(const Duration(minutes: 10));
     final client = MockClient((request) async {
@@ -97,9 +103,11 @@ void main() {
           200,
         );
       }
-      if (request.method == 'POST' && ruta.endsWith('/guias/lote')) {
+      if (request.method == 'POST' &&
+          (ruta.endsWith('/guias/lote') || ruta.endsWith('/despachos-corte'))) {
         pedidosDeRegistro++;
         final cuerpo = jsonDecode(request.body) as Map<String, dynamic>;
+        if (ruta.endsWith('/despachos-corte')) cuerposCorte.add(cuerpo);
         final resultados = <Map<String, dynamic>>[];
         for (final g in (cuerpo['guias'] as List).cast<Map>()) {
           final numero = g['numeroGuia'] as String;
@@ -107,7 +115,13 @@ void main() {
           origenes.add(g['origen'] as String);
           resultados.add({'guia': _guia(numero, DateTime.now())});
         }
-        return http.Response(jsonEncode({'resultados': resultados}), 200);
+        return http.Response(
+          jsonEncode({
+            'resultados': resultados,
+            if (ruta.endsWith('/despachos-corte')) 'despacho_corte': 'DC-1',
+          }),
+          200,
+        );
       }
       return http.Response(jsonEncode([_guia('T100', hace10)]), 200);
     });
@@ -119,7 +133,9 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider.value(
         value: appState,
-        child: const MaterialApp(home: CaptureFlowScreen()),
+        child: MaterialApp(
+          home: CaptureFlowScreen(despachoCorte: corte, codigoCorte: codigo),
+        ),
       ),
     );
   }
@@ -226,6 +242,39 @@ void main() {
     expect(find.text('T500'), findsOneWidget);
     expect(find.text('La IA está ocupada: reintentando…'), findsNothing);
     expect(find.text('Registrar guía'), findsOneWidget);
+  });
+
+  testWidgets('Despacho Corte: crea el corte y luego suma guías a él', (
+    tester,
+  ) async {
+    leidas = ['T200'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester, corte: true);
+    expect(find.text('Despacho Corte'), findsOneWidget);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Despachar guía'));
+    await tester.pumpAndSettle();
+    expect(cuerposCorte.single.containsKey('despachoCorte'), isFalse);
+    expect(registradas, ['T200']);
+  });
+
+  testWidgets('Agregar guías a un corte en camino las suma a ese corte', (
+    tester,
+  ) async {
+    leidas = ['T201'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester, corte: true, codigo: 'DC-9');
+    expect(find.text('Despacho Corte · DC-9'), findsOneWidget);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Despachar guía'));
+    await tester.pumpAndSettle();
+    expect(cuerposCorte.single['despachoCorte'], 'DC-9');
   });
 
   test('Solo espera 20 minutos la guía que él mismo registró', () async {

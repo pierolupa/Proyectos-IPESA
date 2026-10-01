@@ -84,7 +84,18 @@ class _Borrador {
 /// transportista no registra el mismo número dos veces dentro de 20
 /// minutos (otro transportista sí puede).
 class CaptureFlowScreen extends StatefulWidget {
-  const CaptureFlowScreen({super.key});
+  const CaptureFlowScreen({
+    super.key,
+    this.despachoCorte = false,
+    this.codigoCorte,
+  });
+
+  /// Despacho Corte: las guías se registran igual, pero unidas en un solo
+  /// despacho que sale y llega junto (sin foto al llegar).
+  final bool despachoCorte;
+
+  /// Para sumar guías a un Despacho Corte que ya está en camino.
+  final String? codigoCorte;
 
   /// Los tests los reemplazan (no hay cámara ahí). El GPS, en
   /// `Ubicacion.leer`.
@@ -105,6 +116,10 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
   final _cola = <_Borrador>[];
   int _leyendoAhora = 0;
   int _siguienteId = 0;
+
+  /// El código del Despacho Corte una vez creado: si registra más guías
+  /// desde esta misma pantalla, se suman al mismo corte.
+  late String? _codigoCorte = widget.codigoCorte;
 
   @override
   void dispose() {
@@ -285,7 +300,10 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       SnackBar(
         content: Text(
           [
-            if (ok > 0)
+            if (ok > 0 && widget.despachoCorte)
+              'Despacho Corte $_codigoCorte · '
+                  '${ok == 1 ? '1 guía' : '$ok guías'} en ruta'
+            else if (ok > 0)
               ok == 1
                   ? '1 guía asignada · en ruta'
                   : '$ok guías asignadas · en ruta',
@@ -310,21 +328,27 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     // Dentro del perímetro de una sucursal, salen de ahí.
     final sucursal = _sucursalAqui(appState)?.nombre;
     try {
-      final resultados = await appState.asignarLote([
-        for (final b in listas)
-          GuiaNueva(
-            numeroGuia: b.numero.text.trim(),
-            tipoEntrega: b.tipo,
-            origen: sucursal ?? b.origen.text.trim(),
-            destino: b.destino.text.trim(),
-            transportista: appState.transportistaActual,
-            destinatario: b.destinatario.text.trim(),
-            lat: lat!,
-            lng: lng!,
-            numeroPedido: b.pedido.text.trim(),
-            numeroEntrega: b.entrega.text.trim(),
-          ),
-      ]);
+      final carga = await appState.asignarLote(
+        despachoCorte: widget.despachoCorte,
+        codigoCorte: _codigoCorte,
+        [
+          for (final b in listas)
+            GuiaNueva(
+              numeroGuia: b.numero.text.trim(),
+              tipoEntrega: b.tipo,
+              origen: sucursal ?? b.origen.text.trim(),
+              destino: b.destino.text.trim(),
+              transportista: appState.transportistaActual,
+              destinatario: b.destinatario.text.trim(),
+              lat: lat!,
+              lng: lng!,
+              numeroPedido: b.pedido.text.trim(),
+              numeroEntrega: b.entrega.text.trim(),
+            ),
+        ],
+      );
+      final resultados = carga.resultados;
+      _codigoCorte ??= carga.despachoCorte;
       if (mounted) {
         setState(() {
           for (var i = 0; i < listas.length; i++) {
@@ -371,7 +395,13 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         gpsActivo && !_abriendoFotos && _borradores.length < maxGuiasPorCarga;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevas guías · Asignación')),
+      appBar: AppBar(
+        title: Text(
+          widget.despachoCorte
+              ? 'Despacho Corte${_codigoCorte == null ? '' : ' · $_codigoCorte'}'
+              : 'Nuevas guías · Asignación',
+        ),
+      ),
       bottomNavigationBar: _borradores.isEmpty
           ? null
           : SafeArea(
@@ -409,8 +439,12 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
                         _registrando
                             ? 'Registrando…'
                             : listas <= 1
-                            ? 'Registrar guía'
-                            : 'Registrar $listas guías',
+                            ? (widget.despachoCorte
+                                  ? 'Despachar guía'
+                                  : 'Registrar guía')
+                            : (widget.despachoCorte
+                                  ? 'Despachar $listas guías'
+                                  : 'Registrar $listas guías'),
                       ),
                     ),
                   ],

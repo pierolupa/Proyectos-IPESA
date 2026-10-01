@@ -46,10 +46,10 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a X):
+y esta fila de encabezados (columnas A a Y):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte
 ```
 
 Cada dato va **siempre en la misma columna** (la de la lista de arriba),
@@ -71,7 +71,8 @@ Si ya tenías la hoja creada con menos columnas, agrega las que falten al
 final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
 `motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
-`transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1)
+`transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1,
+`despacho_corte` en Y1)
 — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
@@ -271,6 +272,9 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número dentro de los 20 minutos siguientes; otro transportista, sí. |
 | `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
+| `POST` | `/api/despachos-corte` | Despacho Corte: igual que `/api/guias/lote`, pero todas las guías creadas llevan el mismo código en `despacho_corte` (ej. `DC-261001-1542-K7`). Responde `{ despacho_corte, resultados }`. |
+| `POST` | `/api/despachos-corte/:codigo/llegada` | Llegada del corte: `{ geo, transportista }`. Todas sus guías en camino pasan a `entregado` de una vez (sin foto), con la hora y el GPS de la llegada. |
+| `POST` | `/api/despachos-corte/:codigo/quitar` | Saca una guía del corte (`{ numeroGuia, fechaCreacion }`): sigue como tarea normal. Para rechazarla se usa `/api/guias/:numeroGuia/rechazo` como siempre. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
 | `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |

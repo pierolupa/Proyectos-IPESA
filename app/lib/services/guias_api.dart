@@ -259,27 +259,86 @@ class GuiasApi {
 
   /// Carga masiva: registra hasta [maxGuiasPorCarga] guías con un solo
   /// pedido. Devuelve, en el mismo orden, la guía creada o el error de
-  /// cada una (las demás se registran igual).
-  Future<List<ResultadoRegistro>> asignarLote(List<GuiaNueva> guias) async {
+  /// cada una (las demás se registran igual). Con [despachoCorte] todas
+  /// quedan unidas en un Despacho Corte, cuyo código va en
+  /// [ResultadoCarga.despachoCorte].
+  Future<ResultadoCarga> asignarLote(
+    List<GuiaNueva> guias, {
+    bool despachoCorte = false,
+    String? codigoCorte,
+  }) async {
     final res = await _client.post(
-      Uri.parse('$apiBaseUrl/guias/lote'),
+      Uri.parse(
+        despachoCorte
+            ? '$apiBaseUrl/despachos-corte'
+            : '$apiBaseUrl/guias/lote',
+      ),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'guias': [for (final g in guias) g.toJson()],
+        if (despachoCorte && codigoCorte != null) 'despachoCorte': codigoCorte,
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);
-    final resultados = _decodeBody(res)['resultados'] as List<dynamic>;
+    final cuerpo = _decodeBody(res);
+    final resultados = cuerpo['resultados'] as List<dynamic>;
+    return ResultadoCarga(
+      despachoCorte: cuerpo['despacho_corte'] as String?,
+      resultados: [
+        for (final r in resultados.cast<Map<String, dynamic>>())
+          r['guia'] is Map<String, dynamic>
+              ? ResultadoRegistro.guia(
+                  Guia.fromJson(r['guia'] as Map<String, dynamic>),
+                )
+              : ResultadoRegistro.error(
+                  r['error'] as String? ?? 'No se pudo registrar.',
+                ),
+      ],
+    );
+  }
+
+  /// Llegada de un Despacho Corte: todas sus guías en camino quedan
+  /// entregadas a la vez (sin foto). Devuelve las guías actualizadas.
+  Future<List<Guia>> llegadaDespachoCorte(
+    String codigo, {
+    required double lat,
+    required double lng,
+    required String transportista,
+  }) async {
+    final res = await _client.post(
+      Uri.parse(
+        '$apiBaseUrl/despachos-corte/${Uri.encodeComponent(codigo)}/llegada',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'geo': {'lat': lat, 'lng': lng},
+        'transportista': transportista,
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
     return [
-      for (final r in resultados.cast<Map<String, dynamic>>())
-        r['guia'] is Map<String, dynamic>
-            ? ResultadoRegistro.guia(
-                Guia.fromJson(r['guia'] as Map<String, dynamic>),
-              )
-            : ResultadoRegistro.error(
-                r['error'] as String? ?? 'No se pudo registrar.',
-              ),
+      for (final g
+          in (_decodeBody(res)['guias'] as List<dynamic>)
+              .cast<Map<String, dynamic>>())
+        Guia.fromJson(g),
     ];
+  }
+
+  /// Saca una guía de su Despacho Corte: sigue como tarea normal.
+  Future<Guia> quitarDeDespachoCorte(Guia guia) async {
+    final res = await _client.post(
+      Uri.parse(
+        '$apiBaseUrl/despachos-corte/'
+        '${Uri.encodeComponent(guia.despachoCorte)}/quitar',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'numeroGuia': guia.numeroGuia,
+        'fechaCreacion': _fechaCreacion(guia),
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
   }
 
   Future<Guia> asignarNuevaGuia({
@@ -593,6 +652,15 @@ class GuiaNueva {
     if (numeroPedido.isNotEmpty) 'numeroPedido': numeroPedido,
     if (numeroEntrega.isNotEmpty) 'numeroEntrega': numeroEntrega,
   };
+}
+
+/// Resultado de una carga masiva: el de cada guía, en orden, y el código
+/// del Despacho Corte si fue uno (null si ninguna se registró).
+class ResultadoCarga {
+  const ResultadoCarga({required this.resultados, this.despachoCorte});
+
+  final List<ResultadoRegistro> resultados;
+  final String? despachoCorte;
 }
 
 /// Lo que pasó con una guía de la carga masiva: creada o con su error.

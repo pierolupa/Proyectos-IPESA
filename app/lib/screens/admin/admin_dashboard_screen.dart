@@ -822,6 +822,28 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     : detalle,
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              if (guia.enDespachoCorte)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 15,
+                        color: Ipesa.petroleo,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Despacho Corte ${guia.despachoCorte}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Ipesa.petroleo,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (guia.resumenTransbordo.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),

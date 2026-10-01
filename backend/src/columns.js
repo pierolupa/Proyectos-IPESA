@@ -15,6 +15,9 @@
  * (espera que transbordo_a acepte), 'rechazado' (transbordo_a no aceptó;
  * la tarea sigue con quien la envió) o 'aceptado' (transbordo_de la envió
  * y ahora la tiene el transportista actual).
+ * despacho_corte = código del Despacho Corte (ej. DC-261001-1542-K7) si la
+ * guía salió en uno: todas las de un mismo corte salen juntas y llegan
+ * juntas (POST /despachos-corte y /despachos-corte/:id/llegada).
  */
 const COLUMNS = [
   'numero_guia',
@@ -41,6 +44,7 @@ const COLUMNS = [
   'transbordo_estado',
   'transbordo_a',
   'transbordo_de',
+  'despacho_corte',
 ];
 
 const ELIMINACION = Object.freeze({

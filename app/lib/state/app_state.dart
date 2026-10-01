@@ -457,19 +457,52 @@ class AppState extends ChangeNotifier {
   }
 
   /// Carga masiva: registra todas con un solo pedido al backend y agrega a
-  /// la lista las que se crearon. Devuelve el resultado de cada una, en el
-  /// mismo orden.
-  Future<List<ResultadoRegistro>> asignarLote(List<GuiaNueva> guias) async {
-    final resultados = await _api.asignarLote(guias);
+  /// la lista las que se crearon. Con [despachoCorte] quedan unidas en un
+  /// Despacho Corte. Devuelve el resultado de cada una, en el mismo orden.
+  Future<ResultadoCarga> asignarLote(
+    List<GuiaNueva> guias, {
+    bool despachoCorte = false,
+    String? codigoCorte,
+  }) async {
+    final carga = await _api.asignarLote(
+      guias,
+      despachoCorte: despachoCorte,
+      codigoCorte: codigoCorte,
+    );
     final creadas = [
-      for (final r in resultados)
+      for (final r in carga.resultados)
         if (r.guia != null) r.guia!,
     ];
     if (creadas.isNotEmpty) {
       _guias.insertAll(0, creadas.reversed);
       notifyListeners();
     }
-    return resultados;
+    return carga;
+  }
+
+  /// Llegada de un Despacho Corte: todas sus guías en camino quedan
+  /// entregadas a la vez. Devuelve cuántas.
+  Future<int> llegadaDespachoCorte(
+    String codigo, {
+    required double lat,
+    required double lng,
+  }) async {
+    final actualizadas = await _api.llegadaDespachoCorte(
+      codigo,
+      lat: lat,
+      lng: lng,
+      transportista: transportistaActual,
+    );
+    for (final nueva in actualizadas) {
+      final i = _guias.indexWhere((g) => g.clave == nueva.clave);
+      if (i != -1) _guias[i] = nueva;
+    }
+    notifyListeners();
+    return actualizadas.length;
+  }
+
+  Future<void> quitarDeDespachoCorte(Guia guia) async {
+    _reemplazar(guia, await _api.quitarDeDespachoCorte(guia));
   }
 
   /// Devuelve el aviso si la foto no se pudo guardar (null si todo bien).

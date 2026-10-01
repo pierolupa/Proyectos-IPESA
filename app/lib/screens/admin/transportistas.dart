@@ -911,7 +911,11 @@ class _TransportistaDetalleScreenState
                       final g = guias[i];
                       final nota = g.estado == EstadoGuia.rechazado
                           ? g.motivoRechazo
-                          : g.resumenTransbordo;
+                          : g.resumenTransbordo.isNotEmpty
+                          ? g.resumenTransbordo
+                          : g.enDespachoCorte
+                          ? 'Despacho Corte ${g.despachoCorte}'
+                          : '';
                       return InkWell(
                         onTap: () => abrirGuiaAdmin(context, g),
                         child: _FilaTabla(
@@ -936,7 +940,9 @@ class _TransportistaDetalleScreenState
                                       fontWeight: FontWeight.w600,
                                       color: g.estado == EstadoGuia.rechazado
                                           ? EstadoGuia.rechazado.color
-                                          : EstadoGuia.enRuta.color,
+                                          : g.resumenTransbordo.isNotEmpty
+                                          ? EstadoGuia.enRuta.color
+                                          : Ipesa.petroleo,
                                     ),
                                   ),
                               ],
@@ -1149,20 +1155,30 @@ class _LineaDelDia extends StatelessWidget {
   final List<Guia> guias;
   final String titulo;
 
+  static DateTime _minuto(DateTime f) {
+    final l = f.toLocal();
+    return DateTime(l.year, l.month, l.day, l.hour, l.minute);
+  }
+
+  static String _guias(int n) => n == 1 ? '1 guía' : '$n guías';
+
   List<(DateTime, String, Color)> _eventos() {
     final eventos = <(DateTime, String, Color)>[];
-    final registros = <DateTime, List<Guia>>{};
+    // Los registros de un mismo minuto (y despacho) van juntos; las
+    // llegadas de un Despacho Corte, también.
+    final registros = <(DateTime, String), List<Guia>>{};
+    final llegadas = <(DateTime, String), int>{};
     for (final g in guias) {
-      final c = g.fechaCreacion.toLocal();
       registros
-          .putIfAbsent(
-            DateTime(c.year, c.month, c.day, c.hour, c.minute),
-            () => [],
-          )
+          .putIfAbsent((_minuto(g.fechaCreacion), g.despachoCorte), () => [])
           .add(g);
-      if (g.estado.esFinal) {
+      final cierre = g.fechaCierre ?? g.fechaActualizacion;
+      if (g.estado.esFinal && g.enDespachoCorte) {
+        final clave = (_minuto(cierre), g.despachoCorte);
+        llegadas[clave] = (llegadas[clave] ?? 0) + 1;
+      } else if (g.estado.esFinal) {
         eventos.add((
-          (g.fechaCierre ?? g.fechaActualizacion).toLocal(),
+          cierre.toLocal(),
           'Entregó ${g.numeroGuia} · ${g.destinatario}',
           EstadoGuia.entregado.color,
         ));
@@ -1175,13 +1191,24 @@ class _LineaDelDia extends StatelessWidget {
         ));
       }
     }
-    for (final e in registros.entries) {
+    for (final MapEntry(key: (minuto, corte), value: lista)
+        in registros.entries) {
       eventos.add((
-        e.key,
-        e.value.length == 1
-            ? 'Registró ${e.value.first.numeroGuia} · ${e.value.first.destinatario}'
-            : 'Registró ${e.value.length} guías',
-        EstadoGuia.enRuta.color,
+        minuto,
+        corte.isNotEmpty
+            ? 'Salió Despacho Corte $corte · ${_guias(lista.length)}'
+            : lista.length == 1
+            ? 'Registró ${lista.first.numeroGuia} · ${lista.first.destinatario}'
+            : 'Registró ${lista.length} guías',
+        corte.isNotEmpty ? Ipesa.petroleo : EstadoGuia.enRuta.color,
+      ));
+    }
+    for (final MapEntry(key: (minuto, corte), value: n) in llegadas.entries) {
+      eventos.add((
+        minuto,
+        'Llegó Despacho Corte $corte · '
+            '${n == 1 ? '1 guía entregada' : '$n guías entregadas'}',
+        EstadoGuia.entregado.color,
       ));
     }
     // Del más reciente al más antiguo (la lista va invertida).

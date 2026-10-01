@@ -10,6 +10,7 @@ import '../../theme.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
+import '../../widgets/despacho_corte.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/transbordo.dart';
 import 'capture_flow_screen.dart';
@@ -83,6 +84,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const CaptureFlowScreen()));
 
+  void _despachoCorte() => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => const CaptureFlowScreen(despachoCorte: true),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -111,12 +118,28 @@ class _TaskListScreenState extends State<TaskListScreen> {
       // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
       floatingActionButton: !_verEntregadas && pendientes.isEmpty
           ? null
-          : FloatingActionButton.extended(
-              backgroundColor: Ipesa.turquesa,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.photo_camera_outlined),
-              label: const Text('Nueva guía'),
-              onPressed: _nuevaGuia,
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'despacho_corte',
+                  backgroundColor: Colors.white,
+                  foregroundColor: Ipesa.petroleo,
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Despacho Corte'),
+                  onPressed: _despachoCorte,
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'nueva_guia',
+                  backgroundColor: Ipesa.turquesa,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('Nueva guía'),
+                  onPressed: _nuevaGuia,
+                ),
+              ],
             ),
       body: ActualizacionAutomatica(
         intervalo: const Duration(seconds: 60),
@@ -221,6 +244,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           child: _TodoEntregado(
             entregadasHoy: entregadasHoy,
             onNuevaGuia: _nuevaGuia,
+            onDespachoCorte: _despachoCorte,
           ),
         ),
       );
@@ -236,6 +260,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
       );
     } else {
+      // En pendientes, las de un Despacho Corte van juntas en una tarjeta.
+      final cortes = _verEntregadas
+          ? const <String, List<Guia>>{}
+          : agruparPorCorte(guias);
+      final sueltas = _verEntregadas
+          ? guias
+          : guias.where((g) => !g.enDespachoCorte).toList();
       contenido = LayoutBuilder(
         builder: (context, c) {
           // Una columna en celular; 2 o 3 en pantallas anchas.
@@ -250,7 +281,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
             spacing: espacio,
             runSpacing: espacio,
             children: [
-              for (final g in guias)
+              for (final e in cortes.entries)
+                SizedBox(
+                  width: ancho,
+                  child: TarjetaDespachoCorte(
+                    key: ValueKey(e.key),
+                    codigo: e.key,
+                    guias: e.value,
+                  ),
+                ),
+              for (final g in sueltas)
                 SizedBox(
                   width: ancho,
                   child: _TarjetaTarea(guia: g, entregada: _verEntregadas),
@@ -505,10 +545,12 @@ class _TodoEntregado extends StatelessWidget {
   const _TodoEntregado({
     required this.entregadasHoy,
     required this.onNuevaGuia,
+    required this.onDespachoCorte,
   });
 
   final int entregadasHoy;
   final VoidCallback onNuevaGuia;
+  final VoidCallback onDespachoCorte;
 
   @override
   Widget build(BuildContext context) {
@@ -568,6 +610,18 @@ class _TodoEntregado extends StatelessWidget {
                   onPressed: onNuevaGuia,
                   icon: const Icon(Icons.photo_camera_outlined),
                   label: const Text('Nueva guía'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: onDespachoCorte,
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Despacho Corte'),
                 ),
               ],
             ),
