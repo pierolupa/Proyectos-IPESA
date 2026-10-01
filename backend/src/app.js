@@ -35,8 +35,9 @@ function tipoInvalido(tipoEntrega) {
 }
 const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
-// Tiempo mínimo entre dos registros del mismo número de guía.
-const ESPERA_MISMA_GUIA_MS = 2 * 60 * 60 * 1000;
+// Tiempo mínimo entre dos registros del mismo número de guía por el mismo
+// transportista (otro transportista la puede registrar en cualquier momento).
+const ESPERA_MISMA_GUIA_MS = 20 * 60 * 1000;
 
 /** "14:35" en hora de Perú (el servidor corre en UTC). */
 function horaPeru(ms) {
@@ -361,23 +362,29 @@ app.post('/guias', async (req, res, next) => {
     }
 
 
-    // Un mismo número de guía se puede volver a registrar (otro viaje de
-    // la misma guía), pero no dentro de las 2 horas siguientes al último
-    // registro: eso casi siempre es la misma foto enviada dos veces. Si el
-    // último fue rechazado, la tarea nunca se hizo: se puede volver a
-    // registrar al momento.
-    const existente = await repo.buscarPorNumero(numeroGuia, { fresco: true });
-    if (existente && existente.estado !== ESTADOS.RECHAZADO) {
-      const registrada = Date.parse(existente.fecha_creacion || existente.fecha_actualizacion);
-      const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
-      if (!Number.isNaN(registrada) && Date.now() < libreDesde) {
-        const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
-        return res.status(409).json({
-          error:
-            `La guía ${numeroGuia} ya se registró hace ${minutos} min. `
-            + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
-        });
-      }
+    // Un mismo número de guía se puede volver a registrar: otro
+    // transportista que la lleva en el siguiente tramo, en cualquier
+    // momento; el mismo transportista, pasados 20 minutos de su último
+    // registro (antes, casi siempre es la misma foto enviada dos veces).
+    // Un registro rechazado no cuenta: esa tarea nunca se hizo.
+    const suyas = (await repo.listarGuias({ fresco: true })).filter(
+      (g) =>
+        g.numero_guia === numeroGuia
+        && g.estado !== ESTADOS.RECHAZADO
+        && mismoNombre(g.transportista, transportista),
+    );
+    const registrada = Math.max(
+      ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
+      0,
+    );
+    const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
+    if (registrada > 0 && Date.now() < libreDesde) {
+      const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
+      return res.status(409).json({
+        error:
+          `Ya registraste la guía ${numeroGuia} hace ${minutos} min. `
+          + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
+      });
     }
 
     // Si se registra dentro del perímetro de una sucursal, sale de ahí.
@@ -424,7 +431,7 @@ app.post('/guias', async (req, res, next) => {
 app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { estado, geo, porAdmin, foto } = req.body || {};
+    const { estado, geo, porAdmin, foto, fechaCreacion } = req.body || {};
 
     if (!ESTADOS_VALIDOS.has(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
@@ -440,7 +447,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
@@ -513,7 +520,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { motivo, geo } = req.body || {};
+    const { motivo, geo, fechaCreacion } = req.body || {};
     const motivoLimpio = String(motivo ?? '').trim();
     if (motivoLimpio.length < 3) {
       return res.status(400).json({ error: 'Indica el motivo del rechazo.' });
@@ -522,7 +529,7 @@ app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
       return res.status(400).json({ error: 'El motivo es muy largo (máx. 300 caracteres).' });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }

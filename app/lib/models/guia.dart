@@ -108,7 +108,7 @@ class Guia {
   bool get esEditablePorTransportista => estado == EstadoGuia.enRuta;
 
   /// Identifica este registro aunque el mismo número de guía se haya
-  /// registrado más de una vez (otro viaje, con 2 horas de diferencia).
+  /// registrado más de una vez (otro viaje u otro transportista).
   String get clave => '$numeroGuia|${fechaCreacion.toUtc().toIso8601String()}';
 
   bool get tieneUbicacionCierre => cierreLat != null && cierreLng != null;

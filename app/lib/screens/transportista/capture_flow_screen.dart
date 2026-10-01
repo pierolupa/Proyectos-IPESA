@@ -69,8 +69,9 @@ class _Borrador {
 /// seguidas: cada una queda como una tarjeta que la IA va llenando en
 /// paralelo (Claude con visión, vía backend/src/ocrAgente.js) mientras él
 /// sigue fotografiando. Revisa y corrige lo que haga falta, y registra
-/// todas las que estén listas de una vez. El GPS es obligatorio. Un mismo
-/// número de guía no se registra dos veces dentro de 2 horas.
+/// todas las que estén listas de una vez. El GPS es obligatorio. Un
+/// transportista no registra el mismo número dos veces dentro de 20
+/// minutos (otro transportista sí puede).
 class CaptureFlowScreen extends StatefulWidget {
   const CaptureFlowScreen({super.key});
 
@@ -195,7 +196,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     final numero = b.numero.text.trim();
     if (numero.isEmpty) return 'Falta el número de guía.';
     if (appState.registroBloqueadoHasta(numero) case final libre?) {
-      return 'Esta guía ya se registró hace poco. Podrás registrarla de '
+      return 'Ya registraste esta guía hace poco. Podrás registrarla de '
           'nuevo desde las ${_hora.format(libre.toLocal())}.';
     }
     final repetida = _borradores.any(

@@ -70,7 +70,7 @@ void main() {
 
   Future<void> abrir(WidgetTester tester) async {
     // T100 se registró hace 30 min: no se puede registrar otra vez aún.
-    final hace30 = DateTime.now().subtract(const Duration(minutes: 30));
+    final hace10 = DateTime.now().subtract(const Duration(minutes: 10));
     final client = MockClient((request) async {
       final ruta = request.url.path;
       if (ruta.endsWith('/sucursales')) return http.Response(sucursales, 200);
@@ -93,7 +93,7 @@ void main() {
         origenes.add(cuerpo['origen'] as String);
         return http.Response(jsonEncode(_guia(numero, DateTime.now())), 201);
       }
-      return http.Response(jsonEncode([_guia('T100', hace30)]), 200);
+      return http.Response(jsonEncode([_guia('T100', hace10)]), 200);
     });
     final appState = AppState(api: GuiasApi(client: client));
     await appState.restaurarSesion();
@@ -123,8 +123,11 @@ void main() {
     expect(find.text('T200'), findsOneWidget);
     expect(find.text('T201'), findsOneWidget);
     expect(find.text('T100'), findsOneWidget);
-    // T100 se registró hace 30 min: esa espera; las otras dos, listas.
-    expect(find.textContaining('ya se registró hace poco'), findsOneWidget);
+    // T100 la registró él hace 10 min: esa espera; las otras dos, listas.
+    expect(
+      find.textContaining('Ya registraste esta guía hace poco'),
+      findsOneWidget,
+    );
     expect(find.text('Registrar 2 guías'), findsOneWidget);
 
     await tester.tap(find.text('Registrar 2 guías'));
@@ -156,27 +159,35 @@ void main() {
     expect(find.text('Registrar 2 guías'), findsOneWidget);
   });
 
-  test('La misma guía se puede registrar de nuevo pasadas 2 horas', () async {
+  test('Solo espera 20 minutos la guía que él mismo registró', () async {
     final ahora = DateTime(2026, 9, 28, 15);
+    final deDiego = {
+      ..._guia('T3', ahora.subtract(const Duration(minutes: 5))),
+      'transportista': 'Diego',
+    };
     final client = MockClient(
       (request) async => request.url.path.endsWith('/sucursales')
           ? http.Response('[]', 200)
           : http.Response(
               jsonEncode([
-                _guia('T1', ahora.subtract(const Duration(hours: 1))),
-                _guia('T2', ahora.subtract(const Duration(hours: 3))),
+                _guia('T1', ahora.subtract(const Duration(minutes: 10))),
+                _guia('T2', ahora.subtract(const Duration(minutes: 25))),
+                deDiego,
               ]),
               200,
             ),
     );
     final appState = AppState(api: GuiasApi(client: client));
+    await appState.restaurarSesion();
     await appState.cargarGuias();
 
     expect(
       appState.registroBloqueadoHasta('T1', ahora: ahora),
-      ahora.add(const Duration(hours: 1)).toUtc(),
+      ahora.add(const Duration(minutes: 10)).toUtc(),
     );
     expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
+    // La registró otro transportista: él la puede registrar al momento.
+    expect(appState.registroBloqueadoHasta('T3', ahora: ahora), isNull);
     expect(appState.registroBloqueadoHasta('T9', ahora: ahora), isNull);
   });
 

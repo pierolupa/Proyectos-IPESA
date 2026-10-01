@@ -36,6 +36,7 @@ function guia(overrides = {}) {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  repo.listarGuias.mockResolvedValue([]);
 });
 
 describe('POST /guias (asignación)', () => {
@@ -57,25 +58,35 @@ describe('POST /guias (asignación)', () => {
     expect(repo.crearGuia).not.toHaveBeenCalled();
   });
 
-  it('no deja registrar la misma guía dentro de las 2 horas', async () => {
-    const haceMedia = new Date(Date.now() - 30 * 60000).toISOString();
-    repo.buscarPorNumero.mockResolvedValue(
-      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMedia }),
-    );
+  it('el mismo transportista no registra la misma guía dentro de 20 minutos', async () => {
+    const hace10 = new Date(Date.now() - 10 * 60000).toISOString();
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: hace10 }),
+    ]);
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/hace 30 min/);
+    expect(res.body.error).toMatch(/Ya registraste .* hace 10 min/);
     expect(res.body.error).toMatch(/desde las \d{2}:\d{2}/);
     expect(repo.crearGuia).not.toHaveBeenCalled();
     // La comprobación lee la hoja sin caché.
-    expect(repo.buscarPorNumero).toHaveBeenCalledWith(payload.numeroGuia, { fresco: true });
+    expect(repo.listarGuias).toHaveBeenCalledWith({ fresco: true });
   });
 
-  it('la misma guía se puede registrar otra vez pasadas 2 horas, aunque siga activa', async () => {
-    const haceTres = new Date(Date.now() - 3 * 3600000).toISOString();
-    repo.buscarPorNumero.mockResolvedValue(
-      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceTres }),
-    );
+  it('el mismo transportista la puede registrar otra vez pasados 20 minutos', async () => {
+    const hace25 = new Date(Date.now() - 25 * 60000).toISOString();
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: hace25 }),
+    ]);
+    const res = await request(app).post('/guias').send(payload);
+    expect(res.status).toBe(201);
+    expect(repo.crearGuia).toHaveBeenCalledTimes(1);
+  });
+
+  it('otro transportista la puede registrar al momento, aunque siga activa', async () => {
+    const hace5 = new Date(Date.now() - 5 * 60000).toISOString();
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, transportista: 'Diego', fecha_creacion: hace5 }),
+    ]);
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(201);
     expect(repo.crearGuia).toHaveBeenCalledTimes(1);
@@ -128,6 +139,23 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     expect(res.body.cierre_lat).toBe(-12.1);
     expect(res.body.cierre_lng).toBe(-77.02);
     expect(res.body.fecha_cierre).toBe(res.body.fecha_actualizacion);
+  });
+
+  it('con la fecha de creación actualiza ese registro, no el más reciente del número', async () => {
+    const deDiego = guia({ transportista: 'Diego', fecha_creacion: '2026-10-01T14:10:00.000Z', _row: 2 });
+    const deJuan = guia({ fecha_creacion: '2026-10-01T14:30:00.000Z', _row: 3 });
+    repo.listarGuias.mockResolvedValue([deDiego, deJuan]);
+    repo.buscarPorNumero.mockResolvedValue(deJuan);
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({
+        estado: ESTADOS.ENTREGADO,
+        geo: { lat: -12.1, lng: -77.02 },
+        fechaCreacion: '2026-10-01T14:10:00.000Z',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.transportista).toBe('Diego');
+    expect(repo.actualizarGuia).toHaveBeenCalledWith(2, expect.anything());
   });
 
   it('no marca cierre en un estado intermedio', async () => {
@@ -524,9 +552,9 @@ describe('POST /guias/:numeroGuia/rechazo', () => {
   });
 
   it('un número de guía rechazado se puede volver a registrar al momento', async () => {
-    repo.buscarPorNumero.mockResolvedValue(
+    repo.listarGuias.mockResolvedValue([
       guia({ estado: ESTADOS.RECHAZADO, fecha_creacion: new Date().toISOString() }),
-    );
+    ]);
     const res = await request(app).post('/guias').send({
       numeroGuia: 'IPE-2026-000123',
       tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,

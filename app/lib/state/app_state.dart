@@ -50,9 +50,10 @@ class CambioGuia {
 
 const _prefRol = 'sesion_rol';
 
-/// Un mismo número de guía se puede volver a registrar pasado este tiempo
-/// desde su último registro (lo mismo valida el backend).
-const esperaMismaGuia = Duration(hours: 2);
+/// Un transportista no puede volver a registrar un número de guía que él
+/// mismo registró hace menos de este tiempo (sería la misma foto dos
+/// veces). Otro transportista sí puede (lo mismo valida el backend).
+const esperaMismaGuia = Duration(minutes: 20);
 
 /// Distancia en metros entre dos puntos (haversine).
 double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
@@ -381,15 +382,41 @@ class AppState extends ChangeNotifier {
     return i == -1 ? null : _guias[i];
   }
 
-  /// Si ese número se registró hace menos de [esperaMismaGuia], desde
-  /// cuándo se podrá registrar otra vez; si no, null. Un registro
-  /// rechazado no bloquea. Validación local rápida contra la última lista
-  /// cargada; la definitiva la hace el backend al confirmar (409).
+  /// Si el usuario actual registró ese número hace menos de
+  /// [esperaMismaGuia], desde cuándo podrá registrarlo otra vez; si no,
+  /// null. Lo que registró otro transportista y un registro rechazado no
+  /// bloquean. Validación local rápida contra la última lista cargada; la
+  /// definitiva la hace el backend al confirmar (409).
   DateTime? registroBloqueadoHasta(String numeroGuia, {DateTime? ahora}) {
-    final ultima = buscarPorNumero(numeroGuia);
-    if (ultima == null || ultima.estado == EstadoGuia.rechazado) return null;
+    final yo = transportistaActual.trim().toLowerCase();
+    Guia? ultima;
+    for (final g in _guias) {
+      if (g.numeroGuia != numeroGuia ||
+          g.estado == EstadoGuia.rechazado ||
+          g.transportista.trim().toLowerCase() != yo) {
+        continue;
+      }
+      if (ultima == null || g.fechaCreacion.isAfter(ultima.fechaCreacion)) {
+        ultima = g;
+      }
+    }
+    if (ultima == null) return null;
     final libre = ultima.fechaCreacion.add(esperaMismaGuia);
     return (ahora ?? DateTime.now()).isBefore(libre) ? libre : null;
+  }
+
+  /// El registro exacto (por fecha de creación) o, sin ella, el más
+  /// reciente con ese número.
+  int _indiceDeRegistro(String numeroGuia, DateTime? fechaCreacion) {
+    if (fechaCreacion != null) {
+      final i = _guias.indexWhere(
+        (g) =>
+            g.numeroGuia == numeroGuia &&
+            g.fechaCreacion.isAtSameMomentAs(fechaCreacion),
+      );
+      if (i != -1) return i;
+    }
+    return _indiceDe(numeroGuia);
   }
 
   bool esDuplicado(String numeroGuia) =>
@@ -437,6 +464,7 @@ class AppState extends ChangeNotifier {
     double? lng,
     bool porAdmin = false,
     Uint8List? foto,
+    DateTime? fechaCreacion,
   }) async {
     final (actualizada, avisoFoto) = await _api.actualizarEstado(
       numeroGuia,
@@ -445,8 +473,9 @@ class AppState extends ChangeNotifier {
       lng: lng,
       porAdmin: porAdmin,
       foto: foto,
+      fechaCreacion: fechaCreacion,
     );
-    final index = _indiceDe(numeroGuia);
+    final index = _indiceDeRegistro(numeroGuia, fechaCreacion);
     if (index != -1) {
       _guias[index] = actualizada;
     }
@@ -470,14 +499,16 @@ class AppState extends ChangeNotifier {
     String motivo, {
     double? lat,
     double? lng,
+    DateTime? fechaCreacion,
   }) async {
     final actualizada = await _api.rechazarGuia(
       numeroGuia,
       motivo,
       lat: lat,
       lng: lng,
+      fechaCreacion: fechaCreacion,
     );
-    final index = _indiceDe(numeroGuia);
+    final index = _indiceDeRegistro(numeroGuia, fechaCreacion);
     if (index != -1) _guias[index] = actualizada;
     notifyListeners();
   }

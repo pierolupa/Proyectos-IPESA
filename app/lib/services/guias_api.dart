@@ -312,6 +312,7 @@ class GuiasApi {
     double? lng,
     bool porAdmin = false,
     Uint8List? foto,
+    DateTime? fechaCreacion,
   }) async {
     final res = await _client.patch(
       Uri.parse('$apiBaseUrl/guias/$numeroGuia/estado'),
@@ -319,6 +320,8 @@ class GuiasApi {
       body: jsonEncode({
         'estado': nuevoEstado.valorApi,
         'porAdmin': porAdmin,
+        if (fechaCreacion != null)
+          'fechaCreacion': fechaCreacion.toUtc().toIso8601String(),
         if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
         if (foto != null) 'foto': _fotoJson(foto),
       }),
@@ -342,12 +345,15 @@ class GuiasApi {
     String motivo, {
     double? lat,
     double? lng,
+    DateTime? fechaCreacion,
   }) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/guias/${Uri.encodeComponent(numeroGuia)}/rechazo'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'motivo': motivo,
+        if (fechaCreacion != null)
+          'fechaCreacion': fechaCreacion.toUtc().toIso8601String(),
         if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
       }),
     );

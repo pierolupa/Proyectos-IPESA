@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
+import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
@@ -63,13 +64,14 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
     }
   }
 
-  Future<void> _cambiarEstado(String numeroGuia, EstadoGuia nuevoEstado) async {
+  Future<void> _cambiarEstado(Guia guia, EstadoGuia nuevoEstado) async {
     setState(() => _guardandoEstado = true);
     try {
       await context.read<AppState>().actualizarEstado(
-        numeroGuia,
+        guia.numeroGuia,
         nuevoEstado,
         porAdmin: true,
+        fechaCreacion: guia.fechaCreacion,
       );
     } catch (e) {
       _mostrarError(e);
@@ -156,7 +158,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
                 ? null
                 : (nuevoEstado) {
                     if (nuevoEstado == null) return;
-                    _cambiarEstado(guia.numeroGuia, nuevoEstado);
+                    _cambiarEstado(guia, nuevoEstado);
                   },
           ),
           const SizedBox(height: 24),

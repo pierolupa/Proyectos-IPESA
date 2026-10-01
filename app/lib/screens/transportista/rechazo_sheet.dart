@@ -109,6 +109,7 @@ class _HojaRechazoState extends State<HojaRechazo> {
         motivo,
         lat: posicion?.latitude,
         lng: posicion?.longitude,
+        fechaCreacion: widget.guia.fechaCreacion,
       );
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {

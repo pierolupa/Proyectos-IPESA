@@ -202,6 +202,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         lat: posicion.latitude,
         lng: posicion.longitude,
         foto: nuevoEstado.esFinal ? _fotoBytes : null,
+        fechaCreacion: g.fechaCreacion,
       );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
