@@ -712,7 +712,7 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
                       children: [
                         SizedBox(width: 400, child: lista),
                         const SizedBox(width: 18),
-                        Expanded(child: _MapaGuias(guias: guias)),
+                        Expanded(child: MapaGuias(guias: guias)),
                       ],
                     ),
                   )
@@ -891,11 +891,14 @@ class TarjetaGuiaAdmin extends StatelessWidget {
 }
 
 /// Mapa con la última ubicación de cada guía (o donde se cerró) y el
-/// perímetro de las sucursales.
-class _MapaGuias extends StatelessWidget {
-  const _MapaGuias({required this.guias});
+/// perímetro de las sucursales. Con [recorrido] (las guías de un solo
+/// transportista) une además esos puntos en orden de hora y marca con un
+/// camión el último.
+class MapaGuias extends StatelessWidget {
+  const MapaGuias({super.key, required this.guias, this.recorrido = false});
 
   final List<Guia> guias;
+  final bool recorrido;
 
   static LatLng? _punto(Guia g) {
     if (g.tieneUbicacionCierre) return LatLng(g.cierreLat!, g.cierreLng!);
@@ -913,6 +916,15 @@ class _MapaGuias extends StatelessWidget {
         if (_punto(g) case final p?) (g, p),
     ];
     final puntos = [for (final (_, p) in conPunto) p];
+    // Los eventos conocidos del transportista, del más antiguo al último.
+    final camino = recorrido
+        ? ([...conPunto]..sort(
+                (a, b) =>
+                    a.$1.fechaActualizacion.compareTo(b.$1.fechaActualizacion),
+              ))
+              .map((e) => e.$2)
+              .toList()
+        : const <LatLng>[];
 
     final opciones = puntos.length >= 2
         ? MapOptions(
@@ -941,6 +953,17 @@ class _MapaGuias extends StatelessWidget {
             children: [
               ...capasBaseMapa(),
               for (final s in sucursales) capaPerimetro(s),
+              if (camino.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: camino,
+                      strokeWidth: 3,
+                      color: _colorRecorrido,
+                      pattern: StrokePattern.dashed(segments: const [10, 7]),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   for (final (g, p) in conPunto)
@@ -959,6 +982,27 @@ class _MapaGuias extends StatelessWidget {
                         ),
                       ),
                     ),
+                  if (camino.isNotEmpty)
+                    Marker(
+                      point: camino.last,
+                      width: 34,
+                      height: 34,
+                      child: Tooltip(
+                        message: 'Última ubicación conocida',
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Ipesa.petroleo,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                          ),
+                          child: const Icon(
+                            Icons.local_shipping_rounded,
+                            size: 17,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
               atribucionMapa,
@@ -973,16 +1017,20 @@ class _MapaGuias extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(Ipesa.radioCampo),
               ),
-              child: const Wrap(
+              child: Wrap(
                 spacing: 16,
+                runSpacing: 4,
                 children: [
-                  _Leyenda(color: Color(0xFF2459A8), texto: 'En ruta'),
-                  _Leyenda(color: Color(0xFF1D6B41), texto: 'Entregado'),
-                  _Leyenda(
-                    color: Ipesa.turquesa,
-                    texto: 'Perímetro de sucursal',
-                    anillo: true,
-                  ),
+                  const _Leyenda(color: Color(0xFF2459A8), texto: 'En ruta'),
+                  const _Leyenda(color: Color(0xFF1D6B41), texto: 'Entregado'),
+                  if (recorrido)
+                    const _Leyenda(color: _colorRecorrido, texto: 'Recorrido')
+                  else
+                    const _Leyenda(
+                      color: Ipesa.turquesa,
+                      texto: 'Perímetro de sucursal',
+                      anillo: true,
+                    ),
                 ],
               ),
             ),
@@ -992,6 +1040,9 @@ class _MapaGuias extends StatelessWidget {
     );
   }
 }
+
+// Se ve sobre el mapa oscuro.
+const _colorRecorrido = Color(0xFF7FD1C7);
 
 class _Leyenda extends StatelessWidget {
   const _Leyenda({

@@ -197,12 +197,53 @@ void main() {
     await tester.tap(find.text('Ana Díaz'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Entregó 2 de 2 cerradas (100 %)'), findsOneWidget);
+    // 2 de sus 3 guías cerradas, las 2 entregadas.
+    expect(find.text('Cierre · Eficiencia 67 %'), findsOneWidget);
     expect(find.text('Pendientes · 1'), findsOneWidget);
     expect(find.text('Entregadas · 2'), findsOneWidget);
     expect(find.text('T001-3'), findsOneWidget);
     expect(find.text('T001-4'), findsOneWidget);
     expect(find.text('T001-1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('En computadora el desglose tiene tabla, mapa y línea del día', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+    tester.view.physicalSize = const Size(1440, 900);
+    final appState = Provider.of<AppState>(
+      tester.element(find.byType(AdminDashboardScreen)),
+      listen: false,
+    );
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: const MaterialApp(
+          home: TransportistaDetalleScreen(nombre: 'Ana Díaz'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MapaGuias), findsOneWidget);
+    expect(find.text('Línea del día'), findsOneWidget);
+    expect(find.text('Entregó T001-4 · Cliente T001-4'), findsOneWidget);
+    // La tabla abre en las pendientes.
+    expect(find.text('T001-3'), findsOneWidget);
+    expect(find.text('T001-4'), findsNothing);
+
+    await tester.tap(find.text('Entregadas'));
+    await tester.pumpAndSettle();
+    expect(find.text('T001-4'), findsOneWidget);
+    expect(find.text('T001-5'), findsOneWidget);
+    expect(find.text('T001-3'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'T001-5');
+    await tester.pumpAndSettle();
+    expect(find.text('T001-4'), findsNothing);
+    // La fila y lo escrito en el buscador.
+    expect(find.text('T001-5'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 

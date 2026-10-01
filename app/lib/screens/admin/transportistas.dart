@@ -6,6 +6,7 @@ import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/estado_badge.dart';
 import 'admin_dashboard_screen.dart';
 
 /// Qué guías cuentan en el resumen. Las que siguen pendientes (en ruta o
@@ -696,9 +697,22 @@ class TransportistaDetalleScreen extends StatefulWidget {
       _TransportistaDetalleScreenState();
 }
 
+/// Las pestañas de la tabla de guías del transportista.
+enum _Pestana {
+  pendientes('Pendientes', [GrupoEstado.enRuta, GrupoEstado.trasbordo]),
+  entregadas('Entregadas', [GrupoEstado.entregado]),
+  rechazadas('Rechazadas', [GrupoEstado.rechazado]);
+
+  const _Pestana(this.titulo, this.grupos);
+  final String titulo;
+  final List<GrupoEstado> grupos;
+}
+
 class _TransportistaDetalleScreenState
     extends State<TransportistaDetalleScreen> {
   late PeriodoResumen _periodo = widget.periodoInicial;
+  var _pestana = _Pestana.pendientes;
+  var _busqueda = '';
 
   @override
   Widget build(BuildContext context) {
@@ -707,67 +721,272 @@ class _TransportistaDetalleScreenState
       appState.guias,
       _periodo,
     ).where((r) => r.nombre == widget.nombre).firstOrNull;
-    final ancha = MediaQuery.sizeOf(context).width >= 700;
+    final ancho = MediaQuery.sizeOf(context).width;
 
-    final contenido = <Widget>[
-      Align(
-        alignment: Alignment.centerLeft,
-        child: SelectorPeriodo(
-          periodo: _periodo,
-          onCambio: (p) => setState(() => _periodo = p),
-        ),
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.nombre)),
+      body: ancho >= 1000
+          ? _vistaAncha(resumen)
+          : _vistaAngosta(resumen, ancho >= 700),
+    );
+  }
+
+  Widget get _selector => SelectorPeriodo(
+    periodo: _periodo,
+    onCambio: (p) => setState(() => _periodo = p),
+  );
+
+  static const _sinGuias = Padding(
+    padding: EdgeInsets.symmetric(vertical: 40),
+    child: Text(
+      'No tiene guías en este periodo.',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: Ipesa.textoSuave),
+    ),
+  );
+
+  /// Los indicadores: uno por estado y el cierre (con la eficiencia).
+  List<Widget> _indicadores(ResumenTransportista r) {
+    final total = r.guias.length;
+    final entregadas = r.cuantas(GrupoEstado.entregado);
+    final cerradas = entregadas + r.cuantas(GrupoEstado.rechazado);
+    String pct(int n) => '${total == 0 ? 0 : (n * 100 / total).round()} %';
+    return [
+      for (final g in GrupoEstado.values)
+        _Cifra(grupo: g, cantidad: r.cuantas(g)),
+      _Indicador(
+        valor: pct(cerradas),
+        etiqueta: 'Cierre',
+        color: Ipesa.petroleo,
+        detalle: 'Eficiencia ${pct(entregadas)}',
       ),
+    ];
+  }
+
+  /// Escritorio: indicadores arriba; abajo la tabla de guías y, al
+  /// costado, el mapa con el recorrido y la línea del día. La página no
+  /// se desplaza: solo la tabla y la línea del día.
+  Widget _vistaAncha(ResumenTransportista? resumen) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 76,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(child: _selector),
+                if (resumen != null)
+                  for (final w in _indicadores(resumen)) ...[
+                    const SizedBox(width: 12),
+                    Expanded(child: w),
+                  ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: resumen == null
+                ? const Align(alignment: Alignment.topCenter, child: _sinGuias)
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 3, child: _tabla(resumen)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: MapaGuias(
+                                guias: resumen.guias,
+                                recorrido: true,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              flex: 2,
+                              child: _LineaDelDia(
+                                guias: resumen.guias,
+                                titulo: _periodo == PeriodoResumen.hoy
+                                    ? 'Línea del día'
+                                    : 'Actividad',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabla(ResumenTransportista resumen) {
+    final texto = _busqueda.trim().toLowerCase();
+    final guias = resumen
+        .de(_pestana.grupos)
+        .where(
+          (g) =>
+              texto.isEmpty ||
+              g.numeroGuia.toLowerCase().contains(texto) ||
+              g.destinatario.toLowerCase().contains(texto) ||
+              g.destino.toLowerCase().contains(texto),
+        )
+        .toList();
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _bordeTarjeta),
+        borderRadius: BorderRadius.circular(Ipesa.radio),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 12, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final p in _Pestana.values)
+                          _BotonPestana(
+                            titulo: p.titulo,
+                            cantidad: resumen.de(p.grupos).length,
+                            activa: p == _pestana,
+                            onTap: () => setState(() => _pestana = p),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 240,
+                  child: TextField(
+                    onChanged: (v) => setState(() => _busqueda = v),
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar',
+                      prefixIcon: Icon(Icons.search, size: 20),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const _FilaTabla(
+            encabezado: true,
+            celdas: [
+              Text('GUÍA'),
+              Text('DESTINATARIO'),
+              Text('ESTADO'),
+              Text('HACE'),
+            ],
+          ),
+          Expanded(
+            child: guias.isEmpty
+                ? Center(
+                    child: Text(
+                      texto.isEmpty
+                          ? 'Sin guías ${_pestana.titulo.toLowerCase()}.'
+                          : 'Ninguna guía coincide con la búsqueda.',
+                      style: const TextStyle(color: Ipesa.textoSuave),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: guias.length,
+                    itemBuilder: (context, i) {
+                      final g = guias[i];
+                      final nota = g.estado == EstadoGuia.rechazado
+                          ? g.motivoRechazo
+                          : g.resumenTransbordo;
+                      return InkWell(
+                        onTap: () => abrirGuiaAdmin(context, g),
+                        child: _FilaTabla(
+                          celdas: [
+                            Text(g.numeroGuia, style: Ipesa.titulo(14.5)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  g.destinatario,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (nota.isNotEmpty)
+                                  Text(
+                                    nota,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: g.estado == EstadoGuia.rechazado
+                                          ? EstadoGuia.rechazado.color
+                                          : EstadoGuia.enRuta.color,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: EstadoBadge(estado: g.estado),
+                            ),
+                            Text(
+                              haceCuanto(g.fechaActualizacion),
+                              style: const TextStyle(color: Ipesa.textoSuave),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Celular o ventana angosta: todo en una columna que se desplaza.
+  Widget _vistaAngosta(ResumenTransportista? resumen, bool media) {
+    final contenido = <Widget>[
+      Align(alignment: Alignment.centerLeft, child: _selector),
       const SizedBox(height: 16),
     ];
-
     if (resumen == null) {
-      contenido.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: Text(
-            'No tiene guías en este periodo.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Ipesa.textoSuave),
-          ),
-        ),
-      );
+      contenido.add(_sinGuias);
     } else {
-      final entregadas = resumen.cuantas(GrupoEstado.entregado);
-      final cerradas = entregadas + resumen.cuantas(GrupoEstado.rechazado);
       final motivos = <String, int>{};
       for (final g in resumen.de([GrupoEstado.rechazado])) {
         final motivo = g.motivoRechazo.split(':').first.trim();
         final clave = motivo.isEmpty ? 'Sin motivo' : motivo;
         motivos[clave] = (motivos[clave] ?? 0) + 1;
       }
-
       contenido.addAll([
         GridView.count(
-          crossAxisCount: ancha ? 4 : 2,
+          crossAxisCount: media ? 5 : 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: ancha ? 1.9 : 1.7,
-          children: [
-            for (final g in GrupoEstado.values)
-              _Cifra(grupo: g, cantidad: resumen.cuantas(g)),
-          ],
+          childAspectRatio: media ? 1.6 : 1.9,
+          children: _indicadores(resumen),
         ),
         const SizedBox(height: 14),
-        _Linea(
-          icono: Icons.inventory_2_outlined,
-          texto: resumen.guias.length == 1
-              ? '1 guía en el periodo'
-              : '${resumen.guias.length} guías en el periodo',
-        ),
-        if (cerradas > 0)
-          _Linea(
-            icono: Icons.verified_outlined,
-            texto:
-                'Entregó $entregadas de $cerradas cerradas '
-                '(${(entregadas * 100 / cerradas).round()} %)',
-          ),
         _Linea(
           icono: Icons.schedule,
           texto: 'Última actividad ${haceCuanto(resumen.ultimaActividad!)}',
@@ -783,14 +1002,15 @@ class _TransportistaDetalleScreenState
               texto: '${e.key} · ${e.value}',
             ),
         ],
-        for (final (titulo, grupos) in [
-          ('Pendientes', [GrupoEstado.enRuta, GrupoEstado.trasbordo]),
-          ('Entregadas', [GrupoEstado.entregado]),
-          ('Rechazadas', [GrupoEstado.rechazado]),
-        ])
-          if (resumen.de(grupos) case final guias when guias.isNotEmpty) ...[
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 300,
+          child: MapaGuias(guias: resumen.guias, recorrido: true),
+        ),
+        for (final p in _Pestana.values)
+          if (resumen.de(p.grupos) case final guias when guias.isNotEmpty) ...[
             const SizedBox(height: 20),
-            Text('$titulo · ${guias.length}', style: Ipesa.titulo(17)),
+            Text('${p.titulo} · ${guias.length}', style: Ipesa.titulo(17)),
             const SizedBox(height: 8),
             for (final g in guias)
               Padding(
@@ -800,21 +1020,254 @@ class _TransportistaDetalleScreenState
           ],
       ]);
     }
-
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.nombre)),
-      body: RefreshIndicator(
-        onRefresh: () => context.read<AppState>().cargarGuias(),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-              children: contenido,
-            ),
+    return RefreshIndicator(
+      onRefresh: () => context.read<AppState>().cargarGuias(),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+            children: contenido,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BotonPestana extends StatelessWidget {
+  const _BotonPestana({
+    required this.titulo,
+    required this.cantidad,
+    required this.activa,
+    required this.onTap,
+  });
+
+  final String titulo;
+  final int cantidad;
+  final bool activa;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: activa,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: activa ? Ipesa.petroleo : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                titulo,
+                style: Ipesa.titulo(
+                  14.5,
+                  color: activa ? Ipesa.petroleo : Ipesa.textoSuave,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(
+                  color: activa ? Ipesa.petroleo : Ipesa.segmento,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  '$cantidad',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: activa ? Colors.white : Ipesa.etiqueta,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Una fila de la tabla de guías (o su encabezado).
+class _FilaTabla extends StatelessWidget {
+  const _FilaTabla({required this.celdas, this.encabezado = false});
+
+  final List<Widget> celdas;
+  final bool encabezado;
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = encabezado
+        ? const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+            color: Ipesa.textoSuave,
+          )
+        : const TextStyle(fontSize: 14.5, color: Ipesa.texto);
+    return Container(
+      constraints: BoxConstraints(minHeight: encabezado ? 38 : 48),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: encabezado ? const Color(0xFFFAFBFB) : null,
+        border: const Border(top: BorderSide(color: Color(0xFFEDF1F0))),
+      ),
+      child: DefaultTextStyle.merge(
+        style: estilo,
+        child: Row(
+          children: [
+            SizedBox(width: 130, child: celdas[0]),
+            Expanded(child: celdas[1]),
+            const SizedBox(width: 12),
+            SizedBox(width: 150, child: celdas[2]),
+            SizedBox(width: 110, child: celdas[3]),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Lo que hizo el transportista, con la hora: registros (los de un mismo
+/// minuto juntos), entregas y rechazos. Lo último queda abajo, a la vista.
+class _LineaDelDia extends StatelessWidget {
+  const _LineaDelDia({required this.guias, required this.titulo});
+
+  final List<Guia> guias;
+  final String titulo;
+
+  List<(DateTime, String, Color)> _eventos() {
+    final eventos = <(DateTime, String, Color)>[];
+    final registros = <DateTime, List<Guia>>{};
+    for (final g in guias) {
+      final c = g.fechaCreacion.toLocal();
+      registros
+          .putIfAbsent(
+            DateTime(c.year, c.month, c.day, c.hour, c.minute),
+            () => [],
+          )
+          .add(g);
+      if (g.estado.esFinal) {
+        eventos.add((
+          (g.fechaCierre ?? g.fechaActualizacion).toLocal(),
+          'Entregó ${g.numeroGuia} · ${g.destinatario}',
+          EstadoGuia.entregado.color,
+        ));
+      } else if (g.estado == EstadoGuia.rechazado) {
+        eventos.add((
+          g.fechaActualizacion.toLocal(),
+          'Rechazó ${g.numeroGuia}'
+              '${g.motivoRechazo.isEmpty ? '' : ' · ${g.motivoRechazo}'}',
+          EstadoGuia.rechazado.color,
+        ));
+      }
+    }
+    for (final e in registros.entries) {
+      eventos.add((
+        e.key,
+        e.value.length == 1
+            ? 'Registró ${e.value.first.numeroGuia} · ${e.value.first.destinatario}'
+            : 'Registró ${e.value.length} guías',
+        EstadoGuia.enRuta.color,
+      ));
+    }
+    // Del más reciente al más antiguo (la lista va invertida).
+    return eventos..sort((a, b) => b.$1.compareTo(a.$1));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventos = _eventos();
+    final hoy = DateTime.now();
+    String hora(DateTime f) =>
+        f.year == hoy.year && f.month == hoy.month && f.day == hoy.day
+        ? DateFormat('HH:mm').format(f)
+        : DateFormat('dd/MM HH:mm').format(f);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _bordeTarjeta),
+        borderRadius: BorderRadius.circular(Ipesa.radio),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(titulo, style: Ipesa.titulo(16, color: Ipesa.petroleo)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              reverse: true,
+              itemCount: eventos.length,
+              itemBuilder: (context, i) {
+                final (fecha, texto, color) = eventos[i];
+                return SizedBox(
+                  height: 38,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 82,
+                        child: Text(
+                          hora(fecha),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Ipesa.textoSuave,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 22,
+                        height: 38,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // La línea que une los eventos.
+                            Positioned(
+                              top: i == eventos.length - 1 ? 19 : 0,
+                              bottom: i == 0 ? 19 : 0,
+                              child: Container(width: 2, color: Ipesa.borde),
+                            ),
+                            Container(
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          texto,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -827,10 +1280,30 @@ class _Cifra extends StatelessWidget {
   final int cantidad;
 
   @override
+  Widget build(BuildContext context) => _Indicador(
+    valor: '$cantidad',
+    etiqueta: grupo.etiqueta,
+    color: _estadoDe(grupo).color,
+  );
+}
+
+class _Indicador extends StatelessWidget {
+  const _Indicador({
+    required this.valor,
+    required this.etiqueta,
+    required this.color,
+    this.detalle,
+  });
+
+  final String valor;
+  final String etiqueta;
+  final Color color;
+  final String? detalle;
+
+  @override
   Widget build(BuildContext context) {
-    final estado = _estadoDe(grupo);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: _bordeTarjeta),
@@ -840,15 +1313,19 @@ class _Cifra extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('$cantidad', style: Ipesa.titulo(28, color: estado.color)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(valor, style: Ipesa.titulo(26, color: color)),
+          ),
           Text(
-            grupo.etiqueta,
+            detalle == null ? etiqueta : '$etiqueta · $detalle',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: FontWeight.w700,
-              color: estado.color,
+              color: color,
             ),
           ),
         ],
