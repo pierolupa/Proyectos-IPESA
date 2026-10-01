@@ -118,29 +118,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
       floatingActionButton: !_verEntregadas && pendientes.isEmpty
           ? null
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'despacho_corte',
-                  backgroundColor: Colors.white,
-                  foregroundColor: Ipesa.petroleo,
-                  icon: const Icon(Icons.inventory_2_outlined),
-                  label: const Text('Despacho Corte'),
-                  onPressed: _despachoCorte,
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'nueva_guia',
-                  backgroundColor: Ipesa.turquesa,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: const Text('Nueva guía'),
-                  onPressed: _nuevaGuia,
-                ),
-              ],
-            ),
+          : _BotonNuevaGuia(onPressed: _nuevaGuia),
       body: ActualizacionAutomatica(
         intervalo: const Duration(seconds: 60),
         child: Column(
@@ -185,7 +163,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Buscar guía, cliente o destino',
+        hintText: 'Buscar',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: Colors.white,
@@ -328,17 +306,130 @@ class _TaskListScreenState extends State<TaskListScreen> {
             const SizedBox(height: 6),
           ],
           if (!sinPendientes) ...[
+            // "Despacho Corte" arriba, lejos de "Nueva guía" (abajo).
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: _buscador(),
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Row(
+                  children: [
+                    Expanded(child: _buscador()),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 50),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        backgroundColor: Colors.white,
+                        foregroundColor: Ipesa.petroleo,
+                        side: const BorderSide(
+                          color: Ipesa.petroleo,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      onPressed: _despachoCorte,
+                      icon: const Icon(Icons.inventory_2_outlined, size: 20),
+                      label: const Text(
+                        'Despacho Corte',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 14),
           ],
           contenido,
         ],
+      ),
+    );
+  }
+}
+
+/// "Nueva guía": el botón principal, abajo a la derecha. Degradado de la
+/// marca, con la cámara en un círculo y qué hace debajo del nombre.
+class _BotonNuevaGuia extends StatelessWidget {
+  const _BotonNuevaGuia({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final borde = BorderRadius.circular(20);
+    return Semantics(
+      button: true,
+      label: 'Nueva guía',
+      excludeSemantics: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: borde,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF22A094), Ipesa.turquesa, Ipesa.petroleo],
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x401B7F79),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borde,
+          child: InkWell(
+            borderRadius: borde,
+            onTap: onPressed,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 22, 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.add_a_photo_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nueva guía',
+                        style: Ipesa.titulo(17, color: Colors.white),
+                      ),
+                      Text(
+                        'Foto o galería',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
