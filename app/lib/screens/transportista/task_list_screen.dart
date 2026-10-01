@@ -118,7 +118,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
       // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
       floatingActionButton: !_verEntregadas && pendientes.isEmpty
           ? null
-          : _BotonNuevaGuia(onPressed: _nuevaGuia),
+          : FloatingActionButton.extended(
+              backgroundColor: Ipesa.turquesa,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('Nueva guía'),
+              onPressed: _nuevaGuia,
+            ),
       body: ActualizacionAutomatica(
         intervalo: const Duration(seconds: 60),
         child: Column(
@@ -344,92 +350,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ],
           contenido,
         ],
-      ),
-    );
-  }
-}
-
-/// "Nueva guía": el botón principal, abajo a la derecha. Degradado de la
-/// marca, con la cámara en un círculo y qué hace debajo del nombre.
-class _BotonNuevaGuia extends StatelessWidget {
-  const _BotonNuevaGuia({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final borde = BorderRadius.circular(20);
-    return Semantics(
-      button: true,
-      label: 'Nueva guía',
-      excludeSemantics: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: borde,
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF22A094), Ipesa.turquesa, Ipesa.petroleo],
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x401B7F79),
-              blurRadius: 18,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: borde,
-          child: InkWell(
-            borderRadius: borde,
-            onTap: onPressed,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 22, 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.add_a_photo_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Nueva guía',
-                        style: Ipesa.titulo(17, color: Colors.white),
-                      ),
-                      Text(
-                        'Foto o galería',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.85),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
