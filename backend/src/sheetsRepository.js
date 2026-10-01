@@ -352,10 +352,6 @@ function ordenarHoja(encabezados, filasLeidas) {
   return { filas, cambiadas, encabezados: encabezadosCorregidos(encabezados) };
 }
 
-// Filas de la hoja (con encabezado) en la última lectura: la próxima guía
-// va en la siguiente.
-let filasOcupadas = 1;
-
 /**
  * Lee todas las guías directamente de la hoja (sin caché). Si la hoja no
  * está en orden (ver ordenarHoja), la ordena con una sola escritura. Las
@@ -370,7 +366,6 @@ async function leerGuiasDeHoja() {
   });
   const valores = res.data.values || [];
   const [encabezados = [], ...filasLeidas] = valores;
-  filasOcupadas = Math.max(1, valores.length);
 
   const orden = ordenarHoja(encabezados, filasLeidas);
   const data = orden.cambiadas.map((i) => {
@@ -475,32 +470,48 @@ async function buscarPorNumero(numeroGuia, opciones) {
   );
 }
 
-// Las guías nuevas se escriben de a una por instancia (cada una lee cuál
-// es la fila libre justo antes de escribir).
-let colaDeRegistro = Promise.resolve();
+/** Una celda para appendCells, con el mismo tipo que escribiría 'RAW'. */
+function celdaNueva(valor) {
+  if (typeof valor === 'number' && Number.isFinite(valor)) {
+    return { userEnteredValue: { numberValue: valor } };
+  }
+  if (typeof valor === 'boolean') return { userEnteredValue: { boolValue: valor } };
+  return { userEnteredValue: { stringValue: String(valor ?? '') } };
+}
+
+// El id (gid) de la pestaña de guías, que no cambia.
+let idPestanaGuias = null;
 
 /**
- * Agrega una nueva guía en la fila siguiente a la última con datos,
- * siempre desde la columna A. (No usa el "agregar al final" de Sheets:
- * ese adivina dónde está la tabla y, con datos sueltos a la derecha,
- * pegaba la fila corrida en otras columnas.)
+ * Agrega una nueva guía en la fila siguiente a la última con datos de la
+ * hoja, siempre desde la columna A. Usa appendCells: Google la hace de una
+ * vez en su lado, así que varias guías registradas al mismo tiempo (desde
+ * distintas instancias del servidor) quedan cada una en su fila. (No se
+ * calcula la fila libre aquí: dos instancias calculaban la misma y una
+ * guía pisaba a la otra. Tampoco se usa values.append: adivina dónde está
+ * la tabla y, con datos sueltos a la derecha, pegaba la fila corrida.)
  */
-function crearGuia(guia) {
-  const tarea = colaDeRegistro.then(async () => {
-    const sheets = await getSheetsClient();
-    const spreadsheetId = requireSheetId();
-    await listarGuias({ fresco: true });
-    const fila = guiaToRow(guia);
-    const numeroDeFila = filasOcupadas + 1;
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${SHEET_NAME}!A${numeroDeFila}:${letraColumna(fila.length)}${numeroDeFila}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [fila] },
-    }).finally(invalidarCacheGuias);
-  });
-  colaDeRegistro = tarea.catch(() => {});
-  return tarea;
+async function crearGuia(guia) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  if (idPestanaGuias === null) {
+    idPestanaGuias = await idDePestana(sheets, spreadsheetId, SHEET_NAME);
+  }
+  const fila = guiaToRow(guia);
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          appendCells: {
+            sheetId: idPestanaGuias,
+            rows: [{ values: fila.map(celdaNueva) }],
+            fields: 'userEnteredValue',
+          },
+        },
+      ],
+    },
+  }).finally(invalidarCacheGuias);
 }
 
 /**

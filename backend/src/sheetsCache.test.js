@@ -7,8 +7,12 @@ const mockValores = {
   batchUpdate: jest.fn(),
 };
 
+const mockHojas = { get: jest.fn(), batchUpdate: jest.fn() };
+
 jest.mock('googleapis', () => ({
-  google: { sheets: () => ({ spreadsheets: { values: mockValores } }) },
+  google: {
+    sheets: () => ({ spreadsheets: { values: mockValores, ...mockHojas } }),
+  },
 }));
 jest.mock('google-auth-library', () => ({
   GoogleAuth: jest.fn().mockImplementation(() => ({ getClient: async () => ({}) })),
@@ -170,14 +174,38 @@ describe('orden de la hoja de guías', () => {
     expect(fila.slice(4).every((v) => v === '')).toBe(true);
   });
 
-  it('una guía nueva va en la fila siguiente a la última, desde la columna A', async () => {
-    mockValores.get.mockReset().mockResolvedValue({
-      data: { values: [COLUMNS, ['T1', 'en_ruta'], ['', '', '', 'algo suelto']] },
+  it('una guía nueva se agrega después de la última fila, desde la columna A', async () => {
+    mockHojas.get.mockReset().mockResolvedValue({
+      data: { sheets: [{ properties: { sheetId: 77, title: 'Guias' } }] },
     });
-    await repo.crearGuia({ numero_guia: 'T9', estado: 'en_ruta' });
-    const escritura = mockValores.update.mock.calls.at(-1)[0];
-    expect(escritura.range).toBe('Guias!A4:X4');
-    expect(escritura.requestBody.values[0].slice(0, 2)).toEqual(['T9', 'en_ruta']);
+    mockHojas.batchUpdate.mockReset().mockResolvedValue({});
+    await repo.crearGuia({
+      numero_guia: 'T9', estado: 'en_ruta', geo_lat: -12.1, corregido_por_admin: false,
+    });
+    const pedido = mockHojas.batchUpdate.mock.calls[0][0].requestBody.requests[0];
+    expect(pedido.appendCells.sheetId).toBe(77);
+    expect(pedido.appendCells.fields).toBe('userEnteredValue');
+    const [fila] = pedido.appendCells.rows;
+    expect(fila.values).toHaveLength(COLUMNS.length);
+    expect(fila.values[0]).toEqual({ userEnteredValue: { stringValue: 'T9' } });
+    expect(fila.values[7]).toEqual({ userEnteredValue: { numberValue: -12.1 } });
+    expect(fila.values[9]).toEqual({ userEnteredValue: { boolValue: false } });
+    // No calcula la fila: no escribe con values.update.
+    expect(mockValores.update).not.toHaveBeenCalled();
+  });
+
+  it('varias guías al mismo tiempo: cada una se agrega por separado', async () => {
+    mockHojas.get.mockReset().mockResolvedValue({
+      data: { sheets: [{ properties: { sheetId: 77, title: 'Guias' } }] },
+    });
+    mockHojas.batchUpdate.mockReset().mockResolvedValue({});
+    await Promise.all(
+      ['T1', 'T2', 'T3', 'T4', 'T5'].map((n) => repo.crearGuia({ numero_guia: n })),
+    );
+    const numeros = mockHojas.batchUpdate.mock.calls.map(
+      (c) => c[0].requestBody.requests[0].appendCells.rows[0].values[0].userEnteredValue.stringValue,
+    );
+    expect(numeros.sort()).toEqual(['T1', 'T2', 'T3', 'T4', 'T5']);
   });
 
   it('salta las filas sin número de guía', async () => {
