@@ -36,6 +36,8 @@ void main() {
   late List<String> leidas;
   late List<String> registradas;
   late List<String> origenes;
+  late int pedidosDeRegistro;
+  late int ocupadaVeces;
   var sucursales = '[]';
 
   setUp(() {
@@ -46,6 +48,8 @@ void main() {
     leidas = ['T200', 'T201', 'T100'];
     registradas = [];
     origenes = [];
+    pedidosDeRegistro = 0;
+    ocupadaVeces = 0;
     sucursales = '[]';
     Ubicacion.olvidarUltima();
     Ubicacion.permisoConcedido = () async => false;
@@ -69,12 +73,19 @@ void main() {
   });
 
   Future<void> abrir(WidgetTester tester) async {
-    // T100 se registró hace 30 min: no se puede registrar otra vez aún.
+    // T100 la registró él hace 10 min: no se puede registrar otra vez aún.
     final hace10 = DateTime.now().subtract(const Duration(minutes: 10));
     final client = MockClient((request) async {
       final ruta = request.url.path;
       if (ruta.endsWith('/sucursales')) return http.Response(sucursales, 200);
       if (ruta.endsWith('/ocr/leer-guia')) {
+        if (ocupadaVeces > 0) {
+          ocupadaVeces--;
+          return http.Response(
+            jsonEncode({'error': 'La IA está ocupada en este momento.'}),
+            429,
+          );
+        }
         final numero = leidas.removeAt(0);
         return http.Response(
           jsonEncode({
@@ -86,12 +97,17 @@ void main() {
           200,
         );
       }
-      if (request.method == 'POST' && ruta.endsWith('/guias')) {
+      if (request.method == 'POST' && ruta.endsWith('/guias/lote')) {
+        pedidosDeRegistro++;
         final cuerpo = jsonDecode(request.body) as Map<String, dynamic>;
-        final numero = cuerpo['numeroGuia'] as String;
-        registradas.add(numero);
-        origenes.add(cuerpo['origen'] as String);
-        return http.Response(jsonEncode(_guia(numero, DateTime.now())), 201);
+        final resultados = <Map<String, dynamic>>[];
+        for (final g in (cuerpo['guias'] as List).cast<Map>()) {
+          final numero = g['numeroGuia'] as String;
+          registradas.add(numero);
+          origenes.add(g['origen'] as String);
+          resultados.add({'guia': _guia(numero, DateTime.now())});
+        }
+        return http.Response(jsonEncode({'resultados': resultados}), 200);
       }
       return http.Response(jsonEncode([_guia('T100', hace10)]), 200);
     });
@@ -134,6 +150,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(registradas, unorderedEquals(['T200', 'T201']));
+    // Todas en un solo pedido al servidor.
+    expect(pedidosDeRegistro, 1);
     expect(find.text('2 guías asignadas · en ruta'), findsOneWidget);
     // Queda solo la que no se pudo registrar.
     expect(find.text('T100'), findsOneWidget);
@@ -157,6 +175,57 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Registrar 2 guías'), findsOneWidget);
+  });
+
+  testWidgets('Acepta hasta 30 fotos por carga y las registra juntas', (
+    tester,
+  ) async {
+    leidas = [for (var i = 0; i < 30; i++) 'G$i'];
+    CaptureFlowScreen.elegirFotos = () async => [
+      for (var i = 0; i < 35; i++) Uint8List.fromList(_png),
+    ];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Máximo 30 guías por carga'), findsOneWidget);
+    expect(leidas, isEmpty);
+    expect(find.text('Galería · 30/30'), findsOneWidget);
+    // Se va el aviso del límite.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Registrar 30 guías'));
+    await tester.pumpAndSettle();
+    expect(registradas, hasLength(30));
+    expect(pedidosDeRegistro, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Si la IA está ocupada, espera y vuelve a leer la foto', (
+    tester,
+  ) async {
+    leidas = ['T500'];
+    ocupadaVeces = 2;
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('La IA está ocupada: reintentando…'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(ocupadaVeces, 0);
+    expect(find.text('T500'), findsOneWidget);
+    expect(find.text('La IA está ocupada: reintentando…'), findsNothing);
+    expect(find.text('Registrar guía'), findsOneWidget);
   });
 
   test('Solo espera 20 minutos la guía que él mismo registró', () async {

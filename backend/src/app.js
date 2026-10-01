@@ -176,6 +176,13 @@ app.post('/ocr/leer-guia', async (req, res, next) => {
     // indiagnosticable desde afuera. No es información sensible: es un
     // error de la librería de Gemini, no un dato de la guía ni la API key.
     console.error(err);
+    // Límite por minuto de la IA (varios transportistas leyendo fotos a la
+    // vez): 429 para que la app espere y vuelva a intentar esa foto.
+    if (err.status === 429 || /RESOURCE_EXHAUSTED|\b429\b/.test(String(err.message))) {
+      return res.status(429).json({
+        error: 'La IA está ocupada en este momento; se reintentará en unos segundos.',
+      });
+    }
     res.status(500).json({ error: `Fallo al leer la guía con IA: ${err.message}` });
   }
 });
@@ -333,75 +340,76 @@ app.get('/guias/transportista/:nombre', async (req, res, next) => {
   }
 });
 
-// Asignación: crea una guía "en ruta" a partir del número leído por OCR.
-// GPS obligatorio (ARCHITECTURE.md, sección 5).
-app.post('/guias', async (req, res, next) => {
-  try {
-    const {
-      numeroGuia,
-      tipoEntrega,
-      origen,
-      destino,
-      transportista,
-      destinatario,
-      geo,
-      numeroPedido,
-      numeroEntrega,
-    } = req.body || {};
+// Guías que se pueden registrar de una vez (carga masiva desde la galería).
+const MAX_GUIAS_POR_LOTE = 30;
 
-    if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios.' });
-    }
-    if (!TIPOS_VALIDOS.has(tipoEntrega)) {
-      return res.status(400).json({ error: tipoInvalido(tipoEntrega) });
-    }
-    if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
-      return res.status(400).json({
-        error: 'GPS obligatorio: no se puede registrar una guía sin geolocalización.',
-      });
-    }
+/**
+ * Valida los datos de una guía por registrar y arma su fila, o devuelve
+ * { status, error }. `existentes` son las guías de la hoja (y las ya
+ * aceptadas en el mismo lote); `sucursales`, las de la hoja.
+ */
+function prepararGuia(datos, existentes, sucursales) {
+  const {
+    numeroGuia,
+    tipoEntrega,
+    origen,
+    destino,
+    transportista,
+    destinatario,
+    geo,
+    numeroPedido,
+    numeroEntrega,
+  } = datos || {};
 
+  if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
+    return { status: 400, error: 'Faltan campos obligatorios.' };
+  }
+  if (!TIPOS_VALIDOS.has(tipoEntrega)) {
+    return { status: 400, error: tipoInvalido(tipoEntrega) };
+  }
+  if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
+    return {
+      status: 400,
+      error: 'GPS obligatorio: no se puede registrar una guía sin geolocalización.',
+    };
+  }
 
-    // Un mismo número de guía se puede volver a registrar: otro
-    // transportista que la lleva en el siguiente tramo, en cualquier
-    // momento; el mismo transportista, pasados 20 minutos de su último
-    // registro (antes, casi siempre es la misma foto enviada dos veces).
-    // Un registro rechazado no cuenta: esa tarea nunca se hizo.
-    const suyas = (await repo.listarGuias({ fresco: true })).filter(
-      (g) =>
-        g.numero_guia === numeroGuia
-        && g.estado !== ESTADOS.RECHAZADO
-        && mismoNombre(g.transportista, transportista),
-    );
-    const registrada = Math.max(
-      ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
-      0,
-    );
-    const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
-    if (registrada > 0 && Date.now() < libreDesde) {
-      const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
-      return res.status(409).json({
-        error:
-          `Ya registraste la guía ${numeroGuia} hace ${minutos} min. `
-          + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
-      });
-    }
+  // Un mismo número de guía se puede volver a registrar: otro
+  // transportista que la lleva en el siguiente tramo, en cualquier
+  // momento; el mismo transportista, pasados 20 minutos de su último
+  // registro (antes, casi siempre es la misma foto enviada dos veces).
+  // Un registro rechazado no cuenta: esa tarea nunca se hizo.
+  const suyas = existentes.filter(
+    (g) =>
+      g.numero_guia === numeroGuia
+      && g.estado !== ESTADOS.RECHAZADO
+      && mismoNombre(g.transportista, transportista),
+  );
+  const registrada = Math.max(
+    ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
+    0,
+  );
+  const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
+  if (registrada > 0 && Date.now() < libreDesde) {
+    const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
+    return {
+      status: 409,
+      error:
+        `Ya registraste la guía ${numeroGuia} hace ${minutos} min. `
+        + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
+    };
+  }
 
-    // Si se registra dentro del perímetro de una sucursal, sale de ahí.
-    let origenFinal = origen;
-    try {
-      const aqui = sucursalEnPunto(await repo.listarSucursales(), geo.lat, geo.lng);
-      if (aqui) origenFinal = aqui.nombre;
-    } catch (err) {
-      console.error(err);
-    }
+  // Si se registra dentro del perímetro de una sucursal, sale de ahí.
+  const aqui = sucursalEnPunto(sucursales, geo.lat, geo.lng);
 
-    const ahora = new Date().toISOString();
-    const nueva = {
+  const ahora = new Date().toISOString();
+  return {
+    guia: {
       numero_guia: numeroGuia,
       estado: ESTADOS.EN_RUTA,
       tipo_entrega: tipoEntrega,
-      origen: origenFinal,
+      origen: aqui ? aqui.nombre : origen,
       destino,
       transportista,
       destinatario,
@@ -414,12 +422,73 @@ app.post('/guias', async (req, res, next) => {
       // opcionales porque el OCR no siempre los encuentra.
       numero_pedido: numeroPedido || '',
       numero_entrega: numeroEntrega || '',
-    };
-    await repo.crearGuia(nueva);
+    },
+  };
+}
+
+// Las sucursales para el punto de partida; si no se pueden leer, la guía
+// se registra igual con el punto de partida que vino.
+async function sucursalesParaRegistro() {
+  try {
+    return await repo.listarSucursales();
+  } catch (err) {
+    console.error(err);
+    return [];
+  }
+}
+
+// Asignación: crea una guía "en ruta" a partir del número leído por OCR.
+// GPS obligatorio (ARCHITECTURE.md, sección 5).
+app.post('/guias', async (req, res, next) => {
+  try {
+    const existentes = await repo.listarGuias({ fresco: true });
+    const sucursales = await sucursalesParaRegistro();
+    const { guia: nueva, status, error } = prepararGuia(req.body, existentes, sucursales);
+    if (error) return res.status(status).json({ error });
+    await repo.crearGuias([nueva]);
 
     // La guía completa: la app la agrega a su lista sin volver a pedirlas
     // todas.
-    res.status(201).json({ ...nueva, numeroGuia, estado: ESTADOS.EN_RUTA });
+    res.status(201).json({ ...nueva, numeroGuia: nueva.numero_guia });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Carga masiva: hasta MAX_GUIAS_POR_LOTE guías de una vez, con una sola
+// lectura y una sola escritura en la hoja (así 30 guías no gastan la cuota
+// de Google Sheets que comparten todos los transportistas). Cada guía se
+// valida por separado: las que fallan vuelven con su error y las demás se
+// registran igual. Responde { resultados: [{ guia } | { error }] } en el
+// mismo orden.
+app.post('/guias/lote', async (req, res, next) => {
+  try {
+    const { guias } = req.body || {};
+    if (!Array.isArray(guias) || guias.length === 0) {
+      return res.status(400).json({ error: 'Faltan las guías a registrar.' });
+    }
+    if (guias.length > MAX_GUIAS_POR_LOTE) {
+      return res.status(400).json({
+        error: `Máximo ${MAX_GUIAS_POR_LOTE} guías por carga.`,
+      });
+    }
+    const existentes = await repo.listarGuias({ fresco: true });
+    const sucursales = await sucursalesParaRegistro();
+    const resultados = [];
+    const nuevas = [];
+    for (const datos of guias) {
+      // Las ya aceptadas en este lote cuentan: la misma guía dos veces en
+      // la misma carga se registra una sola vez.
+      const preparada = prepararGuia(datos, [...existentes, ...nuevas], sucursales);
+      if (preparada.error) {
+        resultados.push({ error: preparada.error });
+      } else {
+        nuevas.push(preparada.guia);
+        resultados.push({ guia: preparada.guia });
+      }
+    }
+    if (nuevas.length > 0) await repo.crearGuias(nuevas);
+    res.json({ resultados });
   } catch (err) {
     next(err);
   }

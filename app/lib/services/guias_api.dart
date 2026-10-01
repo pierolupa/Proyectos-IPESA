@@ -41,8 +41,14 @@ Map<String, String> _fotoJson(Uint8List foto) => {
 };
 
 class ApiException implements Exception {
-  ApiException(this.mensaje);
+  ApiException(this.mensaje, {this.codigo});
   final String mensaje;
+
+  /// Código HTTP de la respuesta, si vino del servidor.
+  final int? codigo;
+
+  /// La IA está ocupada (límite por minuto): conviene esperar y reintentar.
+  bool get esLimiteTemporal => codigo == 429;
 
   @override
   String toString() => mensaje;
@@ -113,11 +119,15 @@ class GuiasApi {
       final body = _decodeBody(res);
       throw ApiException(
         body['error'] as String? ?? 'Error inesperado del servidor.',
+        codigo: res.statusCode,
       );
     } on ApiException {
       rethrow;
     } catch (_) {
-      throw ApiException('Error inesperado del servidor (${res.statusCode}).');
+      throw ApiException(
+        'Error inesperado del servidor (${res.statusCode}).',
+        codigo: res.statusCode,
+      );
     }
   }
 
@@ -245,6 +255,31 @@ class GuiasApi {
     );
     if (res.statusCode != 200) _lanzarError(res);
     return DatosGuiaLeida.fromJson(_decodeBody(res));
+  }
+
+  /// Carga masiva: registra hasta [maxGuiasPorCarga] guías con un solo
+  /// pedido. Devuelve, en el mismo orden, la guía creada o el error de
+  /// cada una (las demás se registran igual).
+  Future<List<ResultadoRegistro>> asignarLote(List<GuiaNueva> guias) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/guias/lote'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'guias': [for (final g in guias) g.toJson()],
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    final resultados = _decodeBody(res)['resultados'] as List<dynamic>;
+    return [
+      for (final r in resultados.cast<Map<String, dynamic>>())
+        r['guia'] is Map<String, dynamic>
+            ? ResultadoRegistro.guia(
+                Guia.fromJson(r['guia'] as Map<String, dynamic>),
+              )
+            : ResultadoRegistro.error(
+                r['error'] as String? ?? 'No se pudo registrar.',
+              ),
+    ];
   }
 
   Future<Guia> asignarNuevaGuia({
@@ -516,4 +551,55 @@ class GuiasApi {
     final json = _decodeBody(res);
     return (Guia.fromJson(json), json['aviso_foto'] as String?);
   }
+}
+
+/// Guías que se pueden registrar de una vez (lo mismo valida el backend).
+const maxGuiasPorCarga = 30;
+
+/// Una guía por registrar en una carga masiva (POST /guias/lote).
+class GuiaNueva {
+  const GuiaNueva({
+    required this.numeroGuia,
+    required this.tipoEntrega,
+    required this.origen,
+    required this.destino,
+    required this.transportista,
+    required this.destinatario,
+    required this.lat,
+    required this.lng,
+    this.numeroPedido = '',
+    this.numeroEntrega = '',
+  });
+
+  final String numeroGuia;
+  final TipoEntrega tipoEntrega;
+  final String origen;
+  final String destino;
+  final String transportista;
+  final String destinatario;
+  final double lat;
+  final double lng;
+  final String numeroPedido;
+  final String numeroEntrega;
+
+  Map<String, dynamic> toJson() => {
+    'numeroGuia': numeroGuia,
+    'tipoEntrega': tipoEntrega.valorApi,
+    'origen': origen,
+    'destino': destino,
+    'transportista': transportista,
+    'destinatario': destinatario,
+    'geo': {'lat': lat, 'lng': lng},
+    if (numeroPedido.isNotEmpty) 'numeroPedido': numeroPedido,
+    if (numeroEntrega.isNotEmpty) 'numeroEntrega': numeroEntrega,
+  };
+}
+
+/// Lo que pasó con una guía de la carga masiva: creada o con su error.
+class ResultadoRegistro {
+  const ResultadoRegistro.guia(Guia this.guia) : error = null;
+  const ResultadoRegistro.error(String this.error) : guia = null;
+
+  final Guia? guia;
+  final String? error;
 }

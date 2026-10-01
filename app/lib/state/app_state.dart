@@ -456,6 +456,22 @@ class AppState extends ChangeNotifier {
     return nueva;
   }
 
+  /// Carga masiva: registra todas con un solo pedido al backend y agrega a
+  /// la lista las que se crearon. Devuelve el resultado de cada una, en el
+  /// mismo orden.
+  Future<List<ResultadoRegistro>> asignarLote(List<GuiaNueva> guias) async {
+    final resultados = await _api.asignarLote(guias);
+    final creadas = [
+      for (final r in resultados)
+        if (r.guia != null) r.guia!,
+    ];
+    if (creadas.isNotEmpty) {
+      _guias.insertAll(0, creadas.reversed);
+      notifyListeners();
+    }
+    return resultados;
+  }
+
   /// Devuelve el aviso si la foto no se pudo guardar (null si todo bien).
   Future<String?> actualizarEstado(
     String numeroGuia,

@@ -266,10 +266,11 @@ Al terminar, Vercel te da una URL pública (algo como
 
 | Método | Ruta | Uso |
 |---|---|---|
-| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. |
+| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número dentro de los 20 minutos siguientes; otro transportista, sí. |
+| `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
 | `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
 | `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
 | `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |

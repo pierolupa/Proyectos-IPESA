@@ -37,6 +37,7 @@ function guia(overrides = {}) {
 beforeEach(() => {
   jest.resetAllMocks();
   repo.listarGuias.mockResolvedValue([]);
+  repo.listarSucursales.mockResolvedValue([]);
 });
 
 describe('POST /guias (asignación)', () => {
@@ -55,7 +56,7 @@ describe('POST /guias (asignación)', () => {
       .post('/guias')
       .send({ ...payload, geo: undefined });
     expect(res.status).toBe(400);
-    expect(repo.crearGuia).not.toHaveBeenCalled();
+    expect(repo.crearGuias).not.toHaveBeenCalled();
   });
 
   it('el mismo transportista no registra la misma guía dentro de 20 minutos', async () => {
@@ -67,7 +68,7 @@ describe('POST /guias (asignación)', () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/Ya registraste .* hace 10 min/);
     expect(res.body.error).toMatch(/desde las \d{2}:\d{2}/);
-    expect(repo.crearGuia).not.toHaveBeenCalled();
+    expect(repo.crearGuias).not.toHaveBeenCalled();
     // La comprobación lee la hoja sin caché.
     expect(repo.listarGuias).toHaveBeenCalledWith({ fresco: true });
   });
@@ -79,7 +80,7 @@ describe('POST /guias (asignación)', () => {
     ]);
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(201);
-    expect(repo.crearGuia).toHaveBeenCalledTimes(1);
+    expect(repo.crearGuias).toHaveBeenCalledTimes(1);
   });
 
   it('otro transportista la puede registrar al momento, aunque siga activa', async () => {
@@ -89,7 +90,7 @@ describe('POST /guias (asignación)', () => {
     ]);
     const res = await request(app).post('/guias').send(payload);
     expect(res.status).toBe(201);
-    expect(repo.crearGuia).toHaveBeenCalledTimes(1);
+    expect(repo.crearGuias).toHaveBeenCalledTimes(1);
   });
 
   it('crea la guía en estado en_ruta cuando no hay duplicado', async () => {
@@ -104,9 +105,68 @@ describe('POST /guias (asignación)', () => {
       transportista: payload.transportista,
     });
     expect(res.body.fecha_creacion).toBeTruthy();
-    expect(repo.crearGuia).toHaveBeenCalledWith(
+    expect(repo.crearGuias).toHaveBeenCalledWith([
       expect.objectContaining({ numero_guia: payload.numeroGuia, estado: ESTADOS.EN_RUTA }),
-    );
+    ]);
+  });
+});
+
+describe('POST /guias/lote (carga masiva)', () => {
+  const datos = (numero, extra = {}) => ({
+    numeroGuia: numero,
+    tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+    origen: 'Almacén Callao',
+    destino: 'Av. Siempre Viva 742',
+    transportista: 'Juan Pérez',
+    destinatario: 'María Torres',
+    geo: { lat: -12.05, lng: -77.04 },
+    ...extra,
+  });
+
+  it('registra 30 guías con una sola lectura y una sola escritura', async () => {
+    const guias = Array.from({ length: 30 }, (_, i) => datos(`T${i}`));
+    const res = await request(app).post('/guias/lote').send({ guias });
+    expect(res.status).toBe(200);
+    expect(res.body.resultados).toHaveLength(30);
+    expect(res.body.resultados.every((r) => r.guia && !r.error)).toBe(true);
+    expect(res.body.resultados[29].guia.numero_guia).toBe('T29');
+    expect(repo.listarGuias).toHaveBeenCalledTimes(1);
+    expect(repo.crearGuias).toHaveBeenCalledTimes(1);
+    expect(repo.crearGuias.mock.calls[0][0]).toHaveLength(30);
+  });
+
+  it('no acepta más de 30', async () => {
+    const guias = Array.from({ length: 31 }, (_, i) => datos(`T${i}`));
+    const res = await request(app).post('/guias/lote').send({ guias });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Máximo 30/);
+    expect(repo.crearGuias).not.toHaveBeenCalled();
+  });
+
+  it('las que fallan vuelven con su error y las demás se registran', async () => {
+    const hace5 = new Date(Date.now() - 5 * 60000).toISOString();
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T1', fecha_creacion: hace5 }),
+    ]);
+    const res = await request(app).post('/guias/lote').send({
+      guias: [datos('T1'), datos('T2'), datos('T3', { geo: undefined }), datos('T2')],
+    });
+    const [yaRegistrada, nueva, sinGps, repetida] = res.body.resultados;
+    expect(yaRegistrada.error).toMatch(/Ya registraste la guía T1/);
+    expect(nueva.guia.numero_guia).toBe('T2');
+    expect(sinGps.error).toMatch(/GPS obligatorio/);
+    // La misma guía dos veces en la misma carga: una sola vez.
+    expect(repetida.error).toMatch(/Ya registraste la guía T2/);
+    expect(repo.crearGuias.mock.calls[0][0].map((g) => g.numero_guia)).toEqual(['T2']);
+  });
+
+  it('si ninguna es válida, no escribe en la hoja', async () => {
+    const res = await request(app).post('/guias/lote').send({
+      guias: [datos('T1', { destinatario: '' })],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.resultados[0].error).toBe('Faltan campos obligatorios.');
+    expect(repo.crearGuias).not.toHaveBeenCalled();
   });
 });
 
@@ -349,6 +409,14 @@ describe('POST /ocr/leer-guia', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toContain('falló la IA');
   });
+  it('con el límite por minuto de la IA responde 429 para reintentar', async () => {
+    leerGuiaConIA.mockRejectedValue(Object.assign(new Error('RESOURCE_EXHAUSTED'), { status: 429 }));
+    const res = await request(app)
+      .post('/ocr/leer-guia')
+      .send({ imagenBase64: 'ZmFrZQ==' });
+    expect(res.status).toBe(429);
+    expect(res.body.error).toMatch(/ocupada/);
+  });
 });
 
 describe('Sucursales y geocerca', () => {
@@ -405,7 +473,7 @@ describe('Sucursales y geocerca', () => {
     });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Ya no se registran traslados/);
-    expect(repo.crearGuia).not.toHaveBeenCalled();
+    expect(repo.crearGuias).not.toHaveBeenCalled();
   });
 
   it('acepta la llegada dentro del perímetro', async () => {

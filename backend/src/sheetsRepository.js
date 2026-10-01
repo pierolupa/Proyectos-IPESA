@@ -483,21 +483,22 @@ function celdaNueva(valor) {
 let idPestanaGuias = null;
 
 /**
- * Agrega una nueva guía en la fila siguiente a la última con datos de la
- * hoja, siempre desde la columna A. Usa appendCells: Google la hace de una
- * vez en su lado, así que varias guías registradas al mismo tiempo (desde
- * distintas instancias del servidor) quedan cada una en su fila. (No se
- * calcula la fila libre aquí: dos instancias calculaban la misma y una
- * guía pisaba a la otra. Tampoco se usa values.append: adivina dónde está
- * la tabla y, con datos sueltos a la derecha, pegaba la fila corrida.)
+ * Agrega guías nuevas en las filas siguientes a la última con datos de la
+ * hoja, siempre desde la columna A, con una sola escritura. Usa
+ * appendCells: Google lo hace de una vez en su lado, así que las guías que
+ * registran varios transportistas al mismo tiempo (desde distintas
+ * instancias del servidor) quedan cada una en su fila. (No se calcula la
+ * fila libre aquí: dos instancias calculaban la misma y una guía pisaba a
+ * la otra. Tampoco se usa values.append: adivina dónde está la tabla y,
+ * con datos sueltos a la derecha, pegaba la fila corrida.)
  */
-async function crearGuia(guia) {
+async function crearGuias(guias) {
+  if (guias.length === 0) return;
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
   if (idPestanaGuias === null) {
     idPestanaGuias = await idDePestana(sheets, spreadsheetId, SHEET_NAME);
   }
-  const fila = guiaToRow(guia);
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -505,13 +506,17 @@ async function crearGuia(guia) {
         {
           appendCells: {
             sheetId: idPestanaGuias,
-            rows: [{ values: fila.map(celdaNueva) }],
+            rows: guias.map((guia) => ({ values: guiaToRow(guia).map(celdaNueva) })),
             fields: 'userEnteredValue',
           },
         },
       ],
     },
   }).finally(invalidarCacheGuias);
+}
+
+function crearGuia(guia) {
+  return crearGuias([guia]);
 }
 
 /**
@@ -737,6 +742,7 @@ module.exports = {
   invalidarCacheGuias,
   buscarPorNumero,
   crearGuia,
+  crearGuias,
   actualizarGuia,
   eliminarGuia,
   listarUsuarios,

@@ -19,6 +19,16 @@ final _hora = DateFormat('HH:mm');
 /// Cuántas fotos lee la IA a la vez (el resto espera su turno).
 const _lecturasSimultaneas = 3;
 
+/// Esperas antes de reintentar una foto si la IA está ocupada (límite por
+/// minuto, por ejemplo con varios transportistas cargando a la vez).
+const _esperasIAOcupada = [
+  Duration(seconds: 5),
+  Duration(seconds: 10),
+  Duration(seconds: 20),
+  Duration(seconds: 30),
+  Duration(seconds: 45),
+];
+
 final _picker = ImagePicker();
 
 Future<List<Uint8List>> _fotoDeCamara() async {
@@ -34,6 +44,7 @@ Future<List<Uint8List>> _fotosDeGaleria() async {
   final archivos = await _picker.pickMultiImage(
     maxWidth: 1600,
     imageQuality: 90,
+    limit: maxGuiasPorCarga,
   );
   return [for (final a in archivos) await a.readAsBytes()];
 }
@@ -112,8 +123,22 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
   Future<void> _agregarFotos(Future<List<Uint8List>> Function() origen) async {
     setState(() => _abriendoFotos = true);
     try {
-      final fotos = await origen();
-      if (!mounted || fotos.isEmpty) return;
+      final elegidas = await origen();
+      if (!mounted || elegidas.isEmpty) return;
+      final espacio = maxGuiasPorCarga - _borradores.length;
+      final fotos = elegidas.take(espacio < 0 ? 0 : espacio).toList();
+      if (fotos.length < elegidas.length) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Máximo $maxGuiasPorCarga guías por carga: '
+              '${fotos.isEmpty ? 'no se agregó ninguna' : 'se agregaron las primeras ${fotos.length}'}. '
+              'Registra estas y luego carga el resto.',
+            ),
+          ),
+        );
+      }
+      if (fotos.isEmpty) return;
       setState(() {
         for (final foto in fotos) {
           final b = _Borrador(foto, _siguienteId++);
@@ -153,9 +178,11 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       b.leyendo = true;
     });
     try {
-      final datos = await context.read<AppState>().leerGuiaConIA(b.foto);
-      if (!mounted || !_borradores.contains(b)) return;
+      final appState = context.read<AppState>();
+      final datos = await _leerConReintentos(appState, b);
+      if (datos == null || !mounted || !_borradores.contains(b)) return;
       setState(() {
+        b.avisoLectura = null;
         void llenar(TextEditingController c, String? valor) {
           if (valor != null && c.text.trim().isEmpty) c.text = valor;
         }
@@ -179,6 +206,27 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       if (mounted && _borradores.contains(b)) {
         setState(() => b.leyendo = false);
       }
+    }
+  }
+
+  /// Lee la foto; si la IA está ocupada, espera y lo vuelve a intentar
+  /// (ver [_esperasIAOcupada]). null si quitaron la foto mientras tanto.
+  Future<DatosGuiaLeida?> _leerConReintentos(
+    AppState appState,
+    _Borrador b,
+  ) async {
+    for (var intento = 0; ; intento++) {
+      try {
+        return await appState.leerGuiaConIA(b.foto);
+      } on ApiException catch (e) {
+        if (!e.esLimiteTemporal || intento >= _esperasIAOcupada.length) {
+          rethrow;
+        }
+      }
+      if (!mounted || !_borradores.contains(b)) return null;
+      setState(() => b.avisoLectura = 'La IA está ocupada: reintentando…');
+      await Future<void>.delayed(_esperasIAOcupada[intento]);
+      if (!mounted || !_borradores.contains(b)) return null;
     }
   }
 
@@ -227,9 +275,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         b.error = null;
       }
     });
-    final resultados = await Future.wait([
-      for (final b in listas) _registrar(appState, b),
-    ]);
+    final resultados = await _registrar(appState, listas);
     if (!mounted) return;
     final ok = resultados.where((r) => r).length;
     final fallidas = resultados.length - ok;
@@ -254,41 +300,63 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (_borradores.isEmpty) Navigator.of(context).pop();
   }
 
-  Future<bool> _registrar(AppState appState, _Borrador b) async {
+  /// Registra todas con un solo pedido (carga masiva): las que se crean
+  /// salen de la lista y las que no se quedan con su error. Devuelve si
+  /// cada una se registró.
+  Future<List<bool>> _registrar(
+    AppState appState,
+    List<_Borrador> listas,
+  ) async {
+    // Dentro del perímetro de una sucursal, salen de ahí.
+    final sucursal = _sucursalAqui(appState)?.nombre;
     try {
-      await appState.asignarNuevaGuia(
-        numeroGuia: b.numero.text.trim(),
-        tipoEntrega: b.tipo,
-        // Dentro del perímetro de una sucursal, sale de ahí.
-        origen: _sucursalAqui(appState)?.nombre ?? b.origen.text.trim(),
-        destino: b.destino.text.trim(),
-        destinatario: b.destinatario.text.trim(),
-        lat: lat!,
-        lng: lng!,
-        numeroPedido: b.pedido.text.trim(),
-        numeroEntrega: b.entrega.text.trim(),
-      );
-      if (mounted) {
-        setState(() => _borradores.remove(b));
-        b.dispose();
-      }
-      return true;
-    } on ApiException catch (e) {
+      final resultados = await appState.asignarLote([
+        for (final b in listas)
+          GuiaNueva(
+            numeroGuia: b.numero.text.trim(),
+            tipoEntrega: b.tipo,
+            origen: sucursal ?? b.origen.text.trim(),
+            destino: b.destino.text.trim(),
+            transportista: appState.transportistaActual,
+            destinatario: b.destinatario.text.trim(),
+            lat: lat!,
+            lng: lng!,
+            numeroPedido: b.pedido.text.trim(),
+            numeroEntrega: b.entrega.text.trim(),
+          ),
+      ]);
       if (mounted) {
         setState(() {
-          b.enviando = false;
-          b.error = e.mensaje;
+          for (var i = 0; i < listas.length; i++) {
+            final b = listas[i];
+            final error = i < resultados.length
+                ? resultados[i].error
+                : 'No se pudo registrar.';
+            if (error == null) {
+              _borradores.remove(b);
+              b.dispose();
+            } else {
+              b.enviando = false;
+              b.error = error;
+            }
+          }
         });
       }
-      return false;
+      return [
+        for (var i = 0; i < listas.length; i++)
+          i < resultados.length && resultados[i].guia != null,
+      ];
     } catch (e) {
+      final mensaje = e is ApiException ? e.mensaje : 'Error de conexión: $e';
       if (mounted) {
         setState(() {
-          b.enviando = false;
-          b.error = 'Error de conexión: $e';
+          for (final b in listas) {
+            b.enviando = false;
+            b.error = mensaje;
+          }
         });
       }
-      return false;
+      return [for (final _ in listas) false];
     }
   }
 
@@ -299,7 +367,8 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         .where((b) => !b.enviando && _falta(b, appState) == null)
         .length;
     final leyendo = _borradores.where((b) => b.enCola || b.leyendo).length;
-    final puedeFotografiar = gpsActivo && !_abriendoFotos;
+    final puedeFotografiar =
+        gpsActivo && !_abriendoFotos && _borradores.length < maxGuiasPorCarga;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Nuevas guías · Asignación')),
@@ -381,7 +450,11 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
                       ? () => _agregarFotos(CaptureFlowScreen.elegirFotos)
                       : null,
                   icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('Galería'),
+                  label: Text(
+                    _borradores.isEmpty
+                        ? 'Galería'
+                        : 'Galería · ${_borradores.length}/$maxGuiasPorCarga',
+                  ),
                 ),
               ),
             ],
@@ -390,8 +463,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               gpsActivo
-                  ? 'Puedes tomar varias fotos seguidas o elegir varias de la '
-                        'galería: la IA las lee mientras sigues.'
+                  ? 'Puedes tomar varias fotos seguidas o elegir hasta '
+                        '$maxGuiasPorCarga de la galería: la IA las lee '
+                        'mientras sigues.'
                   : 'Activa el GPS para habilitar la cámara.',
               style: TextStyle(
                 color: gpsActivo ? Ipesa.textoSuave : Colors.red,
@@ -473,7 +547,7 @@ class _TarjetaBorrador extends StatelessWidget {
       estado = 'En espera para leer…';
       colorEstado = Ipesa.textoSuave;
     } else if (b.leyendo) {
-      estado = 'Leyendo con IA…';
+      estado = b.avisoLectura ?? 'Leyendo con IA…';
       colorEstado = Ipesa.petroleo;
     } else if (b.error != null) {
       estado = b.error!;
