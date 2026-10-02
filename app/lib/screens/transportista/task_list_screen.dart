@@ -15,6 +15,7 @@ import '../../widgets/estado_badge.dart';
 import '../../widgets/transbordo.dart';
 import 'capture_flow_screen.dart';
 import 'entrega_flow_screen.dart';
+import 'entrega_ia_screen.dart';
 import 'guia_detail_screen.dart';
 import 'rechazo_sheet.dart';
 
@@ -83,6 +84,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _nuevaGuia() =>
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const CaptureFlowScreen()));
+
+  void _entregaConIA() =>
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const EntregaIAScreen()));
 
   void _despachoCorte() => Navigator.of(context).push(
     MaterialPageRoute(
@@ -169,7 +174,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Buscar',
+        hintText: 'Buscar guía, cliente o destino',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: Colors.white,
@@ -312,35 +317,35 @@ class _TaskListScreenState extends State<TaskListScreen> {
             const SizedBox(height: 6),
           ],
           if (!sinPendientes) ...[
-            // "Despacho Corte" arriba, lejos de "Nueva guía" (abajo).
+            // "Despacho Corte" y "Entrega con IA" arriba, lejos de "Nueva
+            // guía" (abajo).
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: _buscador()),
-                    const SizedBox(width: 10),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 50),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        backgroundColor: Colors.white,
-                        foregroundColor: Ipesa.petroleo,
-                        side: const BorderSide(
-                          color: Ipesa.petroleo,
-                          width: 1.5,
+                    _buscador(),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _BotonSuperior(
+                            icono: Icons.inventory_2_outlined,
+                            texto: 'Despacho Corte',
+                            onPressed: _despachoCorte,
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _BotonSuperior(
+                            icono: Icons.auto_awesome_outlined,
+                            texto: 'Entrega con IA',
+                            onPressed: _entregaConIA,
+                          ),
                         ),
-                      ),
-                      onPressed: _despachoCorte,
-                      icon: const Icon(Icons.inventory_2_outlined, size: 20),
-                      label: const Text(
-                        'Despacho Corte',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -350,6 +355,41 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ],
           contenido,
         ],
+      ),
+    );
+  }
+}
+
+/// Botón de contorno de arriba ("Despacho Corte", "Entrega con IA").
+class _BotonSuperior extends StatelessWidget {
+  const _BotonSuperior({
+    required this.icono,
+    required this.texto,
+    required this.onPressed,
+  });
+
+  final IconData icono;
+  final String texto;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: Colors.white,
+        foregroundColor: Ipesa.petroleo,
+        side: const BorderSide(color: Ipesa.petroleo, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      onPressed: onPressed,
+      icon: Icon(icono, size: 20),
+      label: Text(
+        texto,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
   }
