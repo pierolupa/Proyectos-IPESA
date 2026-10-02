@@ -55,6 +55,10 @@ const _prefRol = 'sesion_rol';
 /// veces). Otro transportista sí puede (lo mismo valida el backend).
 const esperaMismaGuia = Duration(minutes: 20);
 
+/// Rastrear (y lo que se pide al servidor para el equipo comercial) busca
+/// por defecto en los últimos días, hoy incluido.
+const diasRastreoPorDefecto = 10;
+
 /// Distancia en metros entre dos puntos (haversine).
 double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
   double rad(double g) => g * math.pi / 180;
@@ -86,8 +90,9 @@ class AppState extends ChangeNotifier {
   String? _nombreUsuario;
 
   /// Solo para el equipo comercial: días de la fecha de tarea que se piden
-  /// al servidor (así no se descarga toda la hoja). Por defecto, hoy.
-  DateTime _desdeTareas = _inicioDelDia(DateTime.now());
+  /// al servidor (así no se descarga toda la hoja). Por defecto, los
+  /// últimos [diasRastreoPorDefecto] días.
+  DateTime _desdeTareas = _inicioPorDefecto();
   DateTime _hastaTareas = _inicioDelDia(DateTime.now());
   Future<void>? _cargaEnCurso;
   (DateTime, DateTime)? _rangoCargado;
@@ -137,15 +142,20 @@ class AppState extends ChangeNotifier {
     await _establecerSesion(await _api.registrar(nombre, pin));
   }
 
-  void _rangoDeHoy() {
-    _desdeTareas = _hastaTareas = _inicioDelDia(DateTime.now());
+  static DateTime _inicioPorDefecto() =>
+      _inicioDelDia(DateTime.now())
+          .subtract(const Duration(days: diasRastreoPorDefecto - 1));
+
+  void _rangoPorDefecto() {
+    _desdeTareas = _inicioPorDefecto();
+    _hastaTareas = _inicioDelDia(DateTime.now());
     _rangoCargado = null;
   }
 
   Future<void> _establecerSesion(SesionUsuario sesion) async {
     _nombreUsuario = sesion.nombre;
     _rolActual = sesion.rol;
-    _rangoDeHoy();
+    _rangoPorDefecto();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefNombre, sesion.nombre);
@@ -168,7 +178,7 @@ class AppState extends ChangeNotifier {
 
     _nombreUsuario = nombre;
     _rolActual = rol;
-    _rangoDeHoy();
+    _rangoPorDefecto();
     notifyListeners();
     await cargarGuias();
   }

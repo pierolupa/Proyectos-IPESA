@@ -240,7 +240,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('No encontramos ninguna guía de hoy con esos datos'),
+      find.textContaining(
+        'No encontramos ninguna guía de los últimos 10 días con esos datos',
+      ),
       findsOneWidget,
     );
     expect(find.text('Tu guía'), findsNothing);
@@ -363,17 +365,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Busca solo en la fecha de tarea: hoy, salvo que se cambie', (
+  testWidgets('Busca en los últimos 10 días, salvo que se cambie', (
     tester,
   ) async {
-    // Guías de otros días: con "Hoy" no aparecen.
+    // Guías de hace semanas: en los últimos 10 días no aparecen.
     await _abrirRastreo(tester, datos: _datos);
 
-    // Fecha inicio y fecha fin, las dos en hoy.
-    final hoy = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    // Fecha inicio: hace 9 días; fecha fin: hoy.
+    final ahora = DateTime.now();
+    final formato = DateFormat('dd/MM/yyyy');
     expect(find.text('Fecha inicio'), findsOneWidget);
     expect(find.text('Fecha fin'), findsOneWidget);
-    expect(find.text(hoy), findsNWidgets(2));
+    expect(
+      find.text(formato.format(ahora.subtract(const Duration(days: 9)))),
+      findsOneWidget,
+    );
+    expect(find.text(formato.format(ahora)), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextField, 'N° de guía'),
       'T033-3455',
@@ -384,7 +391,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('No encontramos ninguna guía de hoy'),
+      find.textContaining('No encontramos ninguna guía de los últimos 10 días'),
       findsOneWidget,
     );
     expect(find.text('Tu guía'), findsNothing);
@@ -409,7 +416,11 @@ void main() {
     await appState.restaurarSesion();
 
     final hoy = DateUtils.dateOnly(DateTime.now());
-    expect(consultas.single['desde'], hoy.toUtc().toIso8601String());
+    // Por defecto, los últimos 10 días (hoy incluido).
+    expect(
+      consultas.single['desde'],
+      hoy.subtract(const Duration(days: 9)).toUtc().toIso8601String(),
+    );
     expect(
       consultas.single['hasta'],
       hoy.add(const Duration(days: 1)).toUtc().toIso8601String(),

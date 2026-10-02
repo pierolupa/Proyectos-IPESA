@@ -16,9 +16,14 @@ final _fecha = DateFormat('dd/MM/yyyy');
 
 DateTime _hoy() => DateUtils.dateOnly(DateTime.now());
 
+/// La búsqueda empieza siempre en los últimos 10 días (hoy incluido).
+const _diasPorDefecto = diasRastreoPorDefecto;
+DateTime _inicioPorDefecto() =>
+    _hoy().subtract(const Duration(days: _diasPorDefecto - 1));
+
 /// Inicio del equipo comercial: saludo, una tarjeta "Rastrea tus guías"
 /// con los filtros (N° de guía, cliente, pedido y entrega) y la fecha de la
-/// tarea (hoy, salvo que se elija otro rango), y el paisaje animado con el
+/// tarea (los últimos 10 días, salvo que se elija otro rango), y el paisaje animado con el
 /// camión IPESA al pie. Solo se busca dentro de esas fechas: al comercial
 /// el servidor le manda solo las guías de ese rango. "Buscar" abre la guía
 /// encontrada (o la lista, si hay varias).
@@ -39,7 +44,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
   final _pedido = TextEditingController();
   final _entrega = TextEditingController();
   String? _error;
-  DateTime _desde = _hoy();
+  DateTime _desde = _inicioPorDefecto();
   DateTime _hasta = _hoy();
   bool _buscando = false;
   double _altoSinTeclado = 0;
@@ -72,8 +77,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
   @override
   void initState() {
     super.initState();
-    // Siempre empieza en hoy. Para el comercial, pide al servidor solo
-    // las guías de hoy (si no son las que ya tiene).
+    // Siempre empieza en los últimos 10 días. Para el comercial, pide al
+    // servidor solo las guías de esos días (si no son las que ya tiene).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<AppState>().asegurarRangoTareas(_desde, _hasta);
@@ -81,7 +86,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     });
   }
 
-  bool get _esHoy => _desde == _hoy() && _hasta == _hoy();
+  bool get _esPorDefecto => _desde == _inicioPorDefecto() && _hasta == _hoy();
 
   void _cambiarRango(DateTime desde, DateTime hasta) {
     setState(() {
@@ -151,9 +156,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final encontradas = filtros.aplicar(appState.guias);
     if (!sinDatos && encontradas.isEmpty) {
       setState(
-        () => _error = _esHoy
-            ? 'No encontramos ninguna guía de hoy con esos datos. Si es de '
-                  'otro día, cambia las fechas.'
+        () => _error = _esPorDefecto
+            ? 'No encontramos ninguna guía de los últimos $_diasPorDefecto '
+                  'días con esos datos. Si es más antigua, cambia las fechas.'
             : 'No encontramos ninguna guía con esos datos en esas fechas.',
       );
       return;
@@ -232,7 +237,9 @@ class _RastreoScreenState extends State<RastreoScreen> {
               buscando: _buscando,
               onFechaInicio: () => _elegirFecha(inicio: true),
               onFechaFin: () => _elegirFecha(inicio: false),
-              onHoy: _esHoy ? null : () => _cambiarRango(_hoy(), _hoy()),
+              onPorDefecto: _esPorDefecto
+                  ? null
+                  : () => _cambiarRango(_inicioPorDefecto(), _hoy()),
               onTexto: () => setState(() => _error = null),
               onLimpiar: _limpiar,
               onBuscar: _buscar,
@@ -450,7 +457,7 @@ class _TarjetaBusqueda extends StatelessWidget {
     required this.buscando,
     required this.onFechaInicio,
     required this.onFechaFin,
-    required this.onHoy,
+    required this.onPorDefecto,
     required this.onTexto,
     required this.onLimpiar,
     required this.onBuscar,
@@ -469,7 +476,7 @@ class _TarjetaBusqueda extends StatelessWidget {
   final VoidCallback onFechaFin;
 
   /// Volver a hoy (null si ya es hoy).
-  final VoidCallback? onHoy;
+  final VoidCallback? onPorDefecto;
   final VoidCallback onTexto;
   final VoidCallback onLimpiar;
   final VoidCallback onBuscar;
@@ -515,8 +522,11 @@ class _TarjetaBusqueda extends StatelessWidget {
                 Expanded(
                   child: Text('Rastrea tus guías', style: Ipesa.titulo(19)),
                 ),
-                if (onHoy != null)
-                  TextButton(onPressed: onHoy, child: const Text('Hoy')),
+                if (onPorDefecto != null)
+                  TextButton(
+                    onPressed: onPorDefecto,
+                    child: const Text('Últimos $_diasPorDefecto días'),
+                  ),
                 if (hayFiltros)
                   TextButton(
                     onPressed: onLimpiar,
