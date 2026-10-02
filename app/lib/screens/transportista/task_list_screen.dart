@@ -372,17 +372,45 @@ class _MenuTransportista extends StatelessWidget {
       IconData icono,
       String titulo,
       String detalle,
-      VoidCallback onTap,
-    ) => ListTile(
+      VoidCallback onTap, {
+      bool chispa = false,
+    }) => ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Container(
+      leading: SizedBox(
         width: 42,
         height: 42,
-        decoration: BoxDecoration(
-          color: Ipesa.menta,
-          borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Ipesa.menta,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icono, color: Ipesa.petroleo),
+            ),
+            // La chispa marca la opción "inteligente".
+            if (chispa)
+              Positioned(
+                right: -5,
+                top: -5,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                    color: Ipesa.turquesa,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    size: 11,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
         ),
-        child: Icon(icono, color: Ipesa.petroleo),
       ),
       title: Text(titulo, style: Ipesa.titulo(16, color: Ipesa.texto)),
       subtitle: Text(
@@ -447,6 +475,7 @@ class _MenuTransportista extends StatelessWidget {
             'Entrega inteligente',
             'Entrega varias tareas con sus fotos',
             onEntregaConIA,
+            chispa: true,
           ),
           const Spacer(),
           const Divider(height: 1),
