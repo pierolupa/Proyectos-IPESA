@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
@@ -41,6 +42,20 @@ class FilaRanking {
   double get cumplimiento => total == 0 ? 0 : entregadas / total;
 }
 
+/// Una agencia de transporte en el periodo: cuántos pedidos le dieron y
+/// cuánto se le pagó (de los comprobantes pegados en las guías).
+class FilaAgencia {
+  FilaAgencia(this.nombre);
+
+  final String nombre;
+  String ruc = '';
+  int pedidos = 0;
+  double costo = 0;
+}
+
+/// "S/ 1,234.50".
+String soles(double monto) => 'S/ ${NumberFormat('#,##0.00').format(monto)}';
+
 /// Los números del dashboard, calculados de las guías del periodo con la
 /// misma regla que la vista Transportistas (ver [PeriodoResumen.incluye]).
 class IndicadoresOperacion {
@@ -54,6 +69,7 @@ class IndicadoresOperacion {
   }) {
     final r = IndicadoresOperacion._(periodo);
     final ranking = <String, FilaRanking>{};
+    final agencias = <String, FilaAgencia>{};
     final tiempos = <Duration>[];
     final sucursalesMin = {for (final s in sucursales) s.toLowerCase()};
 
@@ -86,6 +102,24 @@ class IndicadoresOperacion {
           }
       }
       if (g.eliminacionPendiente) r.pidenEliminar.add(g);
+      if (g.tieneComprobanteAgencia) {
+        // La misma agencia escrita con otros espacios o mayúsculas es una.
+        final nombre = g.agenciaRazonSocial.isNotEmpty
+            ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
+            : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
+        final fila = agencias.putIfAbsent(
+          nombre.toUpperCase(),
+          () => FilaAgencia(nombre),
+        );
+        fila.pedidos++;
+        if (fila.ruc.isEmpty) fila.ruc = g.agenciaRuc;
+        if (g.agenciaMonto case final m?) {
+          fila.costo += m;
+          r.costoAgencias += m;
+          r.conMonto++;
+        }
+        r.comprobantes++;
+      }
       if (g.tipoEntrega == TipoEntrega.agencia) {
         r.agencia++;
       } else {
@@ -106,6 +140,11 @@ class IndicadoresOperacion {
         return porEntregas != 0 ? porEntregas : b.total.compareTo(a.total);
       });
     r.atrasadas.sort((a, b) => a.fechaCreacion.compareTo(b.fechaCreacion));
+    r.agencias = agencias.values.toList()
+      ..sort((a, b) {
+        final porCosto = b.costo.compareTo(a.costo);
+        return porCosto != 0 ? porCosto : b.pedidos.compareTo(a.pedidos);
+      });
     r.serie = _serie(r.guias, periodo, ahora);
     return r;
   }
@@ -124,6 +163,18 @@ class IndicadoresOperacion {
   final List<Guia> pidenEliminar = [];
   List<FilaRanking> ranking = [];
   List<PuntoSerie> serie = [];
+
+  /// Comprobantes de agencia del periodo, cuántos traen monto y su total.
+  int comprobantes = 0;
+  int conMonto = 0;
+  double costoAgencias = 0;
+
+  /// Por agencia, de la de más costo a la de menos.
+  List<FilaAgencia> agencias = [];
+
+  /// Lo que costó en promedio cada pedido enviado por agencia.
+  double? get costoPromedioAgencia =>
+      conMonto == 0 ? null : costoAgencias / conMonto;
 
   int get total => guias.length;
 
@@ -300,7 +351,6 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
         builder: (context, c) {
           final ancho = c.maxWidth;
           final ancha = ancho >= 1000;
-          final media = ancho >= 640;
           const sep = 16.0;
 
           final cifras = [
@@ -346,9 +396,26 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                   ? 'sin movimiento'
                   : 'activos en el periodo',
             ),
+            _Cifra(
+              etiqueta: 'Costo de agencias',
+              valor: soles(datos.costoAgencias),
+              detalle: datos.comprobantes == 0
+                  ? 'sin comprobantes'
+                  : datos.comprobantes == 1
+                  ? '1 comprobante'
+                  : '${datos.comprobantes} comprobantes',
+            ),
+            _Cifra(
+              etiqueta: 'Costo por pedido',
+              valor: datos.costoPromedioAgencia == null
+                  ? '—'
+                  : soles(datos.costoPromedioAgencia!),
+              detalle: 'promedio por envío',
+            ),
           ];
 
-          final columnasCifras = ancha ? 3 : (media ? 3 : 2);
+          // 8 cifras: 4 por fila en computadora, 2 en lo demás.
+          final columnasCifras = ancha ? 4 : 2;
           final anchoGrilla = ancha ? (ancho - 48 - sep) * 0.64 : ancho - 48;
           final anchoCifra =
               (anchoGrilla - sep * (columnasCifras - 1)) / columnasCifras;
@@ -365,6 +432,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           final estados = _Estados(datos: datos);
           final ranking = _Ranking(datos: datos);
           final atencion = _Atencion(datos: datos);
+          final agencias = _Agencias(datos: datos);
 
           Widget fila(List<Widget> hijos, List<int> flex) => IntrinsicHeight(
             child: Row(
@@ -395,6 +463,8 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                 fila([grafico, estados], [62, 38]),
                 const SizedBox(height: sep),
                 fila([ranking, atencion], [62, 38]),
+                const SizedBox(height: sep),
+                agencias,
               ] else ...[
                 hero,
                 const SizedBox(height: sep),
@@ -407,6 +477,8 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                 ranking,
                 const SizedBox(height: sep),
                 atencion,
+                const SizedBox(height: sep),
+                agencias,
               ],
             ],
           );
@@ -1306,6 +1378,141 @@ class _Atencion extends StatelessWidget {
                   ),
               ],
             ),
+    );
+  }
+}
+
+/// Pedidos y costo por agencia de transporte (de los comprobantes leídos de
+/// las fotos): una barra por agencia, larga según lo que se le pagó.
+class _Agencias extends StatelessWidget {
+  const _Agencias({required this.datos});
+
+  final IndicadoresOperacion datos;
+
+  static const _visibles = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final todas = datos.agencias;
+    // Más de [_visibles]: las de menos costo se juntan en "Otras".
+    final filas = todas.length <= _visibles
+        ? todas
+        : [
+            ...todas.take(_visibles - 1),
+            todas
+                .skip(_visibles - 1)
+                .fold(
+                  FilaAgencia('Otras ${todas.length - _visibles + 1} agencias'),
+                  (otras, a) => otras
+                    ..pedidos += a.pedidos
+                    ..costo += a.costo,
+                ),
+          ];
+    final maximo = filas.fold<double>(0, (m, a) => math.max(m, a.costo));
+    return _Tarjeta(
+      titulo: 'Agencias',
+      subtitulo: 'Pedidos enviados y costo pagado a cada agencia en el periodo',
+      child: filas.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Sin comprobantes de agencia en este periodo.',
+                style: TextStyle(color: Ipesa.textoSuave),
+              ),
+            )
+          : Column(
+              children: [
+                for (final a in filas)
+                  _FilaAgencia(
+                    fila: a,
+                    fraccion: maximo == 0 ? 0 : a.costo / maximo,
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _FilaAgencia extends StatelessWidget {
+  const _FilaAgencia({required this.fila, required this.fraccion});
+
+  final FilaAgencia fila;
+  final double fraccion;
+
+  @override
+  Widget build(BuildContext context) {
+    final pedidos = fila.pedidos == 1 ? '1 pedido' : '${fila.pedidos} pedidos';
+    return Tooltip(
+      message: [
+        fila.nombre,
+        if (fila.ruc.isNotEmpty) 'RUC ${fila.ruc}',
+        '$pedidos · ${soles(fila.costo)}',
+      ].join('\n'),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Text(
+                    fila.nombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Ipesa.texto,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  pedidos,
+                  style: const TextStyle(fontSize: 13.5, color: Ipesa.etiqueta),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 104,
+                  child: Text(
+                    soles(fila.costo),
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: Ipesa.texto,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // Barra fina con el extremo redondeado, sobre un riel suave.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: Stack(
+                  children: [
+                    Container(color: Ipesa.menta),
+                    FractionallySizedBox(
+                      widthFactor: fraccion.clamp(0, 1).toDouble(),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Ipesa.turquesa,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -418,6 +418,50 @@ void main() {
     expect(dosDias.serie, hasLength(2));
   });
 
+  test('Costo de agencias: total, promedio y por agencia', () {
+    final ahora = DateTime(2026, 10, 2, 15);
+    Guia guia(String numero, String? razon, String ruc, Object? monto) =>
+        Guia.fromJson(
+          _guia(numero, 'entregado', 'Juan Pérez')
+            ..['fecha_creacion'] = DateTime(
+              2026,
+              10,
+              2,
+              8,
+            ).toUtc().toIso8601String()
+            ..['fecha_actualizacion'] = DateTime(
+              2026,
+              10,
+              2,
+              10,
+            ).toUtc().toIso8601String()
+            ..['agencia_razon_social'] = razon ?? ''
+            ..['agencia_ruc'] = ruc
+            ..['agencia_monto'] = monto,
+        );
+    final datos = IndicadoresOperacion.calcular(
+      [
+        guia('A', 'TURISMO INTERNACIONAL PALOMINO S.A.C.', '20515659324', 70),
+        // La misma agencia con otros espacios y mayúsculas, monto como texto.
+        guia('B', 'Turismo  Internacional Palomino S.A.C.', '', '30'),
+        guia('C', 'SEÑOR DE LUREN EXPRESS E.I.R.L.', '20601857457', 13),
+        // Sin comprobante: no cuenta.
+        guia('D', null, '', null),
+      ],
+      PeriodoResumen.hoy,
+      ahora: ahora,
+    );
+    expect(datos.comprobantes, 3);
+    expect(datos.costoAgencias, 113);
+    expect(datos.costoPromedioAgencia, closeTo(37.67, 0.01));
+    expect(datos.agencias.map((a) => (a.pedidos, a.costo)), [
+      (2, 100.0),
+      (1, 13.0),
+    ]);
+    expect(datos.agencias.first.ruc, '20515659324');
+    expect(soles(1234.5), 'S/ 1,234.50');
+  });
+
   test('Un rechazo cierra la tarea pero no cuenta como entrega', () {
     final ahora = DateTime(2026, 9, 29, 18);
     Guia guia(String numero, String estado) => Guia.fromJson(
