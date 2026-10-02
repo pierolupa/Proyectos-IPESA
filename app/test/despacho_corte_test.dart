@@ -136,26 +136,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('La barra de opciones se abre, se esconde y se recuerda', (
+  testWidgets('El menú ☰ de la cabecera tiene las demás opciones', (
     tester,
   ) async {
     await abrir(tester);
-    // Empieza escondida: solo el botón "Opciones" junto al buscador.
+    // No ocupan espacio en la lista: están en el menú.
     expect(find.text('Entrega con IA'), findsNothing);
-    await tester.tap(find.text('Opciones'));
+    await tester.tap(find.byTooltip('Menú'));
     await tester.pumpAndSettle();
     expect(find.text('Entrega con IA'), findsOneWidget);
-    expect(
-      find.widgetWithText(OutlinedButton, 'Despacho Corte'),
-      findsOneWidget,
-    );
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('opciones_tareas_abiertas'), isTrue);
+    expect(find.text('Varias guías que salen y llegan juntas'), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
 
-    await tester.tap(find.text('Cerrar'));
+    await tester.tap(find.text('Entrega con IA'));
     await tester.pumpAndSettle();
-    expect(find.text('Entrega con IA'), findsNothing);
-    expect(prefs.getBool('opciones_tareas_abiertas'), isFalse);
+    // Se cerró el menú y se abrió la pantalla.
+    expect(find.text('Entrega con IA'), findsOneWidget);
+    expect(find.text('Varias guías que salen y llegan juntas'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Una guía se puede quitar del corte', (tester) async {

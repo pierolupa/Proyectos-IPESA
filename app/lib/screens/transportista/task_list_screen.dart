@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
@@ -31,28 +30,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   bool _verEntregadas = false;
   final _busqueda = TextEditingController();
 
-  /// La barra de opciones ("Despacho Corte", "Entrega con IA") abierta o
-  /// escondida; se recuerda en el celular.
-  bool _opcionesAbiertas = false;
-  static const _prefOpciones = 'opciones_tareas_abiertas';
-
-  @override
-  void initState() {
-    super.initState();
-    SharedPreferences.getInstance().then((prefs) {
-      final abiertas = prefs.getBool(_prefOpciones) ?? false;
-      if (mounted && abiertas != _opcionesAbiertas) {
-        setState(() => _opcionesAbiertas = abiertas);
-      }
-    });
-  }
-
-  void _alternarOpciones() {
-    setState(() => _opcionesAbiertas = !_opcionesAbiertas);
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setBool(_prefOpciones, _opcionesAbiertas),
-    );
-  }
+  final _scaffold = GlobalKey<ScaffoldState>();
 
   /// Transbordos recibidos ya anunciados en esta sesión (uno por tarea).
   final _anunciados = <String>{};
@@ -109,6 +87,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const CaptureFlowScreen()));
 
+  void _cerrarSesion() {
+    context.read<AppState>().cerrarSesion();
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
   void _entregaConIA() =>
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const EntregaIAScreen()));
@@ -142,7 +125,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .toList();
 
     return Scaffold(
+      key: _scaffold,
       backgroundColor: Ipesa.fondo,
+      drawer: _MenuTransportista(
+        nombre: nombre,
+        onDespachoCorte: _despachoCorte,
+        onEntregaConIA: _entregaConIA,
+        onCerrarSesion: _cerrarSesion,
+      ),
       bottomNavigationBar: const BandaMarcas(),
       // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
       floatingActionButton: !_verEntregadas && pendientes.isEmpty
@@ -165,10 +155,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
               pendientes: pendientes.length,
               entregadas: entregadasHoy.length,
               avance: avance,
-              onCerrarSesion: () {
-                context.read<AppState>().cerrarSesion();
-                Navigator.of(context).popUntil((r) => r.isFirst);
-              },
+              onMenu: () => _scaffold.currentState?.openDrawer(),
+              onCerrarSesion: _cerrarSesion,
             ),
             _Pestanas(
               izquierda: 'Pendientes · ${pendientes.length}',
@@ -198,7 +186,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Buscar guía o cliente',
+        hintText: 'Buscar guía, cliente o destino',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: Colors.white,
@@ -341,58 +329,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
             const SizedBox(height: 6),
           ],
           if (!sinPendientes) ...[
-            // El buscador y, a su lado, el botón que abre o esconde la barra
-            // de opciones ("Despacho Corte", "Entrega con IA"): arriba,
-            // lejos de "Nueva guía" (abajo), y sin quitar espacio si está
-            // escondida.
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 640),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _buscador()),
-                        const SizedBox(width: 10),
-                        _BotonOpciones(
-                          abiertas: _opcionesAbiertas,
-                          onPressed: _alternarOpciones,
-                        ),
-                      ],
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      alignment: Alignment.topCenter,
-                      child: !_opcionesAbiertas
-                          ? const SizedBox(width: double.infinity)
-                          : Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _BotonSuperior(
-                                      icono: Icons.inventory_2_outlined,
-                                      texto: 'Despacho Corte',
-                                      onPressed: _despachoCorte,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _BotonSuperior(
-                                      icono: Icons.auto_awesome_outlined,
-                                      texto: 'Entrega con IA',
-                                      onPressed: _entregaConIA,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: _buscador(),
               ),
             ),
             const SizedBox(height: 14),
@@ -404,72 +345,121 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 }
 
-/// Abre o esconde la barra de opciones. Cerrada dice "Opciones"; abierta,
-/// "Cerrar".
-class _BotonOpciones extends StatelessWidget {
-  const _BotonOpciones({required this.abiertas, required this.onPressed});
-
-  final bool abiertas;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: abiertas ? 'Esconder opciones' : 'Mostrar opciones',
-      child: FilledButton.tonalIcon(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 50),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          backgroundColor: abiertas ? Ipesa.petroleo : Ipesa.menta,
-          foregroundColor: abiertas ? Colors.white : Ipesa.petroleo,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        onPressed: onPressed,
-        icon: Icon(
-          abiertas ? Icons.expand_less_rounded : Icons.apps_rounded,
-          size: 20,
-        ),
-        label: Text(
-          abiertas ? 'Cerrar' : 'Opciones',
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-  }
-}
-
-/// Botón de contorno de arriba ("Despacho Corte", "Entrega con IA").
-class _BotonSuperior extends StatelessWidget {
-  const _BotonSuperior({
-    required this.icono,
-    required this.texto,
-    required this.onPressed,
+/// Menú lateral del transportista (se abre con ☰ en la cabecera): las
+/// opciones que no son del día a día, para que no quiten espacio a la
+/// lista de tareas.
+class _MenuTransportista extends StatelessWidget {
+  const _MenuTransportista({
+    required this.nombre,
+    required this.onDespachoCorte,
+    required this.onEntregaConIA,
+    required this.onCerrarSesion,
   });
 
-  final IconData icono;
-  final String texto;
-  final VoidCallback onPressed;
+  final String nombre;
+  final VoidCallback onDespachoCorte;
+  final VoidCallback onEntregaConIA;
+  final VoidCallback onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 48),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        backgroundColor: Colors.white,
-        foregroundColor: Ipesa.petroleo,
-        side: const BorderSide(color: Ipesa.petroleo, width: 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    // Cierra el menú y luego abre la opción.
+    VoidCallback cerrarY(VoidCallback accion) => () {
+      Navigator.of(context).pop();
+      accion();
+    };
+    Widget opcion(
+      IconData icono,
+      String titulo,
+      String detalle,
+      VoidCallback onTap,
+    ) => ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Ipesa.menta,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icono, color: Ipesa.petroleo),
       ),
-      onPressed: onPressed,
-      icon: Icon(icono, size: 20),
-      label: Text(
-        texto,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w700),
+      title: Text(titulo, style: Ipesa.titulo(16, color: Ipesa.texto)),
+      subtitle: Text(
+        detalle,
+        style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+      ),
+      onTap: cerrarY(onTap),
+    );
+
+    return Drawer(
+      backgroundColor: Colors.white,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: Ipesa.petroleo,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.local_shipping_rounded,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Ipesa.titulo(18, color: Colors.white),
+                          ),
+                          const Text(
+                            'Transportista',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Ipesa.suaveSobrePetroleo,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          opcion(
+            Icons.inventory_2_outlined,
+            'Despacho Corte',
+            'Varias guías que salen y llegan juntas',
+            onDespachoCorte,
+          ),
+          opcion(
+            Icons.auto_awesome_outlined,
+            'Entrega con IA',
+            'Entrega varias tareas con sus fotos',
+            onEntregaConIA,
+          ),
+          const Spacer(),
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              leading: const Icon(Icons.logout, color: Ipesa.textoSuave),
+              title: const Text('Cerrar sesión'),
+              onTap: cerrarY(onCerrarSesion),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -483,9 +473,11 @@ class _Cabecera extends StatelessWidget {
     required this.pendientes,
     required this.entregadas,
     required this.avance,
+    required this.onMenu,
     required this.onCerrarSesion,
   });
 
+  final VoidCallback onMenu;
   final String saludo;
   final String nombre;
   final int pendientes;
@@ -539,6 +531,20 @@ class _Cabecera extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Menú',
+                    onPressed: onMenu,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(44, 44),
+                      backgroundColor: const Color(0x1FFFFFFF),
+                    ),
+                    icon: const Icon(
+                      Icons.menu_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Container(
                     width: 44,
                     height: 44,
