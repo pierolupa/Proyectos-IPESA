@@ -147,10 +147,13 @@ describe('columnas por posición (hoja de guías)', () => {
       expect(g.transbordo_estado).toBe('');
       expect(orden.filas[0].slice(24).every((v) => v === '')).toBe(true);
       expect(orden.cambiadas).toEqual([0]);
-      // Encabezados: T..Y correctos y los de más allá, vacíos.
+      // Encabezados: T..AB correctos y los de más allá, vacíos.
       expect(orden.encabezados).toEqual({
         desde: 19,
-        valores: [...COLUMNS.slice(19), '', '', '', '', '', ''],
+        valores: [
+          ...COLUMNS.slice(19),
+          ...Array(MOVIDOS.length - COLUMNS.length).fill(''),
+        ],
       });
     });
 

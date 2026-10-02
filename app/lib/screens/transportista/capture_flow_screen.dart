@@ -59,6 +59,9 @@ class _Borrador {
   final pedido = TextEditingController();
   final entrega = TextEditingController();
   TipoEntrega tipo = TipoEntrega.clienteFinal;
+
+  /// El comprobante de agencia pegado en la guía, si la IA lo encontró.
+  ComprobanteAgencia? comprobante;
   bool enCola = true;
   bool leyendo = false;
   String? avisoLectura;
@@ -75,7 +78,7 @@ class _Borrador {
 /// Flujo de "Asignación" (ARCHITECTURE.md, sección 4.1): el transportista
 /// fotografía las guías antes de salir. Puede tomar o elegir VARIAS fotos
 /// seguidas: cada una queda como una tarjeta que la IA va llenando en
-/// paralelo (Claude con visión, vía backend/src/ocrAgente.js) mientras él
+/// paralelo (Gemini con visión, vía backend/src/ocrAgente.js) mientras él
 /// sigue fotografiando. Revisa y corrige lo que haga falta, y registra
 /// todas las que estén listas de una vez. El GPS es obligatorio. Un
 /// transportista no registra el mismo número dos veces dentro de 20
@@ -205,6 +208,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         llenar(b.origen, datos.origen);
         llenar(b.pedido, datos.numeroPedido);
         llenar(b.entrega, datos.numeroEntrega);
+        b.comprobante ??= datos.comprobante;
         if (datos.numeroGuia == null) {
           b.avisoLectura = 'No se leyó el número: escríbelo.';
         }
@@ -341,6 +345,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               lng: lng!,
               numeroPedido: b.pedido.text.trim(),
               numeroEntrega: b.entrega.text.trim(),
+              comprobante: b.comprobante,
             ),
         ],
       );
@@ -715,6 +720,30 @@ class _TarjetaBorrador extends StatelessWidget {
                       Expanded(child: campo(b.entrega, 'N° entrega')),
                     ],
                   ),
+                  if (b.comprobante case final c?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.receipt_long_outlined,
+                            size: 18,
+                            color: Ipesa.petroleo,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Comprobante de agencia: ${c.resumen}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Ipesa.etiqueta,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

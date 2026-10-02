@@ -311,6 +311,26 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
                       Expanded(child: _Dato('N° entrega', guia.numeroEntrega)),
                     ],
                   ),
+                  if (guia.tieneComprobanteAgencia) ...[
+                    const SizedBox(height: 10),
+                    _Dato('Agencia', guia.agenciaRazonSocial),
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _Dato('RUC agencia', guia.agenciaRuc)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _Dato(
+                            'Monto pagado',
+                            guia.agenciaMonto == null
+                                ? ''
+                                : 'S/ ${guia.agenciaMonto!.toStringAsFixed(2)}',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

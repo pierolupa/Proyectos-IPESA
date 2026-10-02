@@ -46,17 +46,17 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a Y):
+y esta fila de encabezados (columnas A a AB):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte | agencia_razon_social | agencia_ruc | agencia_monto
 ```
 
 Cada dato va **siempre en la misma columna** (la de la lista de arriba),
 sin importar cómo se llame su encabezado: A a S pueden tener tus propios
 nombres ("Nro Pedido", "Foto"...) y el servidor nunca los cambia. Solo
-escribe los encabezados de T a X si están vacíos, y nunca agrega columnas
-en medio de las que ya existen. Lo que haya después de la X se conserva
+escribe los encabezados de T a AB si están vacíos, y nunca agrega columnas
+en medio de las que ya existen. Lo que haya después de la AB se conserva
 tal cual. Las guías nuevas se escriben siempre desde la columna A en la
 fila siguiente a la última con datos, y una guía que haya quedado corrida
 a la derecha se devuelve sola a su lugar. Las filas sin `numero_guia` se
@@ -72,7 +72,8 @@ final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
 `motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
 `transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1,
-`despacho_corte` en Y1)
+`despacho_corte` en Y1, `agencia_razon_social` en Z1, `agencia_ruc` en AA1,
+`agencia_monto` en AB1)
 — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
@@ -80,6 +81,13 @@ igual y esas columnas se leen vacías para ellas.
 llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
+
+`agencia_razon_social`, `agencia_ruc`, `agencia_monto`: si en la foto de la
+guía viene pegado el comprobante de la agencia de transporte (boleta,
+factura o vale de encomienda), la IA lee quién lo emitió, su RUC y el total
+pagado, aunque la entrega no esté marcada como agencia. Se leen al registrar
+la guía (de la foto de registro) y al entregarla (de la foto de entrega; si
+la IA tarda más de 6 s o falla, la entrega se guarda igual sin esos datos).
 
 `eliminacion` queda en `pendiente` cuando el transportista pide borrar una
 tarea en ruta (con su `motivo_eliminacion`); si el administrador lo aprueba,
@@ -267,7 +275,7 @@ Al terminar, Vercel te da una URL pública (algo como
 
 | Método | Ruta | Uso |
 |---|---|---|
-| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
+| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (y, si viene pegado, el comprobante de la agencia: `agencia_razon_social`, `agencia_ruc`, `agencia_monto`) (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
 | `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |

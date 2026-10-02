@@ -17,9 +17,30 @@ function getClient() {
 // respondía 404); GEMINI_MODEL permite cambiarlo desde Vercel sin tocar código.
 const MODELO = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
+// Comprobante de la agencia de transporte (boleta, factura, vale de
+// encomienda u orden de traslado) que a veces se pega sobre la guía.
+const RUC_IPESA = '20101639275';
+const INSTRUCCIONES_COMPROBANTE = `A veces sobre la guía hay pegado (o al \
+lado) un comprobante pequeño de una AGENCIA de transporte o encomiendas \
+(boleta, factura, "vale de encomienda", "orden de traslado"; ej. Palomino, \
+Señor de Luren, ITTSA, GH Bus, Shalom, Marvisur). Si lo hay, lee de ESE \
+comprobante, aunque la guía no diga que es una entrega en agencia:
+
+- agencia_razon_social: la razón social de la empresa que EMITE el \
+  comprobante (la agencia, la del logo/encabezado). NO es IPESA ni el \
+  cliente ni el consignado.
+- agencia_ruc: el RUC de esa agencia (11 dígitos, solo números). NO el RUC \
+  de IPESA (${RUC_IPESA}) ni el del cliente.
+- agencia_monto: el importe TOTAL pagado (con IGV), como número con punto \
+  decimal, sin "S/" (ej. 70.00). Si hay subtotal, IGV y total, es el total.
+
+Si no hay comprobante de agencia en la foto, usa null en esos 3 campos.`;
+
+const CAMPOS_COMPROBANTE = '"agencia_razon_social": string|null, "agencia_ruc": string|null, "agencia_monto": number|null';
+
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
-extrae exactamente estos 6 campos:
+extrae estos campos:
 
 - numero_guia: el número de la guía, arriba a la derecha, formato \
   "serie-correlativo" (una letra + 3 dígitos + guion + dígitos), ej. \
@@ -33,10 +54,12 @@ extrae exactamente estos 6 campos:
   "0188173910").
 - numero_entrega: el valor de "Entrega" en esa misma línea de "Documentos".
 
+${INSTRUCCIONES_COMPROBANTE}
+
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin \
 explicaciones y sin bloques de código markdown, con exactamente esta forma:
 
-{"numero_guia": string|null, "destinatario": string|null, "destino": string|null, "origen": string|null, "numero_pedido": string|null, "numero_entrega": string|null}
+{"numero_guia": string|null, "destinatario": string|null, "destino": string|null, "origen": string|null, "numero_pedido": string|null, "numero_entrega": string|null, ${CAMPOS_COMPROBANTE}}
 
 Si no puedes leer un campo con confianza, usa null para ese campo en vez de \
 inventar un valor.`;
@@ -75,7 +98,75 @@ async function leerGuiaConIA(imagenBase64, mediaType) {
     origen: datos.origen || null,
     numero_pedido: datos.numero_pedido || null,
     numero_entrega: datos.numero_entrega || null,
+    ...comprobanteDe(datos),
   };
+}
+
+/** El monto como número (acepta "S/ 70.00", "70,00", 70). */
+function montoDe(valor) {
+  if (typeof valor === 'number') return Number.isFinite(valor) && valor > 0 ? valor : null;
+  const texto = String(valor ?? '').replace(/s\/|soles|\s/gi, '');
+  if (!texto) return null;
+  // "1.234,50" o "1,234.50" → 1234.50; "70,00" → 70.00
+  const decimal = texto.match(/[.,](\d{1,2})$/);
+  const entero = (decimal ? texto.slice(0, -decimal[0].length) : texto).replace(/[.,]/g, '');
+  const numero = Number(decimal ? `${entero}.${decimal[1]}` : entero);
+  return Number.isFinite(numero) && numero > 0 ? numero : null;
+}
+
+/**
+ * Los datos del comprobante de agencia leídos por la IA, limpios: el RUC
+ * solo si tiene 11 dígitos y no es el de IPESA. Todo null si no hay.
+ */
+function comprobanteDe(datos) {
+  const razon = String(datos?.agencia_razon_social ?? '').trim();
+  const ruc = String(datos?.agencia_ruc ?? '').replace(/\D/g, '');
+  const monto = montoDe(datos?.agencia_monto);
+  const rucValido = ruc.length === 11 && ruc !== RUC_IPESA ? ruc : null;
+  const esIpesa = /^ipesa\b/i.test(razon);
+  return {
+    agencia_razon_social: razon && !esIpesa ? razon : null,
+    agencia_ruc: rucValido,
+    agencia_monto: monto,
+  };
+}
+
+/** true si se leyó algo del comprobante. */
+function hayComprobante(c) {
+  return Boolean(c && (c.agencia_razon_social || c.agencia_ruc || c.agencia_monto));
+}
+
+function jsonDeLaIA(respuesta) {
+  const texto = respuesta.text || '';
+  try {
+    return JSON.parse(texto.replace(/```json\s*|```\s*/g, '').trim());
+  } catch (err) {
+    throw new Error(`La IA no devolvió un JSON válido: ${texto}`);
+  }
+}
+
+/**
+ * Lee solo el comprobante de agencia de una foto de entrega (la que se
+ * sube al entregar). Devuelve los 3 campos (null si no hay comprobante).
+ */
+async function leerComprobante(imagenBase64, mediaType) {
+  const client = getClient();
+  const respuesta = await client.models.generateContent({
+    model: MODELO,
+    contents: [
+      { inlineData: { mimeType: mediaType, data: imagenBase64 } },
+      {
+        text: `Esta es la foto de la entrega de una guía de remisión de IPESA.
+
+${INSTRUCCIONES_COMPROBANTE}
+
+Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, con \
+esta forma: {${CAMPOS_COMPROBANTE}}. No inventes valores.`,
+      },
+    ],
+    config: { responseMimeType: 'application/json' },
+  });
+  return comprobanteDe(jsonDeLaIA(respuesta));
 }
 
 const PROMPT_NUMERO = `Esta es una foto tomada al entregar una guía de \
@@ -125,26 +216,30 @@ como lo lees.`
       {
         text: `${PROMPT_NUMERO}${lista}
 
+Además: ${INSTRUCCIONES_COMPROBANTE}
+
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, con \
-esta forma: {"numero_guia": string|null}. Si no se ve el número de guía \
-con confianza, usa null en vez de inventarlo.`,
+esta forma: {"numero_guia": string|null, ${CAMPOS_COMPROBANTE}}. Si no se \
+ve el número de guía con confianza, usa null en vez de inventarlo.`,
       },
     ],
     config: { responseMimeType: 'application/json' },
   });
 
-  const texto = respuesta.text || '';
-  let datos;
-  try {
-    datos = JSON.parse(texto.replace(/```json\s*|```\s*/g, '').trim());
-  } catch (err) {
-    throw new Error(`La IA no devolvió un JSON válido: ${texto}`);
-  }
+  const datos = jsonDeLaIA(respuesta);
+  const comprobante = comprobanteDe(datos);
   const leido = typeof datos.numero_guia === 'string' ? datos.numero_guia.trim() : '';
-  if (!leido) return { numero_guia: null };
+  if (!leido) return { numero_guia: null, ...comprobante };
   const clave = claveGuia(leido);
   const igual = candidatos.find((c) => claveGuia(c) === clave);
-  return { numero_guia: igual || leido };
+  return { numero_guia: igual || leido, ...comprobante };
 }
 
-module.exports = { leerGuiaConIA, leerNumeroGuia, claveGuia };
+module.exports = {
+  leerGuiaConIA,
+  leerNumeroGuia,
+  leerComprobante,
+  claveGuia,
+  comprobanteDe,
+  hayComprobante,
+};

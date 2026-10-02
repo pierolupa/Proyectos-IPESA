@@ -12,6 +12,7 @@ const {
   SUCURSALES_COLUMNS,
   SUCURSALES_SHEET_NAME,
   SUCURSALES_DATA_RANGE,
+  letraColumna,
 } = require('./columns');
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
@@ -67,8 +68,8 @@ function requireSheetId() {
  * Columnas de la hoja de guías: posición fija, la del arreglo COLUMNS.
  * A..S son las columnas de siempre y se leen por posición, se llame como se
  * llame su encabezado ("Nro Pedido", "Foto"...): esos encabezados nunca se
- * tocan. Las que se agregaron después van a continuación de la S (T..X), y
- * el servidor solo escribe esos encabezados. Lo que haya después de la X
+ * tocan. Las que se agregaron después van a continuación de la S (T..AB), y
+ * el servidor solo escribe esos encabezados. Lo que haya después de la AB
  * se reescribe tal cual estaba.
  */
 const ULTIMA_COLUMNA = 'ZZ';
@@ -81,18 +82,6 @@ const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 const CONOCIDAS = new Set(COLUMNS);
 // Columnas que existieron un tiempo y ya no se usan: su lugar se reutiliza.
 const RETIRADAS = new Set(['salida_lat', 'salida_lng']);
-
-/** "A" para 1, "Z" para 26, "AA" para 27... */
-function letraColumna(numero) {
-  let n = numero;
-  let letras = '';
-  while (n > 0) {
-    const resto = (n - 1) % 26;
-    letras = String.fromCharCode(65 + resto) + letras;
-    n = Math.floor((n - 1) / 26);
-  }
-  return letras;
-}
 
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
 const vacia = (valor) => normalizar(valor) === '';
@@ -202,6 +191,13 @@ function esDeSuColumna(fila, i) {
       return TRANSBORDOS_VALIDOS.has(normalizar(fila[POSICION.transbordo_estado]));
     case 'despacho_corte':
       return valor === '' || valor.startsWith('dc-');
+    // Z..AB (comprobante de agencia) se agregaron cuando ya no había hojas
+    // con el orden anterior: lo que esté ahí bajo el encabezado de otra
+    // columna es de esa otra columna.
+    case 'agencia_razon_social':
+    case 'agencia_ruc':
+    case 'agencia_monto':
+      return false;
     default:
       return true;
   }

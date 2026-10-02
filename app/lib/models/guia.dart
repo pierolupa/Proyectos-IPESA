@@ -54,6 +54,13 @@ class Guia {
   /// si es una tarea suelta. Las de un mismo corte llegan juntas.
   final String despachoCorte;
 
+  /// El comprobante de la agencia de transporte pegado en la guía (leído
+  /// por la IA de la foto): quién lo emitió, su RUC y el total pagado.
+  /// Vacíos (y monto null) si no hubo.
+  final String agenciaRazonSocial;
+  final String agenciaRuc;
+  final double? agenciaMonto;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -80,11 +87,27 @@ class Guia {
     this.transbordoA = '',
     this.transbordoDe = '',
     this.despachoCorte = '',
+    this.agenciaRazonSocial = '',
+    this.agenciaRuc = '',
+    this.agenciaMonto,
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
   bool get enDespachoCorte => despachoCorte.isNotEmpty;
+
+  bool get tieneComprobanteAgencia =>
+      agenciaRazonSocial.isNotEmpty ||
+      agenciaRuc.isNotEmpty ||
+      agenciaMonto != null;
+
+  /// El comprobante de agencia en una línea (vacío si no hay), ej.
+  /// "PALOMINO S.A.C. · RUC 20515659324 · S/ 70.00".
+  String get resumenComprobanteAgencia => [
+    if (agenciaRazonSocial.isNotEmpty) agenciaRazonSocial,
+    if (agenciaRuc.isNotEmpty) 'RUC $agenciaRuc',
+    if (agenciaMonto case final m?) 'S/ ${m.toStringAsFixed(2)}',
+  ].join(' · ');
 
   bool get eliminacionPendiente => eliminacion == 'pendiente';
   bool get eliminacionRechazada => eliminacion == 'rechazada';
@@ -154,6 +177,9 @@ class Guia {
       transbordoA: (json['transbordo_a'] as String? ?? '').trim(),
       transbordoDe: (json['transbordo_de'] as String? ?? '').trim(),
       despachoCorte: (json['despacho_corte'] as String? ?? '').trim(),
+      agenciaRazonSocial: '${json['agencia_razon_social'] ?? ''}'.trim(),
+      agenciaRuc: '${json['agencia_ruc'] ?? ''}'.trim(),
+      agenciaMonto: _coordenada(json['agencia_monto']),
     );
   }
 
@@ -204,6 +230,9 @@ class Guia {
       transbordoA: transbordoA,
       transbordoDe: transbordoDe,
       despachoCorte: despachoCorte,
+      agenciaRazonSocial: agenciaRazonSocial,
+      agenciaRuc: agenciaRuc,
+      agenciaMonto: agenciaMonto,
     );
   }
 }

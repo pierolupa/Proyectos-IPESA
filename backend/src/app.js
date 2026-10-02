@@ -10,7 +10,13 @@ const {
   TRANSBORDO,
 } = require('./columns');
 const repo = require('./sheetsRepository');
-const { leerGuiaConIA, leerNumeroGuia } = require('./ocrAgente');
+const {
+  leerGuiaConIA,
+  leerNumeroGuia,
+  leerComprobante,
+  comprobanteDe,
+  hayComprobante,
+} = require('./ocrAgente');
 const fotos = require('./fotos');
 
 const app = express();
@@ -161,11 +167,6 @@ async function intentarGuardarFoto(numeroGuia, foto) {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-// Lee la foto de una guía con IA (Claude, con visión) y devuelve los datos
-// extraídos. Ver ocrAgente.js — reemplaza el OCR anterior (Tesseract.js en
-// el navegador), que no leía de forma confiable formularios densos con
-// tablas. Requiere ANTHROPIC_API_KEY (ver README.md); tiene un costo
-// pequeño por foto.
 /**
  * Responde un fallo de la IA con el mensaje real (a diferencia del resto de
  * rutas, que usan el manejador genérico) porque este proyecto de Vercel no
@@ -185,6 +186,9 @@ function responderFalloIA(res, err) {
   res.status(500).json({ error: `Fallo al leer la guía con IA: ${err.message}` });
 }
 
+// Lee la foto de una guía con IA (Gemini, con visión) y devuelve los datos
+// extraídos, incluido el comprobante de agencia si viene pegado. Ver
+// ocrAgente.js; requiere GEMINI_API_KEY (ver README.md).
 app.post('/ocr/leer-guia', async (req, res) => {
   try {
     const { imagenBase64, mediaType } = req.body || {};
@@ -390,6 +394,7 @@ function prepararGuia(datos, existentes, sucursales) {
     geo,
     numeroPedido,
     numeroEntrega,
+    comprobante,
   } = datos || {};
 
   if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
@@ -451,8 +456,63 @@ function prepararGuia(datos, existentes, sucursales) {
       // opcionales porque el OCR no siempre los encuentra.
       numero_pedido: numeroPedido || '',
       numero_entrega: numeroEntrega || '',
+      ...columnasComprobante(comprobante),
     },
   };
+}
+
+/**
+ * El comprobante de agencia que manda la app ({ razonSocial, ruc, monto },
+ * leído por la IA de la foto) en las columnas de la hoja; vacías si no hay.
+ */
+function columnasComprobante(comprobante) {
+  const c = comprobanteDe({
+    agencia_razon_social: comprobante?.razonSocial,
+    agencia_ruc: comprobante?.ruc,
+    agencia_monto: comprobante?.monto,
+  });
+  return {
+    agencia_razon_social: c.agencia_razon_social || '',
+    agencia_ruc: c.agencia_ruc || '',
+    agencia_monto: c.agencia_monto ?? '',
+  };
+}
+
+// Lo que se espera a la IA por el comprobante al entregar: si tarda más,
+// la entrega se guarda igual, sin esos datos.
+const ESPERA_COMPROBANTE_MS = 6000;
+
+/**
+ * El comprobante de agencia de la foto de entrega: el que ya leyó la app
+ * (Entrega inteligente lo manda en `comprobante`) o, si no vino, el que lee
+ * ahora la IA. Nunca hace fallar la entrega: ante un error o demora, null.
+ */
+async function comprobanteDeEntrega(body, foto) {
+  if (body && Object.prototype.hasOwnProperty.call(body, 'comprobante')) {
+    const c = columnasComprobante(body.comprobante);
+    return c.agencia_razon_social || c.agencia_ruc || c.agencia_monto !== '' ? c : null;
+  }
+  if (!fotos.esFotoValida(foto)) return null;
+  let espera;
+  try {
+    const leido = await Promise.race([
+      leerComprobante(foto.base64, foto.mediaType || 'image/jpeg'),
+      new Promise((resolve) => {
+        espera = setTimeout(() => resolve(null), ESPERA_COMPROBANTE_MS);
+      }),
+    ]);
+    if (!hayComprobante(leido)) return null;
+    return {
+      agencia_razon_social: leido.agencia_razon_social || '',
+      agencia_ruc: leido.agencia_ruc || '',
+      agencia_monto: leido.agencia_monto ?? '',
+    };
+  } catch (err) {
+    console.error(err);
+    return null;
+  } finally {
+    clearTimeout(espera);
+  }
 }
 
 // Las sucursales para el punto de partida; si no se pueden leer, la guía
@@ -708,11 +768,16 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 
     // Solo se guarda la foto de la entrega final (guía firmada por el
     // cliente, o comprobante de agencia) — no la de pasos intermedios.
-    const fotoEntrega =
-      porAdmin || !ESTADOS_FINALES.has(estado)
-        ? { url: null, aviso: null }
-        : await intentarGuardarFoto(guia.numero_guia, foto);
+    const entregaFinal = !porAdmin && ESTADOS_FINALES.has(estado);
+    // La foto se guarda y, a la vez, la IA busca un comprobante de agencia.
+    const [fotoEntrega, comprobante] = entregaFinal
+      ? await Promise.all([
+          intentarGuardarFoto(guia.numero_guia, foto),
+          comprobanteDeEntrega(req.body, foto),
+        ])
+      : [{ url: null, aviso: null }, null];
     if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
+    if (comprobante) Object.assign(guia, comprobante);
 
     guia.estado = estado;
     guia.fecha_actualizacion = new Date().toISOString();

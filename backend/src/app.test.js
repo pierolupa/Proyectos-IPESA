@@ -1,5 +1,11 @@
 jest.mock('./sheetsRepository');
-jest.mock('./ocrAgente');
+// La IA se simula; la limpieza de lo que lee (comprobanteDe...) es la real.
+jest.mock('./ocrAgente', () => ({
+  ...jest.requireActual('./ocrAgente'),
+  leerGuiaConIA: jest.fn(),
+  leerNumeroGuia: jest.fn(),
+  leerComprobante: jest.fn(),
+}));
 jest.mock('./fotos', () => ({
   ...jest.requireActual('./fotos'),
   guardarFoto: jest.fn(),
@@ -9,7 +15,7 @@ jest.mock('./fotos', () => ({
 
 const request = require('supertest');
 const repo = require('./sheetsRepository');
-const { leerGuiaConIA, leerNumeroGuia } = require('./ocrAgente');
+const { leerGuiaConIA, leerNumeroGuia, leerComprobante } = require('./ocrAgente');
 const fotos = require('./fotos');
 const { ESTADOS, TIPOS_ENTREGA, ROLES, TRANSBORDO } = require('./columns');
 
@@ -660,6 +666,70 @@ describe('Sucursales y geocerca', () => {
       .patch('/guias/IPE-2026-000123/estado')
       .send({ estado: ESTADOS.RECEPCION_SUCURSAL, geo: { lat: -13.5, lng: -71.9 } });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('comprobante de agencia', () => {
+  const foto = { base64: Buffer.from('jpg').toString('base64'), mediaType: 'image/jpeg' };
+  const entrega = { estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto };
+
+  it('al registrar guarda el comprobante leído de la foto, aunque no sea entrega en agencia', async () => {
+    repo.listarGuias.mockResolvedValue([]);
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'T017-1',
+      tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen: 'Almacén Callao',
+      destino: 'Cusco',
+      transportista: 'Juan Pérez',
+      destinatario: 'WILMAQ E.I.R.L.',
+      geo: { lat: -12, lng: -77 },
+      comprobante: { razonSocial: 'TURISMO INTERNACIONAL PALOMINO S.A.C.', ruc: '20515659324', monto: '70.00' },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      agencia_razon_social: 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
+      agencia_ruc: '20515659324',
+      agencia_monto: 70,
+    });
+  });
+
+  it('al entregar, la IA lee el comprobante de la foto y se guarda', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockResolvedValue('drive:foto');
+    leerComprobante.mockResolvedValue({
+      agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
+      agencia_ruc: '20601857457',
+      agencia_monto: 13,
+    });
+    const res = await request(app).patch('/guias/IPE-2026-000123/estado').send(entrega);
+    expect(res.status).toBe(200);
+    expect(leerComprobante).toHaveBeenCalledWith(foto.base64, 'image/jpeg');
+    expect(res.body).toMatchObject({
+      agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
+      agencia_ruc: '20601857457',
+      agencia_monto: 13,
+    });
+  });
+
+  it('si la app ya lo leyó (Entrega inteligente), no se vuelve a pedir a la IA', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockResolvedValue('drive:foto');
+    leerComprobante.mockClear();
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ ...entrega, comprobante: { razonSocial: 'ITTSA', ruc: '20132272418', monto: 24 } });
+    expect(leerComprobante).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({ agencia_razon_social: 'ITTSA', agencia_monto: 24 });
+  });
+
+  it('si la IA falla, la entrega se registra igual', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockResolvedValue('drive:foto');
+    leerComprobante.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
+    const res = await request(app).patch('/guias/IPE-2026-000123/estado').send(entrega);
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(ESTADOS.ENTREGADO);
+    expect(res.body.agencia_ruc).toBeFalsy();
   });
 });
 

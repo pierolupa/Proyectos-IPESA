@@ -876,6 +876,32 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (guia.tieneComprobanteAgencia)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.receipt_long_outlined,
+                        size: 15,
+                        color: Ipesa.petroleo,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          guia.resumenComprobanteAgencia,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Ipesa.etiqueta,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (guia.resumenTransbordo.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),

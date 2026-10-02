@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../theme.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../models/estado_guia.dart';
@@ -188,6 +191,21 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             '${guia.numeroEntrega.isNotEmpty ? '\nN° de entrega: ${guia.numeroEntrega}' : ''}',
             style: TextStyle(color: Colors.grey[700]),
           ),
+          if (guia.tieneComprobanteAgencia) ...[
+            const SizedBox(height: 16),
+            Text('Comprobante de agencia', style: Ipesa.titulo(15)),
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (guia.agenciaRazonSocial.isNotEmpty)
+                  'Razón social: ${guia.agenciaRazonSocial}',
+                if (guia.agenciaRuc.isNotEmpty) 'RUC: ${guia.agenciaRuc}',
+                if (guia.agenciaMonto case final m?)
+                  'Monto pagado: S/ ${m.toStringAsFixed(2)}',
+              ].join('\n'),
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+          ],
           if (guia.estado == EstadoGuia.rechazado) ...[
             const SizedBox(height: 24),
             AvisoRechazo(guia: guia),

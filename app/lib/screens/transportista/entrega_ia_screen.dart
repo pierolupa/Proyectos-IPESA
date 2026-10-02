@@ -75,6 +75,9 @@ class _Foto {
   _Estado estado = _Estado.leyendo;
   bool leida = false;
   String? numeroLeido;
+
+  /// El comprobante de agencia pegado en la guía (null si no hay).
+  ComprobanteAgencia? comprobante;
   Guia? guia;
   String? aviso;
   bool enviando = false;
@@ -181,7 +184,8 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
       setState(() {
         f.aviso = null;
         f.leida = true;
-        f.numeroLeido = datos.$1;
+        f.numeroLeido = datos.numero;
+        f.comprobante = datos.comprobante;
         _clasificar(appState);
       });
     } catch (_) {
@@ -196,15 +200,13 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
   /// Lee el número de guía de la foto (comparándolo con sus guías en
   /// ruta); si la IA está ocupada, espera y vuelve a intentar. Devuelve
   /// null si la foto ya no está.
-  Future<(String?,)?> _leerConReintentos(AppState appState, _Foto f) async {
+  Future<LecturaEntrega?> _leerConReintentos(AppState appState, _Foto f) async {
     final candidatos = [
       for (final g in _pendientes(appState).values) g.numeroGuia,
     ];
     for (var intento = 0; ; intento++) {
       try {
-        return (
-          await appState.leerNumeroGuia(f.bytes, candidatos: candidatos),
-        );
+        return await appState.leerNumeroGuia(f.bytes, candidatos: candidatos);
       } on ApiException catch (e) {
         if (!e.esLimiteTemporal || intento >= _esperasIAOcupada.length) {
           rethrow;
@@ -289,6 +291,8 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
             lng: longitud,
             foto: f.bytes,
             fechaCreacion: g.fechaCreacion,
+            // Ya se leyó con el número: el backend no lo vuelve a leer.
+            comprobante: (f.comprobante,),
           );
           ok++;
           if (mounted) setState(() => _fotos.remove(f));
@@ -547,6 +551,18 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
                       color: Ipesa.textoSuave,
                     ),
                   ),
+                  if (f.comprobante case final c?
+                      when f.estado == _Estado.encontrada)
+                    Text(
+                      'Comprobante: ${c.resumen}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Ipesa.etiqueta,
+                      ),
+                    ),
                 ],
               ),
             ),

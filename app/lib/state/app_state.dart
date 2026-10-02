@@ -438,7 +438,7 @@ class AppState extends ChangeNotifier {
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) =>
       _api.leerGuiaConIA(fotoBytes);
 
-  Future<String?> leerNumeroGuia(
+  Future<LecturaEntrega> leerNumeroGuia(
     Uint8List fotoBytes, {
     List<String> candidatos = const [],
   }) => _api.leerNumeroGuia(fotoBytes, candidatos: candidatos);
@@ -529,6 +529,7 @@ class AppState extends ChangeNotifier {
     bool porAdmin = false,
     Uint8List? foto,
     DateTime? fechaCreacion,
+    LecturaComprobante? comprobante,
   }) async {
     final (actualizada, avisoFoto) = await _api.actualizarEstado(
       numeroGuia,
@@ -538,6 +539,7 @@ class AppState extends ChangeNotifier {
       porAdmin: porAdmin,
       foto: foto,
       fechaCreacion: fechaCreacion,
+      comprobante: comprobante,
     );
     final index = _indiceDeRegistro(numeroGuia, fechaCreacion);
     if (index != -1) {

@@ -143,8 +143,17 @@ void main() {
         candidatos = List<String>.from(
           (jsonDecode(r.body) as Map<String, dynamic>)['candidatos'] as List,
         );
+        final numero = leidas.removeAt(0);
         return http.Response(
-          jsonEncode({'numero_guia': leidas.removeAt(0)}),
+          jsonEncode({
+            'numero_guia': numero,
+            // La de agencia trae pegado el comprobante.
+            if (numero == 'T001-2') ...{
+              'agencia_razon_social': 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
+              'agencia_ruc': '20601857457',
+              'agencia_monto': 13,
+            },
+          }),
           200,
         );
       }
@@ -211,6 +220,15 @@ void main() {
     expect(porNumero['T001-1']!['estado'], 'entregado');
     // La de agencia queda finalizada, como en la entrega normal.
     expect(porNumero['T001-2']!['estado'], 'finalizado');
+    // El comprobante leído con el número va con la entrega (y la que no
+    // tiene manda null, para que el backend no lo vuelva a leer).
+    expect(porNumero['T001-2']!['comprobante'], {
+      'razonSocial': 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
+      'ruc': '20601857457',
+      'monto': 13.0,
+    });
+    expect(porNumero['T001-1']!.containsKey('comprobante'), isTrue);
+    expect(porNumero['T001-1']!['comprobante'], isNull);
     for (final e in entregas) {
       expect(e['geo'], {'lat': -12.1, 'lng': -77.0});
       expect(e['foto'], isNotNull);

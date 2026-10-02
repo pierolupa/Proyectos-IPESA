@@ -34,6 +34,7 @@ Map<String, dynamic> _guia(String numero, DateTime creada) => {
 
 void main() {
   late List<String> leidas;
+  final comprobantes = <Object?>[];
   late List<String> registradas;
   late List<String> origenes;
   late int pedidosDeRegistro;
@@ -99,6 +100,12 @@ void main() {
             'destinatario': 'Cliente $numero',
             'destino': 'Av. Lima 100',
             'origen': 'Almacén Lurín',
+            // T700 viene con el comprobante de la agencia pegado.
+            if (numero == 'T700') ...{
+              'agencia_razon_social': 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
+              'agencia_ruc': '20515659324',
+              'agencia_monto': 70,
+            },
           }),
           200,
         );
@@ -113,6 +120,7 @@ void main() {
           final numero = g['numeroGuia'] as String;
           registradas.add(numero);
           origenes.add(g['origen'] as String);
+          comprobantes.add(g['comprobante']);
           resultados.add({'guia': _guia(numero, DateTime.now())});
         }
         return http.Response(
@@ -239,6 +247,34 @@ void main() {
     expect(find.text('T500'), findsOneWidget);
     expect(find.text('La IA está ocupada: reintentando…'), findsNothing);
     expect(find.text('Registrar guía'), findsOneWidget);
+  });
+
+  testWidgets('El comprobante de agencia pegado en la guía se registra', (
+    tester,
+  ) async {
+    leidas = ['T700'];
+    comprobantes.clear();
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Comprobante de agencia: TURISMO INTERNACIONAL PALOMINO S.A.C. · '
+        'RUC 20515659324 · S/ 70.00',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(comprobantes.single, {
+      'razonSocial': 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
+      'ruc': '20515659324',
+      'monto': 70.0,
+    });
   });
 
   testWidgets('Despacho Corte: crea el corte y luego suma guías a él', (

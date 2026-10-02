@@ -70,7 +70,46 @@ class SesionUsuario {
   }
 }
 
-/// Resultado de POST /ocr/leer-guia: los 5 campos que la IA (Claude, con
+/// El comprobante de una agencia de transporte (boleta, factura o vale de
+/// encomienda) pegado en la guía, leído por la IA de la foto.
+class ComprobanteAgencia {
+  const ComprobanteAgencia({this.razonSocial = '', this.ruc = '', this.monto});
+
+  final String razonSocial;
+  final String ruc;
+  final double? monto;
+
+  /// De la respuesta de la IA (agencia_*); null si no había comprobante.
+  static ComprobanteAgencia? desdeIA(Map<String, dynamic> json) {
+    final razon = '${json['agencia_razon_social'] ?? ''}'.trim();
+    final ruc = '${json['agencia_ruc'] ?? ''}'.trim();
+    final valor = json['agencia_monto'];
+    final monto = valor is num
+        ? valor.toDouble()
+        : double.tryParse('${valor ?? ''}'.trim());
+    if (razon.isEmpty && ruc.isEmpty && monto == null) return null;
+    return ComprobanteAgencia(razonSocial: razon, ruc: ruc, monto: monto);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'razonSocial': razonSocial,
+    'ruc': ruc,
+    'monto': monto,
+  };
+
+  /// En una línea, ej. "PALOMINO S.A.C. · RUC 20515659324 · S/ 70.00".
+  String get resumen => [
+    if (razonSocial.isNotEmpty) razonSocial,
+    if (ruc.isNotEmpty) 'RUC $ruc',
+    if (monto case final m?) 'S/ ${m.toStringAsFixed(2)}',
+  ].join(' · ');
+}
+
+/// Lo que la IA lee de una foto de entrega: el número de guía y, si viene
+/// pegado, el comprobante de la agencia.
+typedef LecturaEntrega = ({String? numero, ComprobanteAgencia? comprobante});
+
+/// Resultado de POST /ocr/leer-guia: los campos que la IA (Gemini, con
 /// visión) extrae de la foto. Cualquiera puede salir null si no se pudo
 /// leer con confianza — todos quedan en campos editables en la pantalla.
 class DatosGuiaLeida {
@@ -81,7 +120,11 @@ class DatosGuiaLeida {
     this.origen,
     this.numeroPedido,
     this.numeroEntrega,
+    this.comprobante,
   });
+
+  /// El comprobante de agencia pegado en la guía (null si no hay).
+  final ComprobanteAgencia? comprobante;
 
   final String? numeroGuia;
   final String? destinatario;
@@ -100,6 +143,7 @@ class DatosGuiaLeida {
       origen: json['origen'] as String?,
       numeroPedido: json['numero_pedido'] as String?,
       numeroEntrega: json['numero_entrega'] as String?,
+      comprobante: ComprobanteAgencia.desdeIA(json),
     );
   }
 }
@@ -257,10 +301,11 @@ class GuiasApi {
     return DatosGuiaLeida.fromJson(_decodeBody(res));
   }
 
-  /// Entrega inteligente: lee solo el número de guía de una foto de
-  /// entrega. La IA lo compara con [candidatos] (sus guías en ruta) y, si es
-  /// una de ellas, devuelve ese número tal cual.
-  Future<String?> leerNumeroGuia(
+  /// Entrega inteligente: lee el número de guía de una foto de entrega (y
+  /// el comprobante de agencia, si viene pegado). La IA lo compara con
+  /// [candidatos] (sus guías en ruta) y, si es una de ellas, devuelve ese
+  /// número tal cual.
+  Future<LecturaEntrega> leerNumeroGuia(
     Uint8List fotoBytes, {
     List<String> candidatos = const [],
   }) async {
@@ -274,8 +319,14 @@ class GuiasApi {
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);
-    final numero = _decodeBody(res)['numero_guia'];
-    return numero is String && numero.trim().isNotEmpty ? numero.trim() : null;
+    final json = _decodeBody(res);
+    final numero = json['numero_guia'];
+    return (
+      numero: numero is String && numero.trim().isNotEmpty
+          ? numero.trim()
+          : null,
+      comprobante: ComprobanteAgencia.desdeIA(json),
+    );
   }
 
   /// Carga masiva: registra hasta [maxGuiasPorCarga] guías con un solo
@@ -428,6 +479,7 @@ class GuiasApi {
     bool porAdmin = false,
     Uint8List? foto,
     DateTime? fechaCreacion,
+    LecturaComprobante? comprobante,
   }) async {
     final res = await _client.patch(
       Uri.parse('$apiBaseUrl/guias/$numeroGuia/estado'),
@@ -439,6 +491,9 @@ class GuiasApi {
           'fechaCreacion': fechaCreacion.toUtc().toIso8601String(),
         if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
         if (foto != null) 'foto': _fotoJson(foto),
+        // Ya leído por la app (aunque no haya): el backend no lo vuelve a
+        // pedir a la IA. Si no viene, lo lee él de la foto.
+        if (comprobante != null) 'comprobante': comprobante.$1?.toJson(),
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);
@@ -649,6 +704,7 @@ class GuiaNueva {
     required this.lng,
     this.numeroPedido = '',
     this.numeroEntrega = '',
+    this.comprobante,
   });
 
   final String numeroGuia;
@@ -662,6 +718,9 @@ class GuiaNueva {
   final String numeroPedido;
   final String numeroEntrega;
 
+  /// El comprobante de agencia leído de la foto (null si no hay).
+  final ComprobanteAgencia? comprobante;
+
   Map<String, dynamic> toJson() => {
     'numeroGuia': numeroGuia,
     'tipoEntrega': tipoEntrega.valorApi,
@@ -672,8 +731,14 @@ class GuiaNueva {
     'geo': {'lat': lat, 'lng': lng},
     if (numeroPedido.isNotEmpty) 'numeroPedido': numeroPedido,
     if (numeroEntrega.isNotEmpty) 'numeroEntrega': numeroEntrega,
+    if (comprobante case final c?) 'comprobante': c.toJson(),
   };
 }
+
+/// El comprobante que la app ya leyó de una foto de entrega: `(null,)` si
+/// la IA no encontró ninguno. Se manda para que el backend no lo vuelva a
+/// leer.
+typedef LecturaComprobante = (ComprobanteAgencia?,);
 
 /// Resultado de una carga masiva: el de cada guía, en orden, y el código
 /// del Despacho Corte si fue uno (null si ninguna se registró).
