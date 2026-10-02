@@ -136,6 +136,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('La barra de opciones se abre, se esconde y se recuerda', (
+    tester,
+  ) async {
+    await abrir(tester);
+    // Empieza escondida: solo el botón "Opciones" junto al buscador.
+    expect(find.text('Entrega con IA'), findsNothing);
+    await tester.tap(find.text('Opciones'));
+    await tester.pumpAndSettle();
+    expect(find.text('Entrega con IA'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Despacho Corte'),
+      findsOneWidget,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('opciones_tareas_abiertas'), isTrue);
+
+    await tester.tap(find.text('Cerrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Entrega con IA'), findsNothing);
+    expect(prefs.getBool('opciones_tareas_abiertas'), isFalse);
+  });
+
   testWidgets('Una guía se puede quitar del corte', (tester) async {
     await abrir(tester);
 

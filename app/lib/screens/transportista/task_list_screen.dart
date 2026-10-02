@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
@@ -29,6 +30,29 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   bool _verEntregadas = false;
   final _busqueda = TextEditingController();
+
+  /// La barra de opciones ("Despacho Corte", "Entrega con IA") abierta o
+  /// escondida; se recuerda en el celular.
+  bool _opcionesAbiertas = false;
+  static const _prefOpciones = 'opciones_tareas_abiertas';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final abiertas = prefs.getBool(_prefOpciones) ?? false;
+      if (mounted && abiertas != _opcionesAbiertas) {
+        setState(() => _opcionesAbiertas = abiertas);
+      }
+    });
+  }
+
+  void _alternarOpciones() {
+    setState(() => _opcionesAbiertas = !_opcionesAbiertas);
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setBool(_prefOpciones, _opcionesAbiertas),
+    );
+  }
 
   /// Transbordos recibidos ya anunciados en esta sesión (uno por tarea).
   final _anunciados = <String>{};
@@ -174,7 +198,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       onChanged: (_) => setState(() {}),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Buscar guía, cliente o destino',
+        hintText: 'Buscar guía o cliente',
         prefixIcon: const Icon(Icons.search),
         filled: true,
         fillColor: Colors.white,
@@ -317,8 +341,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
             const SizedBox(height: 6),
           ],
           if (!sinPendientes) ...[
-            // "Despacho Corte" y "Entrega con IA" arriba, lejos de "Nueva
-            // guía" (abajo).
+            // El buscador y, a su lado, el botón que abre o esconde la barra
+            // de opciones ("Despacho Corte", "Entrega con IA"): arriba,
+            // lejos de "Nueva guía" (abajo), y sin quitar espacio si está
+            // escondida.
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
@@ -326,26 +352,44 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buscador(),
-                    const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(
-                          child: _BotonSuperior(
-                            icono: Icons.inventory_2_outlined,
-                            texto: 'Despacho Corte',
-                            onPressed: _despachoCorte,
-                          ),
-                        ),
+                        Expanded(child: _buscador()),
                         const SizedBox(width: 10),
-                        Expanded(
-                          child: _BotonSuperior(
-                            icono: Icons.auto_awesome_outlined,
-                            texto: 'Entrega con IA',
-                            onPressed: _entregaConIA,
-                          ),
+                        _BotonOpciones(
+                          abiertas: _opcionesAbiertas,
+                          onPressed: _alternarOpciones,
                         ),
                       ],
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      alignment: Alignment.topCenter,
+                      child: !_opcionesAbiertas
+                          ? const SizedBox(width: double.infinity)
+                          : Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _BotonSuperior(
+                                      icono: Icons.inventory_2_outlined,
+                                      texto: 'Despacho Corte',
+                                      onPressed: _despachoCorte,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _BotonSuperior(
+                                      icono: Icons.auto_awesome_outlined,
+                                      texto: 'Entrega con IA',
+                                      onPressed: _entregaConIA,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -355,6 +399,42 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ],
           contenido,
         ],
+      ),
+    );
+  }
+}
+
+/// Abre o esconde la barra de opciones. Cerrada dice "Opciones"; abierta,
+/// "Cerrar".
+class _BotonOpciones extends StatelessWidget {
+  const _BotonOpciones({required this.abiertas, required this.onPressed});
+
+  final bool abiertas;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: abiertas ? 'Esconder opciones' : 'Mostrar opciones',
+      child: FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 50),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          backgroundColor: abiertas ? Ipesa.petroleo : Ipesa.menta,
+          foregroundColor: abiertas ? Colors.white : Ipesa.petroleo,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        onPressed: onPressed,
+        icon: Icon(
+          abiertas ? Icons.expand_less_rounded : Icons.apps_rounded,
+          size: 20,
+        ),
+        label: Text(
+          abiertas ? 'Cerrar' : 'Opciones',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
