@@ -10,8 +10,12 @@ import '../../widgets/estado_badge.dart';
 import 'admin_dashboard_screen.dart';
 
 /// Qué guías cuentan en el resumen: hoy o un rango de fechas (de inicio a
-/// fin, inclusive). Las que siguen pendientes (en ruta o en trasbordo)
-/// cuentan siempre; las cerradas, si se cerraron en el periodo.
+/// fin, inclusive).
+///
+/// - Hoy: la operación del día — las que siguen pendientes (en ruta o en
+///   trasbordo), sean de cuando sean, y las que se cerraron hoy.
+/// - Un rango: las guías registradas en esas fechas (la fecha de la tarea,
+///   como en Operación), con su estado actual.
 @immutable
 class PeriodoResumen {
   const PeriodoResumen._(this._desde, this._hasta);
@@ -52,12 +56,15 @@ class PeriodoResumen {
   }
 
   bool incluye(Guia guia, DateTime ahora) {
-    if (!guia.estado.esCerrada) return true;
     final (desde, hasta) = dias(ahora);
-    final cierre = _dia(
-      (guia.fechaCierre ?? guia.fechaActualizacion).toLocal(),
-    );
-    return !cierre.isBefore(desde) && !cierre.isAfter(hasta);
+    final DateTime dia;
+    if (esHoy) {
+      if (!guia.estado.esCerrada) return true;
+      dia = _dia((guia.fechaCierre ?? guia.fechaActualizacion).toLocal());
+    } else {
+      dia = _dia(guia.fechaCreacion.toLocal());
+    }
+    return !dia.isBefore(desde) && !dia.isAfter(hasta);
   }
 
   @override

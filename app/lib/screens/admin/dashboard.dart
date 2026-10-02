@@ -42,8 +42,7 @@ class FilaRanking {
 }
 
 /// Los números del dashboard, calculados de las guías del periodo con la
-/// misma regla que la vista Transportistas: las pendientes cuentan siempre y
-/// las cerradas, si se cerraron en el periodo.
+/// misma regla que la vista Transportistas (ver [PeriodoResumen.incluye]).
 class IndicadoresOperacion {
   IndicadoresOperacion._(this.periodo);
 

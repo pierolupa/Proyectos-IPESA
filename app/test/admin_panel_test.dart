@@ -307,41 +307,79 @@ void main() {
   });
 
   test(
-    'Las pendientes cuentan siempre; las cerradas, si cierran en el periodo',
+    'Hoy: pendientes y cerradas hoy; un rango: las registradas en esas fechas',
     () {
-      final ahora = DateTime(2026, 9, 28, 12);
-      Guia guia(String estado, DateTime fecha) => Guia.fromJson(
-        _guia('X', estado, 'Juan Pérez')
-          ..['fecha_actualizacion'] = fecha.toUtc().toIso8601String(),
+      final ahora = DateTime(2026, 10, 2, 15);
+      Guia guia(
+        String numero,
+        String estado,
+        DateTime creada, [
+        DateTime? cerrada,
+      ]) => Guia.fromJson(
+        _guia(numero, estado, 'Juan Pérez')
+          ..['fecha_creacion'] = creada.toUtc().toIso8601String()
+          ..['fecha_actualizacion'] = (cerrada ?? creada)
+              .toUtc()
+              .toIso8601String(),
       );
-      final vieja = DateTime(2026, 9, 10);
-      final pendiente = guia('en_ruta', vieja);
-      final entregadaVieja = guia('entregado', vieja);
-      final entregadaHoy = guia('entregado', DateTime(2026, 9, 28, 9));
-
-      final hoy = resumirPorTransportista(
-        [pendiente, entregadaVieja, entregadaHoy],
-        PeriodoResumen.hoy,
+      final guias = [
+        // Del 1/10: una entregada ese día, una entregada hoy y una rechazada.
+        guia(
+          'A',
+          'entregado',
+          DateTime(2026, 10, 1, 9),
+          DateTime(2026, 10, 1, 12),
+        ),
+        guia(
+          'B',
+          'entregado',
+          DateTime(2026, 10, 1, 17),
+          DateTime(2026, 10, 2, 10),
+        ),
+        guia(
+          'C',
+          'rechazado',
+          DateTime(2026, 10, 1, 10),
+          DateTime(2026, 10, 1, 11),
+        ),
+        // Del 30/09, sigue en ruta.
+        guia('D', 'en_ruta', DateTime(2026, 9, 30, 8)),
+        // De hoy: una en ruta y una entregada.
+        guia('E', 'en_ruta', DateTime(2026, 10, 2, 9)),
+        guia(
+          'F',
+          'entregado',
+          DateTime(2026, 10, 2, 8),
+          DateTime(2026, 10, 2, 11),
+        ),
+      ];
+      List<String> numeros(PeriodoResumen p) => (resumirPorTransportista(
+        guias,
+        p,
         ahora: ahora,
-      ).single;
-      expect(hoy.guias, hasLength(2));
-      expect(hoy.pendientes, 1);
+      ).single.guias.map((g) => g.numeroGuia)).toList()..sort();
 
-      final septiembre = resumirPorTransportista(
-        [pendiente, entregadaVieja, entregadaHoy],
-        PeriodoResumen.fechas(DateTime(2026, 9, 1), DateTime(2026, 9, 28)),
-        ahora: ahora,
-      ).single;
-      expect(septiembre.guias, hasLength(3));
-
-      // Un rango que no llega a hoy deja fuera la entregada hoy.
-      final antes = resumirPorTransportista(
-        [pendiente, entregadaVieja, entregadaHoy],
-        PeriodoResumen.fechas(DateTime(2026, 9, 5), DateTime(2026, 9, 15)),
-        ahora: ahora,
-      ).single;
-      expect(antes.guias, hasLength(2));
-      expect(antes.pendientes, 1);
+      // Hoy: lo pendiente (de cualquier día) y lo que se cerró hoy.
+      expect(numeros(PeriodoResumen.hoy), ['B', 'D', 'E', 'F']);
+      // El 1/10: solo las registradas ese día, con su estado actual.
+      final primero = DateTime(2026, 10, 1);
+      expect(numeros(PeriodoResumen.fechas(primero, primero)), ['A', 'B', 'C']);
+      // Del 30/09 al 1/10 entra también la que sigue en ruta desde el 30.
+      expect(numeros(PeriodoResumen.fechas(DateTime(2026, 9, 30), primero)), [
+        'A',
+        'B',
+        'C',
+        'D',
+      ]);
+      // Un rango sin guías no muestra nada de hoy.
+      expect(
+        resumirPorTransportista(
+          guias,
+          PeriodoResumen.fechas(DateTime(2026, 9, 1), DateTime(2026, 9, 29)),
+          ahora: ahora,
+        ),
+        isEmpty,
+      );
     },
   );
 
