@@ -265,14 +265,16 @@ void main() {
     expect(find.text('Operación'), findsOneWidget);
   });
 
-  testWidgets('En computadora el riel tiene Transportistas y Rastrear', (
-    tester,
-  ) async {
+  testWidgets('En computadora las secciones van en el menú ☰', (tester) async {
     await _abrirPanel(tester);
     tester.view.physicalSize = const Size(1400, 900);
     await tester.pumpAndSettle();
 
-    // Las secciones van en orden, con el nombre bajo el ícono.
+    // Escondidas hasta abrir el menú: el contenido usa todo el ancho.
+    expect(find.text('Transportistas'), findsNothing);
+    await tester.tap(find.byTooltip('Menú'));
+    await tester.pumpAndSettle();
+
     final orden = [
       'Guías',
       'Transportistas',
@@ -283,7 +285,14 @@ void main() {
     for (var i = 1; i < orden.length; i++) {
       expect(orden[i], greaterThan(orden[i - 1]));
     }
-    expect(find.byTooltip('Cerrar sesión'), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
+
+    await tester.tap(find.text('Transportistas'));
+    await tester.pumpAndSettle();
+    // Se cerró el menú y cambió la sección.
+    expect(find.text('Cerrar sesión'), findsNothing);
+    expect(find.text('Transportistas'), findsWidgets);
+    expect(find.text('Operación'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

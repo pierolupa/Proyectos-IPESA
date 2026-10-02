@@ -31,6 +31,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _pestana = 0;
+  final _scaffold = GlobalKey<ScaffoldState>();
   bool _notificacionesActivas = Notificador.permitido;
   final _novedades = CentroNovedades();
 
@@ -139,6 +140,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 titulo: _titulos[_pestana],
                 novedades: _novedades,
                 onNovedades: _abrirNovedades,
+                onMenu: ancha
+                    ? () => _scaffold.currentState?.openDrawer()
+                    : null,
                 onRastrear: ancha ? null : _abrirRastreo,
                 onCerrarSesion: ancha ? null : _cerrarSesion,
               ),
@@ -159,6 +163,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
           onVerTodas: _abrirNovedades,
           child: Scaffold(
+            key: _scaffold,
+            // En computadora las secciones van en el menú ☰, para que el
+            // contenido use todo el ancho.
+            drawer: ancha
+                ? _MenuAdmin(
+                    seleccionado: _pestana,
+                    onSeleccion: (i) => setState(() => _pestana = i),
+                    onRastrear: _abrirRastreo,
+                    onCerrarSesion: _cerrarSesion,
+                  )
+                : null,
             floatingActionButton: _pestana == 3
                 ? FloatingActionButton.extended(
                     onPressed: () => Navigator.of(context).push(
@@ -192,23 +207,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
             body: SafeArea(
               child: ancha
-                  ? Row(
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _Riel(
-                          seleccionado: _pestana,
-                          onSeleccion: (i) => setState(() => _pestana = i),
-                          onRastrear: _abrirRastreo,
-                          onCerrarSesion: _cerrarSesion,
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: contenido),
-                              const BandaMarcas(),
-                            ],
-                          ),
-                        ),
+                        Expanded(child: contenido),
+                        const BandaMarcas(),
                       ],
                     )
                   : contenido,
@@ -245,8 +248,10 @@ const _secciones = [
   (Icons.storefront_outlined, 'Sucursales'),
 ];
 
-class _Riel extends StatelessWidget {
-  const _Riel({
+/// Menú lateral del administrador en computadora (se abre con ☰ en la
+/// cabecera y se esconde al elegir una opción).
+class _MenuAdmin extends StatelessWidget {
+  const _MenuAdmin({
     required this.seleccionado,
     required this.onSeleccion,
     required this.onRastrear,
@@ -260,92 +265,92 @@ class _Riel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget item(int i, IconData icono, String etiqueta, {VoidCallback? onTap}) {
-      final activo = i == seleccionado;
-      return Tooltip(
-        message: etiqueta,
-        child: Material(
-          color: activo ? Ipesa.turquesa : Colors.transparent,
-          borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-          child: InkWell(
+    // Cierra el menú y luego abre la opción.
+    VoidCallback cerrarY(VoidCallback accion) => () {
+      Navigator.of(context).pop();
+      accion();
+    };
+    Widget opcion(
+      IconData icono,
+      String etiqueta,
+      VoidCallback onTap, {
+      bool activo = false,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: activo ? Ipesa.menta : Colors.transparent,
+        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+        child: ListTile(
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(Ipesa.radioCampo),
-            onTap: onTap ?? () => onSeleccion(i),
-            child: SizedBox(
-              width: 80,
-              height: 76,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icono,
-                    size: 27,
-                    color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
-                  ),
-                  const SizedBox(height: 5),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      etiqueta,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: activo ? Colors.white : Ipesa.suaveSobrePetroleo,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+          leading: Icon(
+            icono,
+            color: activo ? Ipesa.petroleo : Ipesa.textoSuave,
+          ),
+          title: Text(
+            etiqueta,
+            style: Ipesa.titulo(
+              15.5,
+              color: activo ? Ipesa.petroleo : Ipesa.texto,
             ),
           ),
+          onTap: cerrarY(onTap),
         ),
-      );
-    }
+      ),
+    );
 
-    return Container(
-      width: 96,
-      color: Ipesa.petroleo,
-      padding: const EdgeInsets.symmetric(vertical: 24),
+    return Drawer(
+      backgroundColor: Colors.white,
+      width: 280,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Image.asset(
-            'assets/brand/ipesa_blanco.png',
-            width: 60,
-            semanticLabel: 'IPESA',
-          ),
-          const SizedBox(height: 16),
-          // Las secciones se reparten a lo alto de toda la barra.
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, c) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: c.maxHeight),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      for (final (i, (icono, etiqueta)) in _secciones.indexed)
-                        item(i, icono, etiqueta),
-                      item(
-                        -1,
-                        Icons.manage_search,
-                        'Rastrear',
-                        onTap: onRastrear,
-                      ),
-                    ],
+          Container(
+            color: Ipesa.petroleo,
+            padding: const EdgeInsets.fromLTRB(24, 28, 20, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Image.asset(
+                  'assets/brand/ipesa_blanco.png',
+                  width: 72,
+                  semanticLabel: 'IPESA',
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Administrador',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Ipesa.suaveSobrePetroleo,
                   ),
                 ),
-              ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          IconButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: onCerrarSesion,
-            style: IconButton.styleFrom(
-              fixedSize: const Size(48, 48),
-              backgroundColor: Ipesa.menta,
+          const SizedBox(height: 12),
+          for (final (i, (icono, etiqueta)) in _secciones.indexed)
+            opcion(
+              icono,
+              etiqueta,
+              () => onSeleccion(i),
+              activo: i == seleccionado,
             ),
-            icon: const Icon(Icons.logout, color: Ipesa.petroleo, size: 22),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Divider(height: 1),
           ),
+          opcion(Icons.manage_search, 'Rastrear', onRastrear),
+          const Spacer(),
+          const Divider(height: 1),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 26),
+            leading: const Icon(Icons.logout, color: Ipesa.textoSuave),
+            title: const Text('Cerrar sesión'),
+            onTap: cerrarY(onCerrarSesion),
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -357,6 +362,7 @@ class _Cabecera extends StatelessWidget {
     required this.titulo,
     required this.novedades,
     required this.onNovedades,
+    required this.onMenu,
     required this.onRastrear,
     required this.onCerrarSesion,
   });
@@ -364,6 +370,7 @@ class _Cabecera extends StatelessWidget {
   final String titulo;
   final CentroNovedades novedades;
   final VoidCallback onNovedades;
+  final VoidCallback? onMenu;
   final VoidCallback? onRastrear;
   final VoidCallback? onCerrarSesion;
 
@@ -390,6 +397,19 @@ class _Cabecera extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 20, 8),
       child: Row(
         children: [
+          if (onMenu != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: IconButton(
+                tooltip: 'Menú',
+                onPressed: onMenu,
+                style: IconButton.styleFrom(
+                  fixedSize: const Size.square(44),
+                  backgroundColor: Ipesa.petroleo,
+                ),
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
+              ),
+            ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
