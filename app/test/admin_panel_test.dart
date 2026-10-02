@@ -113,21 +113,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('El panel filtra por En ruta, Entregado y Rechazada', (
+  testWidgets('El panel filtra por estado con una lista desplegable', (
     tester,
   ) async {
     await _abrirPanel(tester);
 
+    // Cerrada muestra solo el estado elegido.
     expect(find.text('Todas · 5'), findsOneWidget);
+    expect(find.text('En ruta · 1'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('filtro_estado')));
+    await tester.pumpAndSettle();
     expect(find.text('En ruta · 1'), findsOneWidget);
     // Sin filtro de trasbordo (sus guías siguen en "Todas").
     expect(find.textContaining('Trasbordo ·'), findsNothing);
     expect(find.text('Entregado · 2'), findsOneWidget);
     expect(find.text('Rechazada · 0'), findsOneWidget);
-    expect(find.byType(ChoiceChip), findsNWidgets(4));
 
     await tester.tap(find.text('Entregado · 2'));
     await tester.pumpAndSettle();
+    expect(find.text('Entregado · 2'), findsOneWidget);
     expect(find.text('T001-4'), findsOneWidget);
     expect(find.text('T001-5'), findsOneWidget);
     expect(find.text('T001-1'), findsNothing);

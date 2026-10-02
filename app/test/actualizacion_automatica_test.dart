@@ -73,13 +73,14 @@ void main() {
         child: const MaterialApp(home: AdminDashboardScreen()),
       ),
     );
-    expect(find.text('En ruta · 1'), findsOneWidget);
+    expect(find.text('Todas · 1'), findsOneWidget);
+    expect(find.text('T001-1'), findsOneWidget);
 
     servidor.guias = [_guia('T001-1', 'entregado'), _guia('T001-2', 'en_ruta')];
     await tester.pump(const Duration(seconds: 15));
     await tester.pump();
 
-    expect(find.text('Entregado · 1'), findsOneWidget);
+    expect(find.text('Todas · 2'), findsOneWidget);
     // Un aviso por novedad, y la campana las cuenta.
     expect(find.text('Guía entregada'), findsOneWidget);
     expect(find.text('Nueva guía registrada'), findsOneWidget);

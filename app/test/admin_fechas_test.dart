@@ -25,7 +25,7 @@ Map<String, dynamic> _guia(String numero, DateTime creada) => {
 };
 
 void main() {
-  testWidgets('Guías muestra las de hoy; 7 días muestra la semana', (
+  testWidgets('Guías muestra las de hoy; sin "7 días", con Fechas aparte', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -59,10 +59,9 @@ void main() {
     expect(find.text('HOY-1'), findsOneWidget);
     expect(find.text('HACE-3'), findsNothing);
 
-    await tester.tap(find.text('7 días'));
-    await tester.pumpAndSettle();
-    expect(find.text('Todas · 2'), findsOneWidget);
-    expect(find.text('HACE-3'), findsOneWidget);
-    expect(find.text('HACE-20'), findsNothing);
+    // Solo "Hoy" y "Fechas" (un rango a elegir).
+    expect(find.text('7 días'), findsNothing);
+    expect(find.text('Hoy'), findsOneWidget);
+    expect(find.text('Fechas'), findsOneWidget);
   });
 }

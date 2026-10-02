@@ -478,7 +478,7 @@ class _PestanaGuias extends StatefulWidget {
   State<_PestanaGuias> createState() => _PestanaGuiasState();
 }
 
-enum _Periodo { hoy, semana, fechas }
+enum _Periodo { hoy, fechas }
 
 class _PestanaGuiasState extends State<_PestanaGuias> {
   GrupoEstado? _filtro;
@@ -493,7 +493,6 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
     final hoy = _dia(DateTime.now());
     return switch (_periodo) {
       _Periodo.hoy => (hoy, hoy),
-      _Periodo.semana => (hoy.subtract(const Duration(days: 6)), hoy),
       _Periodo.fechas => (
         _dia(_fechas?.start ?? hoy),
         _dia(_fechas?.end ?? hoy),
@@ -602,12 +601,6 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
           ),
           const VerticalDivider(width: 1, color: Ipesa.borde),
           segmento(
-            '7 días',
-            _periodo == _Periodo.semana,
-            () => setState(() => _periodo = _Periodo.semana),
-          ),
-          const VerticalDivider(width: 1, color: Ipesa.borde),
-          segmento(
             etiquetaFechas,
             _periodo == _Periodo.fechas,
             _elegirFechas,
@@ -617,32 +610,77 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
       ),
     );
 
+    // Estado: lista desplegable con cuántas hay de cada uno. El trasbordo
+    // no se filtra aparte (sus guías siguen en "Todas").
+    final opcionesEstado = <(String, String, Color)>[
+      ('todas', 'Todas · ${todas.length}', Ipesa.petroleo),
+      for (final grupo in GrupoEstado.values)
+        if (grupo != GrupoEstado.trasbordo)
+          (
+            grupo.name,
+            '${grupo.etiqueta} · '
+                '${todas.where((g) => g.estado.grupo == grupo).length}',
+            _estadoDeGrupo(grupo).color,
+          ),
+    ];
+    final estados = Container(
+      height: 42,
+      padding: const EdgeInsets.only(left: 12, right: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Ipesa.borde),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          key: const ValueKey('filtro_estado'),
+          value: _filtro?.name ?? 'todas',
+          borderRadius: BorderRadius.circular(12),
+          icon: const Icon(Icons.expand_more_rounded, color: Ipesa.etiqueta),
+          items: [
+            for (final (valor, texto, color) in opcionesEstado)
+              DropdownMenuItem(
+                value: valor,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      texto,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Ipesa.texto,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          onChanged: (v) => setState(
+            () => _filtro = GrupoEstado.values
+                .where((g) => g.name == v)
+                .firstOrNull,
+          ),
+        ),
+      ),
+    );
+
     final filtros = Padding(
       padding: const EdgeInsets.fromLTRB(24, 4, 24, 12),
       child: Wrap(
-        spacing: 8,
+        spacing: 10,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          periodo,
-          const SizedBox(width: 8),
-          _Filtro(
-            etiqueta: 'Todas · ${todas.length}',
-            seleccionado: _filtro == null,
-            onTap: () => setState(() => _filtro = null),
-          ),
-          // El trasbordo ya no se filtra aparte (sus guías siguen en "Todas").
-          for (final grupo in GrupoEstado.values)
-            if (grupo != GrupoEstado.trasbordo)
-              _Filtro(
-                etiqueta:
-                    '${grupo.etiqueta} · '
-                    '${todas.where((g) => g.estado.grupo == grupo).length}',
-                seleccionado: _filtro == grupo,
-                estado: _estadoDeGrupo(grupo),
-                onTap: () => setState(() => _filtro = grupo),
-              ),
-        ],
+        children: [periodo, estados],
       ),
     );
 
@@ -729,41 +767,6 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
     GrupoEstado.entregado => EstadoGuia.entregado,
     GrupoEstado.rechazado => EstadoGuia.rechazado,
   };
-}
-
-class _Filtro extends StatelessWidget {
-  const _Filtro({
-    required this.etiqueta,
-    required this.seleccionado,
-    required this.onTap,
-    this.estado,
-  });
-
-  final String etiqueta;
-  final bool seleccionado;
-  final VoidCallback onTap;
-  final EstadoGuia? estado;
-
-  @override
-  Widget build(BuildContext context) {
-    final fondo = estado?.colorFondo ?? Ipesa.menta;
-    final texto = estado?.color ?? Ipesa.petroleo;
-    return ChoiceChip(
-      label: Text(etiqueta),
-      selected: seleccionado,
-      showCheckmark: false,
-      onSelected: (_) => onTap(),
-      backgroundColor: Colors.white,
-      selectedColor: fondo,
-      side: BorderSide(color: seleccionado ? texto : Ipesa.borde),
-      labelStyle: TextStyle(
-        fontFamily: Ipesa.fuenteTexto,
-        color: seleccionado ? texto : Ipesa.texto,
-        fontWeight: FontWeight.w600,
-        fontSize: 14,
-      ),
-    );
-  }
 }
 
 /// Una guía en las listas del administrador; tocarla abre su detalle.
