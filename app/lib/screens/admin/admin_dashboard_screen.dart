@@ -242,15 +242,18 @@ String haceCuanto(DateTime fecha) {
 
 /// Las secciones del menú, en el orden de las pestañas.
 const _secciones = [
-  (Icons.receipt_long_outlined, 'Guías'),
-  (Icons.local_shipping_outlined, 'Transportistas'),
-  (Icons.space_dashboard_outlined, 'Dashboard'),
-  (Icons.storefront_outlined, 'Sucursales'),
+  (Icons.description_sharp, 'Guías'),
+  (Icons.local_shipping_sharp, 'Transportistas'),
+  (Icons.bar_chart_sharp, 'Dashboard'),
+  (Icons.store_sharp, 'Sucursales'),
 ];
 
 /// Menú lateral del administrador en computadora (se abre con ☰ en la
 /// cabecera y se esconde al elegir una opción).
 class _MenuAdmin extends StatelessWidget {
+  static const _fondoActivo = Color(0xFFEDF4F2);
+  static const _iconoGris = Color(0xFF5B6B70);
+
   const _MenuAdmin({
     required this.seleccionado,
     required this.onSeleccion,
@@ -278,21 +281,24 @@ class _MenuAdmin extends StatelessWidget {
     }) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Material(
-        color: activo ? Ipesa.menta : Colors.transparent,
-        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+        color: activo ? _fondoActivo : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
         child: ListTile(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+            borderRadius: BorderRadius.circular(10),
           ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+          minLeadingWidth: 22,
           leading: Icon(
             icono,
-            color: activo ? Ipesa.petroleo : Ipesa.textoSuave,
+            size: 22,
+            color: activo ? Ipesa.petroleo : _iconoGris,
           ),
           title: Text(
             etiqueta,
-            style: Ipesa.titulo(
-              15.5,
+            style: TextStyle(
+              fontSize: 15.5,
+              fontWeight: activo ? FontWeight.w700 : FontWeight.w600,
               color: activo ? Ipesa.petroleo : Ipesa.texto,
             ),
           ),
@@ -341,13 +347,16 @@ class _MenuAdmin extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Divider(height: 1),
           ),
-          opcion(Icons.manage_search, 'Rastrear', onRastrear),
+          opcion(Icons.manage_search_sharp, 'Rastrear', onRastrear),
           const Spacer(),
           const Divider(height: 1),
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 26),
-            leading: const Icon(Icons.logout, color: Ipesa.textoSuave),
-            title: const Text('Cerrar sesión'),
+            leading: const Icon(Icons.logout_sharp, color: Ipesa.textoSuave),
+            title: const Text(
+              'Cerrar sesión',
+              style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
+            ),
             onTap: cerrarY(onCerrarSesion),
           ),
           const SizedBox(height: 8),

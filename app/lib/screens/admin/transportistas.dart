@@ -9,38 +9,65 @@ import '../../theme.dart';
 import '../../widgets/estado_badge.dart';
 import 'admin_dashboard_screen.dart';
 
-/// Qué guías cuentan en el resumen. Las que siguen pendientes (en ruta o
-/// en trasbordo) cuentan siempre; las cerradas, si se cerraron en el
-/// periodo.
-enum PeriodoResumen {
-  hoy('Hoy'),
-  semana('Últimos 7 días'),
-  mes('Este mes'),
-  todo('Todo');
+/// Qué guías cuentan en el resumen: hoy o un rango de fechas (de inicio a
+/// fin, inclusive). Las que siguen pendientes (en ruta o en trasbordo)
+/// cuentan siempre; las cerradas, si se cerraron en el periodo.
+@immutable
+class PeriodoResumen {
+  const PeriodoResumen._(this._desde, this._hasta);
 
-  const PeriodoResumen(this.etiqueta);
-  final String etiqueta;
+  /// El periodo por defecto.
+  static const hoy = PeriodoResumen._(null, null);
 
-  /// Para el selector compacto.
-  String get corta => switch (this) {
-    PeriodoResumen.hoy => 'Hoy',
-    PeriodoResumen.semana => '7 días',
-    PeriodoResumen.mes => 'Mes',
-    PeriodoResumen.todo => 'Todo',
-  };
+  /// Del día de [desde] al de [hasta], inclusive.
+  factory PeriodoResumen.fechas(DateTime desde, DateTime hasta) =>
+      PeriodoResumen._(_dia(desde), _dia(hasta));
+
+  final DateTime? _desde;
+  final DateTime? _hasta;
+
+  static DateTime _dia(DateTime f) => DateTime(f.year, f.month, f.day);
+
+  bool get esHoy => _desde == null;
+
+  /// Primer y último día del periodo.
+  (DateTime, DateTime) dias(DateTime ahora) =>
+      esHoy ? (_dia(ahora), _dia(ahora)) : (_desde!, _hasta!);
+
+  /// Para el selector: "Fechas" en hoy, si no el rango elegido.
+  String get corta {
+    if (esHoy) return 'Fechas';
+    final f = DateFormat('dd/MM');
+    return _desde == _hasta
+        ? f.format(_desde!)
+        : '${f.format(_desde!)} – ${f.format(_hasta!)}';
+  }
+
+  String get etiqueta {
+    if (esHoy) return 'Hoy';
+    final f = DateFormat('dd/MM/yyyy');
+    return _desde == _hasta
+        ? f.format(_desde!)
+        : 'Del ${f.format(_desde!)} al ${f.format(_hasta!)}';
+  }
 
   bool incluye(Guia guia, DateTime ahora) {
-    if (this == PeriodoResumen.todo || !guia.estado.esCerrada) return true;
-    final hoy = DateTime(ahora.year, ahora.month, ahora.day);
-    final desde = switch (this) {
-      PeriodoResumen.hoy => hoy,
-      PeriodoResumen.semana => hoy.subtract(const Duration(days: 6)),
-      PeriodoResumen.mes => DateTime(ahora.year, ahora.month),
-      PeriodoResumen.todo => hoy,
-    };
-    final cierre = (guia.fechaCierre ?? guia.fechaActualizacion).toLocal();
-    return !cierre.isBefore(desde);
+    if (!guia.estado.esCerrada) return true;
+    final (desde, hasta) = dias(ahora);
+    final cierre = _dia(
+      (guia.fechaCierre ?? guia.fechaActualizacion).toLocal(),
+    );
+    return !cierre.isBefore(desde) && !cierre.isAfter(hasta);
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is PeriodoResumen &&
+      other._desde == _desde &&
+      other._hasta == _hasta;
+
+  @override
+  int get hashCode => Object.hash(_desde, _hasta);
 }
 
 /// Las guías de un transportista en el periodo, con sus cuentas.
@@ -106,7 +133,7 @@ String _iniciales(String nombre) {
   return partes.take(2).map((p) => p[0].toUpperCase()).join();
 }
 
-/// Selector compacto del periodo: Hoy · 7 días · Mes · Todo.
+/// Selector del periodo: "Hoy" o un rango de fechas de inicio a fin.
 class SelectorPeriodo extends StatelessWidget {
   const SelectorPeriodo({
     super.key,
@@ -117,8 +144,64 @@ class SelectorPeriodo extends StatelessWidget {
   final PeriodoResumen periodo;
   final ValueChanged<PeriodoResumen> onCambio;
 
+  Future<void> _elegirFechas(BuildContext context) async {
+    final ahora = DateTime.now();
+    final hoy = DateTime(ahora.year, ahora.month, ahora.day);
+    final (desde, hasta) = periodo.dias(ahora);
+    final elegido = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: hoy,
+      initialDateRange: DateTimeRange(start: desde, end: hasta),
+      helpText: 'Fecha de inicio y fin',
+      saveText: 'Ver',
+    );
+    if (elegido == null) return;
+    onCambio(PeriodoResumen.fechas(elegido.start, elegido.end));
+  }
+
   @override
   Widget build(BuildContext context) {
+    Widget segmento(
+      String texto,
+      bool activo,
+      VoidCallback onTap, {
+      IconData? icono,
+    }) => Semantics(
+      button: true,
+      selected: activo,
+      child: Material(
+        color: activo ? Ipesa.petroleo : Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icono != null) ...[
+                  Icon(
+                    icono,
+                    size: 16,
+                    color: activo ? Colors.white : Ipesa.etiqueta,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  texto,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: activo ? FontWeight.w700 : FontWeight.w600,
+                    color: activo ? Colors.white : Ipesa.etiqueta,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -129,36 +212,16 @@ class SelectorPeriodo extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final p in PeriodoResumen.values) ...[
-            if (p != PeriodoResumen.values.first)
-              const VerticalDivider(width: 1, color: Ipesa.borde),
-            Semantics(
-              button: true,
-              selected: p == periodo,
-              child: Material(
-                color: p == periodo ? Ipesa.petroleo : Colors.transparent,
-                child: InkWell(
-                  onTap: () => onCambio(p),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Center(
-                      child: Text(
-                        p.corta,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: p == periodo
-                              ? FontWeight.w700
-                              : FontWeight.w600,
-                          color: p == periodo ? Colors.white : Ipesa.etiqueta,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          segmento('Hoy', periodo.esHoy, () => onCambio(PeriodoResumen.hoy)),
+          const VerticalDivider(width: 1, color: Ipesa.borde),
+          segmento(
+            periodo.corta,
+            !periodo.esHoy,
+            () => _elegirFechas(context),
+            icono: Icons.calendar_month_outlined,
+          ),
         ],
       ),
     );
@@ -812,7 +875,7 @@ class _TransportistaDetalleScreenState
                               flex: 2,
                               child: _LineaDelDia(
                                 guias: resumen.guias,
-                                titulo: _periodo == PeriodoResumen.hoy
+                                titulo: _periodo.esHoy
                                     ? 'Línea del día'
                                     : 'Actividad',
                               ),

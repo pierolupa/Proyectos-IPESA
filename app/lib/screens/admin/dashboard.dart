@@ -138,7 +138,14 @@ class IndicadoresOperacion {
   double get tasaRechazo => total == 0 ? 0 : rechazadas / total;
 
   /// Hoy, por hora; si no, por día.
-  bool get porHora => periodo == PeriodoResumen.hoy;
+  bool get porHora => periodo.esHoy;
+
+  /// Un rango de más de dos meses, por mes.
+  bool get porMes {
+    if (periodo.esHoy) return false;
+    final (desde, hasta) = periodo.dias(DateTime.now());
+    return hasta.difference(desde).inDays + 1 > 62;
+  }
 }
 
 List<PuntoSerie> _serie(
@@ -159,7 +166,7 @@ List<PuntoSerie> _serie(
     }
   }
 
-  if (periodo == PeriodoResumen.hoy) {
+  if (periodo.esHoy) {
     // De 7 a 19 h, estirando si hubo movimiento antes o después.
     var desde = 7;
     var hasta = 19;
@@ -182,13 +189,8 @@ List<PuntoSerie> _serie(
     return puntos.values.toList();
   }
 
-  final hoy = DateTime(ahora.year, ahora.month, ahora.day);
-  final desde = switch (periodo) {
-    PeriodoResumen.semana => hoy.subtract(const Duration(days: 6)),
-    PeriodoResumen.mes => DateTime(ahora.year, ahora.month),
-    _ => hoy.subtract(const Duration(days: 13)),
-  };
-  final dias = hoy.difference(desde).inDays + 1;
+  final (desde, hasta) = periodo.dias(ahora);
+  final dias = hasta.difference(desde).inDays + 1;
   const dias3 = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
   const diasLargos = [
     'Lunes',
@@ -213,6 +215,27 @@ List<PuntoSerie> _serie(
     'noviembre',
     'diciembre',
   ];
+  // Un rango largo se resume por mes para que las barras se lean.
+  if (dias > 62) {
+    final porMes = <(int, int), PuntoSerie>{
+      for (
+        var m = DateTime(desde.year, desde.month);
+        !m.isAfter(hasta);
+        m = DateTime(m.year, m.month + 1)
+      )
+        (m.year, m.month): PuntoSerie(
+          '${meses[m.month - 1].substring(0, 3)} ${m.year % 100}',
+          '${meses[m.month - 1][0].toUpperCase()}'
+              '${meses[m.month - 1].substring(1)} de ${m.year}',
+        ),
+    };
+    for (final g in cerradas) {
+      final c = cierre(g);
+      final punto = porMes[(c.year, c.month)];
+      if (punto != null && !c.isBefore(desde)) sumar(punto, g);
+    }
+    return porMes.values.toList();
+  }
   final puntos = [
     for (var i = 0; i < dias; i++)
       () {
@@ -681,7 +704,11 @@ class _GraficoEntregas extends StatelessWidget {
     final etiquetaCada = serie.length > 16 ? 5 : (serie.length > 10 ? 2 : 1);
 
     return _Tarjeta(
-      titulo: datos.porHora ? 'Cierres por hora' : 'Cierres por día',
+      titulo: datos.porHora
+          ? 'Cierres por hora'
+          : datos.porMes
+          ? 'Cierres por mes'
+          : 'Cierres por día',
       subtitulo: 'Guías entregadas y rechazadas en el periodo',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

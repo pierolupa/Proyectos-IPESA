@@ -96,6 +96,16 @@ void main() {
     expect(find.text('Cierre'), findsOneWidget);
     expect(find.text('Eficiencia'), findsOneWidget);
     expect(find.text('Guías del periodo'), findsOneWidget);
+    // Periodo: hoy o un rango de fechas de inicio a fin.
+    for (final quitado in ['7 días', 'Mes', 'Todo']) {
+      expect(find.text(quitado), findsNothing);
+    }
+    expect(find.text('Fechas'), findsOneWidget);
+    await tester.tap(find.text('Fechas'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fecha de inicio y fin'), findsOneWidget);
+    Navigator.of(tester.element(find.text('Fecha de inicio y fin'))).pop();
+    await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       find.text('Estado de las guías'),
       find.byType(ListView).first,
@@ -317,12 +327,21 @@ void main() {
       expect(hoy.guias, hasLength(2));
       expect(hoy.pendientes, 1);
 
-      final todo = resumirPorTransportista(
+      final septiembre = resumirPorTransportista(
         [pendiente, entregadaVieja, entregadaHoy],
-        PeriodoResumen.todo,
+        PeriodoResumen.fechas(DateTime(2026, 9, 1), DateTime(2026, 9, 28)),
         ahora: ahora,
       ).single;
-      expect(todo.guias, hasLength(3));
+      expect(septiembre.guias, hasLength(3));
+
+      // Un rango que no llega a hoy deja fuera la entregada hoy.
+      final antes = resumirPorTransportista(
+        [pendiente, entregadaVieja, entregadaHoy],
+        PeriodoResumen.fechas(DateTime(2026, 9, 5), DateTime(2026, 9, 15)),
+        ahora: ahora,
+      ).single;
+      expect(antes.guias, hasLength(2));
+      expect(antes.pendientes, 1);
     },
   );
 
