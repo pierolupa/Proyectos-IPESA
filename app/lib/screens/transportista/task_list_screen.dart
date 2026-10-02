@@ -443,8 +443,8 @@ class _MenuTransportista extends StatelessWidget {
             onDespachoCorte,
           ),
           opcion(
-            Icons.auto_awesome_outlined,
-            'Entrega con IA',
+            Icons.smart_toy_outlined,
+            'Entrega inteligente',
             'Entrega varias tareas con sus fotos',
             onEntregaConIA,
           ),

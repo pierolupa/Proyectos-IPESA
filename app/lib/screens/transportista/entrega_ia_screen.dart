@@ -68,7 +68,7 @@ class _Foto {
   String? error;
 }
 
-/// "Entrega con IA": el transportista sube hasta [maxGuiasPorCarga] fotos
+/// "Entrega inteligente": el transportista sube hasta [maxGuiasPorCarga] fotos
 /// de guías entregadas; la IA lee el número de guía de cada una y la busca
 /// entre sus tareas en ruta. Las que encuentra quedan listas para
 /// entregar (con esa foto como foto de entrega, y la hora y el GPS de
@@ -332,7 +332,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
     final n = encontradas.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Entrega con IA')),
+      appBar: AppBar(title: const Text('Entrega inteligente')),
       bottomNavigationBar: _fotos.isEmpty
           ? null
           : SafeArea(

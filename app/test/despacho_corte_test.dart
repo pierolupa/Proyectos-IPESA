@@ -141,17 +141,17 @@ void main() {
   ) async {
     await abrir(tester);
     // No ocupan espacio en la lista: están en el menú.
-    expect(find.text('Entrega con IA'), findsNothing);
+    expect(find.text('Entrega inteligente'), findsNothing);
     await tester.tap(find.byTooltip('Menú'));
     await tester.pumpAndSettle();
-    expect(find.text('Entrega con IA'), findsOneWidget);
+    expect(find.text('Entrega inteligente'), findsOneWidget);
     expect(find.text('Varias guías que salen y llegan juntas'), findsOneWidget);
     expect(find.text('Cerrar sesión'), findsOneWidget);
 
-    await tester.tap(find.text('Entrega con IA'));
+    await tester.tap(find.text('Entrega inteligente'));
     await tester.pumpAndSettle();
     // Se cerró el menú y se abrió la pantalla.
-    expect(find.text('Entrega con IA'), findsOneWidget);
+    expect(find.text('Entrega inteligente'), findsOneWidget);
     expect(find.text('Varias guías que salen y llegan juntas'), findsNothing);
     expect(tester.takeException(), isNull);
   });
