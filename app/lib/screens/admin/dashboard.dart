@@ -9,7 +9,6 @@ import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
-import 'admin_dashboard_screen.dart';
 import 'transportistas.dart';
 
 const _colorEnRuta = Color(0xFF2459A8);
@@ -431,7 +430,6 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           final grafico = _GraficoEntregas(datos: datos);
           final estados = _Estados(datos: datos);
           final ranking = _Ranking(datos: datos);
-          final atencion = _Atencion(datos: datos);
           final agencias = _Agencias(datos: datos);
 
           Widget fila(List<Widget> hijos, List<int> flex) => IntrinsicHeight(
@@ -462,9 +460,9 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                 const SizedBox(height: sep),
                 fila([grafico, estados], [62, 38]),
                 const SizedBox(height: sep),
-                fila([ranking, atencion], [62, 38]),
-                const SizedBox(height: sep),
-                agencias,
+                // Agencias donde estaba "Requiere atención" (las atrasadas
+                // siguen en la cifra "En ruta").
+                fila([ranking, agencias], [50, 50]),
               ] else ...[
                 hero,
                 const SizedBox(height: sep),
@@ -475,8 +473,6 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                 estados,
                 const SizedBox(height: sep),
                 ranking,
-                const SizedBox(height: sep),
-                atencion,
                 const SizedBox(height: sep),
                 agencias,
               ],
@@ -1282,102 +1278,6 @@ class _FilaTransportista extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Lo que pide acción: guías atrasadas y pedidos de eliminación.
-class _Atencion extends StatelessWidget {
-  const _Atencion({required this.datos});
-
-  final IndicadoresOperacion datos;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      for (final g in datos.pidenEliminar)
-        (g, 'Pide eliminarla', Icons.delete_outline, _colorRechazado),
-      for (final g in datos.atrasadas)
-        if (!g.eliminacionPendiente)
-          (
-            g,
-            'Asignada ${haceCuanto(g.fechaCreacion)} · sigue en ruta',
-            Icons.schedule,
-            const Color(0xFF9A4A0B),
-          ),
-    ];
-    return _Tarjeta(
-      titulo: 'Requiere atención',
-      subtitulo: 'Atrasadas (más de 24 h en ruta) y pedidos de eliminación',
-      child: items.isEmpty
-          ? const Row(
-              children: [
-                Icon(Icons.check_circle, color: _colorEntregado, size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Todo en orden: nada pendiente de revisar.',
-                    style: TextStyle(fontSize: 15, color: Ipesa.etiqueta),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                for (final (g, motivo, icono, color) in items.take(5))
-                  InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => abrirGuiaAdmin(context, g),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Icon(icono, size: 20, color: color),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${g.numeroGuia} · ${g.transportista}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: Ipesa.texto,
-                                  ),
-                                ),
-                                Text(
-                                  motivo,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Ipesa.textoSuave,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            Icons.chevron_right,
-                            color: Ipesa.textoSuave,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (items.length > 5)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'y ${items.length - 5} más',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Ipesa.textoSuave,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
     );
   }
 }
