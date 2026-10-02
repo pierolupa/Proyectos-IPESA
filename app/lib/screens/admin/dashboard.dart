@@ -136,12 +136,12 @@ class IndicadoresOperacion {
 
   double get tasaRechazo => total == 0 ? 0 : rechazadas / total;
 
-  /// Hoy, por hora; si no, por día.
-  bool get porHora => periodo.esHoy;
+  /// Un solo día (hoy u otro), por hora; si no, por día.
+  bool get porHora => periodo.unDia;
 
   /// Un rango de más de dos meses, por mes.
   bool get porMes {
-    if (periodo.esHoy) return false;
+    if (periodo.unDia) return false;
     final (desde, hasta) = periodo.dias(DateTime.now());
     return hasta.difference(desde).inDays + 1 > 62;
   }
@@ -165,7 +165,13 @@ List<PuntoSerie> _serie(
     }
   }
 
-  if (periodo.esHoy) {
+  if (periodo.unDia) {
+    // Solo los cierres de ese día (una guía del día pudo cerrarse después).
+    final (dia, _) = periodo.dias(ahora);
+    cerradas.retainWhere((g) {
+      final c = cierre(g);
+      return c.year == dia.year && c.month == dia.month && c.day == dia.day;
+    });
     // De 7 a 19 h, estirando si hubo movimiento antes o después.
     var desde = 7;
     var hasta = 19;

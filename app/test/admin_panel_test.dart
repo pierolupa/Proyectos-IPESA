@@ -383,6 +383,41 @@ void main() {
     },
   );
 
+  test('Un solo día se grafica por hora; varios días, por día', () {
+    final ahora = DateTime(2026, 10, 2, 15);
+    Guia guia(String numero, DateTime creada, DateTime cerrada) =>
+        Guia.fromJson(
+          _guia(numero, 'entregado', 'Juan Pérez')
+            ..['fecha_creacion'] = creada.toUtc().toIso8601String()
+            ..['fecha_actualizacion'] = cerrada.toUtc().toIso8601String(),
+        );
+    final guias = [
+      guia('A', DateTime(2026, 10, 1, 8), DateTime(2026, 10, 1, 9, 30)),
+      guia('B', DateTime(2026, 10, 1, 8), DateTime(2026, 10, 1, 9, 50)),
+      // Del 1/10, pero se entregó el 2/10: no va en las horas del 1/10.
+      guia('C', DateTime(2026, 10, 1, 17), DateTime(2026, 10, 2, 10)),
+    ];
+    final primero = DateTime(2026, 10, 1);
+    final unDia = IndicadoresOperacion.calcular(
+      guias,
+      PeriodoResumen.fechas(primero, primero),
+      ahora: ahora,
+    );
+    expect(unDia.porHora, isTrue);
+    expect(unDia.serie.first.etiqueta, '7 h');
+    final nueve = unDia.serie.firstWhere((p) => p.etiqueta == '9 h');
+    expect(nueve.entregadas, 2);
+    expect(unDia.serie.fold(0, (n, p) => n + p.entregadas), 2);
+
+    final dosDias = IndicadoresOperacion.calcular(
+      guias,
+      PeriodoResumen.fechas(DateTime(2026, 9, 30), primero),
+      ahora: ahora,
+    );
+    expect(dosDias.porHora, isFalse);
+    expect(dosDias.serie, hasLength(2));
+  });
+
   test('Un rechazo cierra la tarea pero no cuenta como entrega', () {
     final ahora = DateTime(2026, 9, 29, 18);
     Guia guia(String numero, String estado) => Guia.fromJson(

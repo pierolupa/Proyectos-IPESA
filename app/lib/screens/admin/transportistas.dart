@@ -34,6 +34,9 @@ class PeriodoResumen {
 
   bool get esHoy => _desde == null;
 
+  /// Hoy o un rango de un solo día.
+  bool get unDia => esHoy || _desde == _hasta;
+
   /// Primer y último día del periodo.
   (DateTime, DateTime) dias(DateTime ahora) =>
       esHoy ? (_dia(ahora), _dia(ahora)) : (_desde!, _hasta!);
