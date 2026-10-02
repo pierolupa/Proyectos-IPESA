@@ -9,7 +9,7 @@ jest.mock('./fotos', () => ({
 
 const request = require('supertest');
 const repo = require('./sheetsRepository');
-const { leerGuiaConIA } = require('./ocrAgente');
+const { leerGuiaConIA, leerNumeroGuia } = require('./ocrAgente');
 const fotos = require('./fotos');
 const { ESTADOS, TIPOS_ENTREGA, ROLES, TRANSBORDO } = require('./columns');
 
@@ -527,6 +527,36 @@ describe('POST /ocr/leer-guia', () => {
       .send({ imagenBase64: 'ZmFrZQ==' });
     expect(res.status).toBe(429);
     expect(res.body.error).toMatch(/ocupada/);
+  });
+});
+
+describe('POST /ocr/numero-guia', () => {
+  it('rechaza si falta la imagen', async () => {
+    const res = await request(app).post('/ocr/numero-guia').send({ candidatos: ['T1'] });
+    expect(res.status).toBe(400);
+    expect(leerNumeroGuia).not.toHaveBeenCalled();
+  });
+
+  it('pasa a la IA las guías en ruta como candidatos, sin repetidos ni vacíos', async () => {
+    leerNumeroGuia.mockResolvedValue({ numero_guia: 'T001-93506' });
+    const res = await request(app)
+      .post('/ocr/numero-guia')
+      .send({
+        imagenBase64: 'ZmFrZQ==',
+        candidatos: ['T001-93506', ' T001-93507 ', 'T001-93506', '', 5],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ numero_guia: 'T001-93506' });
+    expect(leerNumeroGuia).toHaveBeenCalledWith('ZmFrZQ==', 'image/jpeg', [
+      'T001-93506',
+      'T001-93507',
+    ]);
+  });
+
+  it('con el límite por minuto de la IA responde 429 para reintentar', async () => {
+    leerNumeroGuia.mockRejectedValue(Object.assign(new Error('RESOURCE_EXHAUSTED'), { status: 429 }));
+    const res = await request(app).post('/ocr/numero-guia').send({ imagenBase64: 'ZmFrZQ==' });
+    expect(res.status).toBe(429);
   });
 });
 

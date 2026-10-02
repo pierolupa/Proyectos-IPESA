@@ -438,6 +438,11 @@ class AppState extends ChangeNotifier {
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) =>
       _api.leerGuiaConIA(fotoBytes);
 
+  Future<String?> leerNumeroGuia(
+    Uint8List fotoBytes, {
+    List<String> candidatos = const [],
+  }) => _api.leerNumeroGuia(fotoBytes, candidatos: candidatos);
+
   Future<Guia> asignarNuevaGuia({
     required String numeroGuia,
     required TipoEntrega tipoEntrega,

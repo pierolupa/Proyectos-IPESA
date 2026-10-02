@@ -268,6 +268,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | Método | Ruta | Uso |
 |---|---|---|
 | `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
+| `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número dentro de los 20 minutos siguientes; otro transportista, sí. |

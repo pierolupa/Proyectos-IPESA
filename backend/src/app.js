@@ -10,7 +10,7 @@ const {
   TRANSBORDO,
 } = require('./columns');
 const repo = require('./sheetsRepository');
-const { leerGuiaConIA } = require('./ocrAgente');
+const { leerGuiaConIA, leerNumeroGuia } = require('./ocrAgente');
 const fotos = require('./fotos');
 
 const app = express();
@@ -161,7 +161,26 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 // el navegador), que no leía de forma confiable formularios densos con
 // tablas. Requiere ANTHROPIC_API_KEY (ver README.md); tiene un costo
 // pequeño por foto.
-app.post('/ocr/leer-guia', async (req, res, next) => {
+/**
+ * Responde un fallo de la IA con el mensaje real (a diferencia del resto de
+ * rutas, que usan el manejador genérico) porque este proyecto de Vercel no
+ * tiene acceso a runtime logs (403) — sin esto, un fallo de la IA es
+ * indiagnosticable desde afuera. No es información sensible: es un error de
+ * la librería de Gemini, no un dato de la guía ni la API key.
+ */
+function responderFalloIA(res, err) {
+  console.error(err);
+  // Límite por minuto de la IA (varios transportistas leyendo fotos a la
+  // vez): 429 para que la app espere y vuelva a intentar esa foto.
+  if (err.status === 429 || /RESOURCE_EXHAUSTED|\b429\b/.test(String(err.message))) {
+    return res.status(429).json({
+      error: 'La IA está ocupada en este momento; se reintentará en unos segundos.',
+    });
+  }
+  res.status(500).json({ error: `Fallo al leer la guía con IA: ${err.message}` });
+}
+
+app.post('/ocr/leer-guia', async (req, res) => {
   try {
     const { imagenBase64, mediaType } = req.body || {};
     if (!imagenBase64) {
@@ -170,20 +189,27 @@ app.post('/ocr/leer-guia', async (req, res, next) => {
     const datos = await leerGuiaConIA(imagenBase64, mediaType || 'image/jpeg');
     res.json(datos);
   } catch (err) {
-    // Se responde con el mensaje real (a diferencia del resto de rutas, que
-    // usan el manejador genérico) porque este proyecto de Vercel no tiene
-    // acceso a runtime logs (403) — sin esto, un fallo de la IA es
-    // indiagnosticable desde afuera. No es información sensible: es un
-    // error de la librería de Gemini, no un dato de la guía ni la API key.
-    console.error(err);
-    // Límite por minuto de la IA (varios transportistas leyendo fotos a la
-    // vez): 429 para que la app espere y vuelva a intentar esa foto.
-    if (err.status === 429 || /RESOURCE_EXHAUSTED|\b429\b/.test(String(err.message))) {
-      return res.status(429).json({
-        error: 'La IA está ocupada en este momento; se reintentará en unos segundos.',
-      });
+    responderFalloIA(res, err);
+  }
+});
+
+// Entrega inteligente: solo el número de guía de una foto de entrega, que
+// la IA compara con las guías en ruta del transportista (candidatos).
+const MAX_CANDIDATOS = 300;
+app.post('/ocr/numero-guia', async (req, res) => {
+  try {
+    const { imagenBase64, mediaType, candidatos } = req.body || {};
+    if (!imagenBase64) {
+      return res.status(400).json({ error: 'Falta imagenBase64.' });
     }
-    res.status(500).json({ error: `Fallo al leer la guía con IA: ${err.message}` });
+    const lista = Array.isArray(candidatos)
+      ? [...new Set(candidatos.filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim()))]
+          .slice(0, MAX_CANDIDATOS)
+      : [];
+    const datos = await leerNumeroGuia(imagenBase64, mediaType || 'image/jpeg', lista);
+    res.json(datos);
+  } catch (err) {
+    responderFalloIA(res, err);
   }
 });
 

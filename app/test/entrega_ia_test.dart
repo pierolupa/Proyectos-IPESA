@@ -107,6 +107,7 @@ Map<String, dynamic> _guia(
 
 void main() {
   late List<String?> leidas;
+  late List<String> candidatos;
   late List<Map<String, dynamic>> entregas;
 
   setUp(() {
@@ -138,7 +139,10 @@ void main() {
     final client = MockClient((r) async {
       final ruta = r.url.path;
       if (ruta.endsWith('/sucursales')) return http.Response('[]', 200);
-      if (ruta.endsWith('/ocr/leer-guia')) {
+      if (ruta.endsWith('/ocr/numero-guia')) {
+        candidatos = List<String>.from(
+          (jsonDecode(r.body) as Map<String, dynamic>)['candidatos'] as List,
+        );
         return http.Response(
           jsonEncode({'numero_guia': leidas.removeAt(0)}),
           200,
@@ -213,6 +217,29 @@ void main() {
       expect(e['fechaCreacion'], isNotNull);
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Encuentra la guía aunque la IA lea ceros u O por 0', (
+    tester,
+  ) async {
+    leidas = ['T001-0001', 'TOO1 - 2', 'T001 N° 0003'];
+    await abrir(tester, 3);
+    await tester.tap(find.textContaining('Galería'));
+    await tester.pumpAndSettle();
+
+    // La IA recibe solo sus guías en ruta para compararlas.
+    expect(candidatos, unorderedEquals(['T001-1', 'T001-2']));
+    expect(find.text('Para entregar · 2'), findsOneWidget);
+    // T001-3 ya estaba entregada: no se vuelve a entregar.
+    expect(find.text('No se entregarán · 1'), findsOneWidget);
+    expect(find.text('Entregar 2 guías'), findsOneWidget);
+  });
+
+  test('El número se compara sin ceros, espacios ni confusiones O/0', () {
+    for (final leido in ['T001-0093506', 't001 - 93506', 'TOO1-93506']) {
+      expect(claveGuia(leido), claveGuia('T001-93506'));
+    }
+    expect(claveGuia('T001-93507'), isNot(claveGuia('T001-93506')));
   });
 
   testWidgets('Quitar una foto encontrada no la entrega', (tester) async {

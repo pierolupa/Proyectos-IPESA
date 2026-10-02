@@ -47,9 +47,22 @@ Future<List<Uint8List>> _fotosDeGaleria() async {
   return [for (final a in archivos) await a.readAsBytes()];
 }
 
-/// El número de guía para comparar: sin espacios y en mayúsculas.
-String _clave(String numero) =>
-    numero.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+/// El número de guía para comparar: en mayúsculas, sin espacios, "N°" ni
+/// ceros a la izquierda en el correlativo, y con la serie corregida si la
+/// IA confundió O/0 o I/1 (T001-0093506, TOO1 - 93506 → T001-93506).
+String claveGuia(String numero) {
+  final limpio = numero
+      .toUpperCase()
+      .replaceAll(RegExp(r'N[°º]'), '')
+      .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+  final m = RegExp(r'^([A-Z])([0-9OIL]{3})0*(\d+)$').firstMatch(limpio);
+  if (m == null) return limpio;
+  final serie = m
+      .group(2)!
+      .replaceAll('O', '0')
+      .replaceAll(RegExp('[IL]'), '1');
+  return '${m.group(1)}$serie-${m.group(3)}';
+}
 
 enum _Estado { leyendo, encontrada, noEncontrada, sinNumero, repetida, error }
 
@@ -103,7 +116,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
       appState.transportistaActual,
     )) {
       if (g.estado != EstadoGuia.enRuta) continue;
-      final clave = _clave(g.numeroGuia);
+      final clave = claveGuia(g.numeroGuia);
       final otra = porNumero[clave];
       if (otra == null || g.fechaCreacion.isAfter(otra.fechaCreacion)) {
         porNumero[clave] = g;
@@ -168,7 +181,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
       setState(() {
         f.aviso = null;
         f.leida = true;
-        f.numeroLeido = datos.numeroGuia?.trim();
+        f.numeroLeido = datos.$1;
         _clasificar(appState);
       });
     } catch (_) {
@@ -180,11 +193,18 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
     }
   }
 
-  /// Lee la foto; si la IA está ocupada, espera y vuelve a intentar.
-  Future<DatosGuiaLeida?> _leerConReintentos(AppState appState, _Foto f) async {
+  /// Lee el número de guía de la foto (comparándolo con sus guías en
+  /// ruta); si la IA está ocupada, espera y vuelve a intentar. Devuelve
+  /// null si la foto ya no está.
+  Future<(String?,)?> _leerConReintentos(AppState appState, _Foto f) async {
+    final candidatos = [
+      for (final g in _pendientes(appState).values) g.numeroGuia,
+    ];
     for (var intento = 0; ; intento++) {
       try {
-        return await appState.leerGuiaConIA(f.bytes);
+        return (
+          await appState.leerNumeroGuia(f.bytes, candidatos: candidatos),
+        );
       } on ApiException catch (e) {
         if (!e.esLimiteTemporal || intento >= _esperasIAOcupada.length) {
           rethrow;
@@ -210,7 +230,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
         f.guia = null;
         continue;
       }
-      final clave = _clave(numero);
+      final clave = claveGuia(numero);
       final guia = pendientes[clave];
       if (guia == null) {
         f.estado = _Estado.noEncontrada;

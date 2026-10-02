@@ -257,6 +257,27 @@ class GuiasApi {
     return DatosGuiaLeida.fromJson(_decodeBody(res));
   }
 
+  /// Entrega inteligente: lee solo el número de guía de una foto de
+  /// entrega. La IA lo compara con [candidatos] (sus guías en ruta) y, si es
+  /// una de ellas, devuelve ese número tal cual.
+  Future<String?> leerNumeroGuia(
+    Uint8List fotoBytes, {
+    List<String> candidatos = const [],
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/ocr/numero-guia'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'imagenBase64': base64Encode(fotoBytes),
+        'mediaType': tipoImagen(fotoBytes),
+        'candidatos': candidatos,
+      }),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    final numero = _decodeBody(res)['numero_guia'];
+    return numero is String && numero.trim().isNotEmpty ? numero.trim() : null;
+  }
+
   /// Carga masiva: registra hasta [maxGuiasPorCarga] guías con un solo
   /// pedido. Devuelve, en el mismo orden, la guía creada o el error de
   /// cada una (las demás se registran igual). Con [despachoCorte] todas
