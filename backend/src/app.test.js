@@ -59,26 +59,35 @@ describe('POST /guias (asignación)', () => {
     expect(repo.crearGuias).not.toHaveBeenCalled();
   });
 
-  it('el mismo transportista no registra la misma guía dentro de 20 minutos', async () => {
-    const hace10 = new Date(Date.now() - 10 * 60000).toISOString();
+  // Hora fija para que "el mismo día" no dependa de cuándo corre la prueba:
+  // 2026-10-02 18:00 en Perú (23:00 UTC).
+  const ahoraPeru = Date.parse('2026-10-02T23:00:00.000Z');
+  const haceMin = (min) => new Date(ahoraPeru - min * 60000).toISOString();
+
+  it('el mismo transportista no registra la misma guía el mismo día', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
+    // Hoy a las 07:00 de Perú: 11 horas antes, pero el mismo día.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: hace10 }),
+      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: haceMin(11 * 60) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
+    Date.now.mockRestore();
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/Ya registraste .* hace 10 min/);
-    expect(res.body.error).toMatch(/desde las \d{2}:\d{2}/);
+    expect(res.body.error).toMatch(/Ya registraste .* hoy a las 07:00/);
+    expect(res.body.error).toMatch(/mismo día/);
     expect(repo.crearGuias).not.toHaveBeenCalled();
     // La comprobación lee la hoja sin caché.
     expect(repo.listarGuias).toHaveBeenCalledWith({ fresco: true });
   });
 
-  it('el mismo transportista la puede registrar otra vez pasados 20 minutos', async () => {
-    const hace25 = new Date(Date.now() - 25 * 60000).toISOString();
+  it('el mismo transportista la puede registrar otra vez al día siguiente', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
+    // Ayer a las 23:30 de Perú: menos de 24 horas, pero otro día.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, fecha_creacion: hace25 }),
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(18 * 60 + 30) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
+    Date.now.mockRestore();
     expect(res.status).toBe(201);
     expect(repo.crearGuias).toHaveBeenCalledTimes(1);
   });

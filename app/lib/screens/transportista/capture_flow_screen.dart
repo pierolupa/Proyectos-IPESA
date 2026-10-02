@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/sucursal.dart';
@@ -13,8 +12,6 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/aviso_sucursal.dart';
 import '../../widgets/gps_transportista.dart';
-
-final _hora = DateFormat('HH:mm');
 
 /// Cuántas fotos lee la IA a la vez (el resto espera su turno).
 const _lecturasSimultaneas = 3;
@@ -258,9 +255,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (b.enCola || b.leyendo) return 'Leyendo…';
     final numero = b.numero.text.trim();
     if (numero.isEmpty) return 'Falta el número de guía.';
-    if (appState.registroBloqueadoHasta(numero) case final libre?) {
-      return 'Ya registraste esta guía hace poco. Podrás registrarla de '
-          'nuevo desde las ${_hora.format(libre.toLocal())}.';
+    if (appState.registroBloqueadoHasta(numero) != null) {
+      return 'Ya registraste esta guía hoy: no puedes asignártela dos veces '
+          'el mismo día.';
     }
     final repetida = _borradores.any(
       (o) => o != b && o.id < b.id && o.numero.text.trim() == numero,

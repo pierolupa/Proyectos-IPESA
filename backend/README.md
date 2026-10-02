@@ -159,9 +159,9 @@ de guía se puede volver a registrar.
 
 **Mismo número de guía:** se puede registrar más de una vez. Otro
 transportista (el que la lleva en el siguiente tramo) la puede registrar
-en cualquier momento; el mismo transportista, no dentro de los 20 minutos
-siguientes a su último registro de ese número (así no entra dos veces la
-misma foto). Un registro rechazado no cuenta. Las rutas que usan el
+en cualquier momento; el mismo transportista, no el mismo día (hora de
+Perú) de su último registro de ese número: un transportista se asigna una
+guía una sola vez al día. Un registro rechazado no cuenta. Las rutas que usan el
 número reciben además `fechaCreacion` para actuar sobre ese registro
 exacto; sin ella, actúan sobre el más reciente.
 
@@ -271,7 +271,7 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
 | `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
-| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número dentro de los 20 minutos siguientes; otro transportista, sí. |
+| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número el mismo día (hora de Perú); otro transportista, sí. |
 | `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
 | `POST` | `/api/despachos-corte` | Despacho Corte: igual que `/api/guias/lote`, pero todas las guías creadas llevan el mismo código en `despacho_corte` (ej. `DC-261001-1542-K7`). Responde `{ despacho_corte, resultados }`. |
 | `POST` | `/api/despachos-corte/:codigo/llegada` | Llegada del corte: `{ geo, transportista }`. Todas sus guías en camino pasan a `entregado` de una vez (sin foto), con la hora y el GPS de la llegada. |

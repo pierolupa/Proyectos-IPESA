@@ -156,10 +156,7 @@ void main() {
     expect(find.text('T201'), findsOneWidget);
     expect(find.text('T100'), findsOneWidget);
     // T100 la registró él hace 10 min: esa espera; las otras dos, listas.
-    expect(
-      find.textContaining('Ya registraste esta guía hace poco'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Ya registraste esta guía hoy'), findsOneWidget);
     expect(find.text('Registrar 2 guías'), findsOneWidget);
 
     await tester.tap(find.text('Registrar 2 guías'));
@@ -277,7 +274,7 @@ void main() {
     expect(cuerposCorte.single['despachoCorte'], 'DC-9');
   });
 
-  test('Solo espera 20 minutos la guía que él mismo registró', () async {
+  test('No se asigna dos veces el mismo día la guía que él registró', () async {
     final ahora = DateTime(2026, 9, 28, 15);
     final deDiego = {
       ..._guia('T3', ahora.subtract(const Duration(minutes: 5))),
@@ -288,8 +285,10 @@ void main() {
           ? http.Response('[]', 200)
           : http.Response(
               jsonEncode([
-                _guia('T1', ahora.subtract(const Duration(minutes: 10))),
-                _guia('T2', ahora.subtract(const Duration(minutes: 25))),
+                // Hoy a las 07:00: aunque pasaron 8 horas, sigue bloqueada.
+                _guia('T1', ahora.subtract(const Duration(hours: 8))),
+                // Ayer a las 23:00: otro día, ya se puede.
+                _guia('T2', ahora.subtract(const Duration(hours: 16))),
                 deDiego,
               ]),
               200,
@@ -301,7 +300,7 @@ void main() {
 
     expect(
       appState.registroBloqueadoHasta('T1', ahora: ahora),
-      ahora.add(const Duration(minutes: 10)).toUtc(),
+      DateTime(2026, 9, 29),
     );
     expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
     // La registró otro transportista: él la puede registrar al momento.

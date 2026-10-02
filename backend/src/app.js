@@ -35,9 +35,14 @@ function tipoInvalido(tipoEntrega) {
 }
 const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
-// Tiempo mínimo entre dos registros del mismo número de guía por el mismo
-// transportista (otro transportista la puede registrar en cualquier momento).
-const ESPERA_MISMA_GUIA_MS = 20 * 60 * 1000;
+// Perú está en UTC-5 todo el año (sin horario de verano).
+const DESFASE_PERU_MS = 5 * 60 * 60 * 1000;
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/** El día (calendario de Perú) de un instante, como número para comparar. */
+function diaPeru(ms) {
+  return Math.floor((ms - DESFASE_PERU_MS) / DIA_MS);
+}
 
 /** "14:35" en hora de Perú (el servidor corre en UTC). */
 function horaPeru(ms) {
@@ -402,8 +407,8 @@ function prepararGuia(datos, existentes, sucursales) {
 
   // Un mismo número de guía se puede volver a registrar: otro
   // transportista que la lleva en el siguiente tramo, en cualquier
-  // momento; el mismo transportista, pasados 20 minutos de su último
-  // registro (antes, casi siempre es la misma foto enviada dos veces).
+  // momento; el mismo transportista, no el mismo día (hora de Perú) de su
+  // último registro: se puede asignar una guía una sola vez al día.
   // Un registro rechazado no cuenta: esa tarea nunca se hizo.
   const suyas = existentes.filter(
     (g) =>
@@ -415,14 +420,12 @@ function prepararGuia(datos, existentes, sucursales) {
     ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
     0,
   );
-  const libreDesde = registrada + ESPERA_MISMA_GUIA_MS;
-  if (registrada > 0 && Date.now() < libreDesde) {
-    const minutos = Math.max(1, Math.round((Date.now() - registrada) / 60000));
+  if (registrada > 0 && diaPeru(registrada) === diaPeru(Date.now())) {
     return {
       status: 409,
       error:
-        `Ya registraste la guía ${numeroGuia} hace ${minutos} min. `
-        + `Podrás volver a registrarla desde las ${horaPeru(libreDesde)}.`,
+        `Ya registraste la guía ${numeroGuia} hoy a las ${horaPeru(registrada)}. `
+        + 'Un transportista no puede asignarse la misma guía dos veces el mismo día.',
     };
   }
 

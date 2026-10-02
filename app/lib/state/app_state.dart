@@ -50,11 +50,6 @@ class CambioGuia {
 
 const _prefRol = 'sesion_rol';
 
-/// Un transportista no puede volver a registrar un número de guía que él
-/// mismo registró hace menos de este tiempo (sería la misma foto dos
-/// veces). Otro transportista sí puede (lo mismo valida el backend).
-const esperaMismaGuia = Duration(minutes: 20);
-
 /// Rastrear (y lo que se pide al servidor para el equipo comercial) busca
 /// por defecto en los últimos días, hoy incluido.
 const diasRastreoPorDefecto = 10;
@@ -392,10 +387,10 @@ class AppState extends ChangeNotifier {
     return i == -1 ? null : _guias[i];
   }
 
-  /// Si el usuario actual registró ese número hace menos de
-  /// [esperaMismaGuia], desde cuándo podrá registrarlo otra vez; si no,
-  /// null. Lo que registró otro transportista y un registro rechazado no
-  /// bloquean. Validación local rápida contra la última lista cargada; la
+  /// Si el usuario actual ya registró ese número hoy, desde cuándo podrá
+  /// registrarlo otra vez (mañana a las 00:00); si no, null. Un
+  /// transportista se asigna una guía una sola vez al día; lo que registró
+  /// otro transportista y un registro rechazado no bloquean. Validación local rápida contra la última lista cargada; la
   /// definitiva la hace el backend al confirmar (409).
   DateTime? registroBloqueadoHasta(String numeroGuia, {DateTime? ahora}) {
     final yo = transportistaActual.trim().toLowerCase();
@@ -411,7 +406,12 @@ class AppState extends ChangeNotifier {
       }
     }
     if (ultima == null) return null;
-    final libre = ultima.fechaCreacion.add(esperaMismaGuia);
+    final registrada = ultima.fechaCreacion.toLocal();
+    final libre = DateTime(
+      registrada.year,
+      registrada.month,
+      registrada.day + 1,
+    );
     return (ahora ?? DateTime.now()).isBefore(libre) ? libre : null;
   }
 
