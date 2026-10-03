@@ -880,6 +880,7 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(
                         Icons.receipt_long_outlined,
@@ -887,18 +888,7 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                         color: Ipesa.petroleo,
                       ),
                       const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          guia.resumenComprobanteAgencia,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Ipesa.etiqueta,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: _LineasComprobante(guia: guia)),
                     ],
                   ),
                 ),
@@ -1220,6 +1210,51 @@ class _PestanaSucursales extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// El comprobante de agencia de la guía: primero el N° y el monto (lo que
+/// se busca), debajo la agencia y su RUC.
+class _LineasComprobante extends StatelessWidget {
+  const _LineasComprobante({required this.guia});
+
+  final Guia guia;
+
+  @override
+  Widget build(BuildContext context) {
+    final principal = [
+      if (guia.agenciaComprobante.isNotEmpty) 'N° ${guia.agenciaComprobante}',
+      if (guia.agenciaMonto case final m?) 'S/ ${m.toStringAsFixed(2)}',
+    ];
+    final agencia = [
+      if (guia.agenciaRazonSocial.isNotEmpty) guia.agenciaRazonSocial,
+      if (guia.agenciaRuc.isNotEmpty) 'RUC ${guia.agenciaRuc}',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (principal.isNotEmpty)
+          Text(
+            principal.join(' · '),
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: Ipesa.texto,
+            ),
+          ),
+        if (agencia.isNotEmpty)
+          Text(
+            agencia.join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: Ipesa.etiqueta,
+            ),
+          ),
+      ],
     );
   }
 }

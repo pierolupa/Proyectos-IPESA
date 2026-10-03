@@ -146,6 +146,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('La tarjeta muestra el N° y el monto del comprobante', (
+    tester,
+  ) async {
+    final guia = Guia.fromJson(
+      _guia('T001-95318', 'finalizado', 'Victor Torres')
+        ..['fecha_creacion'] = _hoy10.toUtc().toIso8601String()
+        ..['agencia_razon_social'] = 'EMPRESA DE TRANSPORTES PERU BUS S.A'
+        ..['agencia_ruc'] = '20106076635'
+        ..['agencia_monto'] = 25
+        ..['agencia_comprobante'] = 'B015-0123456',
+    );
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: AppState(
+          api: GuiasApi(
+            client: MockClient((_) async => http.Response('[]', 200)),
+          ),
+        ),
+        child: MaterialApp(
+          home: Scaffold(body: TarjetaGuiaAdmin(guia: guia)),
+        ),
+      ),
+    );
+    expect(find.text('N° B015-0123456 · S/ 25.00'), findsOneWidget);
+    expect(
+      find.text('EMPRESA DE TRANSPORTES PERU BUS S.A · RUC 20106076635'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('El panel filtra por estado con una lista desplegable', (
     tester,
   ) async {
