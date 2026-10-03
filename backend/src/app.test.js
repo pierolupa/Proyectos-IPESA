@@ -696,7 +696,23 @@ describe('comprobante de agencia', () => {
       agencia_ruc: '20515659324',
       agencia_monto: 70,
       agencia_comprobante: 'F017-0034441',
+      // Con comprobante, la IA la marca como entrega en agencia.
+      tipo_entrega: TIPOS_ENTREGA.AGENCIA,
     });
+  });
+
+  it('sin tipo ni comprobante, la guía nueva es de cliente final', async () => {
+    repo.listarGuias.mockResolvedValue([]);
+    const res = await request(app).post('/guias').send({
+      numeroGuia: 'T017-2',
+      origen: 'Almacén Callao',
+      destino: 'Lima',
+      transportista: 'Juan Pérez',
+      destinatario: 'Cliente',
+      geo: { lat: -12, lng: -77 },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.CLIENTE_FINAL);
   });
 
   it('al entregar, la IA lee el comprobante de la foto y se guarda', async () => {
@@ -710,6 +726,9 @@ describe('comprobante de agencia', () => {
     const res = await request(app).patch('/guias/IPE-2026-000123/estado').send(entrega);
     expect(res.status).toBe(200);
     expect(leerComprobante).toHaveBeenCalledWith(foto.base64, 'image/jpeg');
+    // Era de cliente final: al ver el comprobante pasa a agencia, finalizada.
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.AGENCIA);
+    expect(res.body.estado).toBe(ESTADOS.FINALIZADO);
     expect(res.body).toMatchObject({
       agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
       agencia_ruc: '20601857457',
@@ -734,7 +753,9 @@ describe('comprobante de agencia', () => {
     leerComprobante.mockRejectedValue(new Error('RESOURCE_EXHAUSTED'));
     const res = await request(app).patch('/guias/IPE-2026-000123/estado').send(entrega);
     expect(res.status).toBe(200);
+    // Sin comprobante sigue como cliente final, entregada.
     expect(res.body.estado).toBe(ESTADOS.ENTREGADO);
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.CLIENTE_FINAL);
     expect(res.body.agencia_ruc).toBeFalsy();
   });
 });

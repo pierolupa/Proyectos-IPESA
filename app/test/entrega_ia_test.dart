@@ -169,7 +169,8 @@ void main() {
       return http.Response(
         jsonEncode([
           _guia('T001-1'),
-          _guia('T001-2', tipo: 'agencia'),
+          // Registrada como cliente final, pero la foto trae el comprobante.
+          _guia('T001-2'),
           _guia('T001-3', estado: 'entregado'),
           _guia('T001-4', transportista: 'Diego'),
         ]),
@@ -218,7 +219,7 @@ void main() {
     );
     final porNumero = {for (final e in entregas) e['numero']: e};
     expect(porNumero['T001-1']!['estado'], 'entregado');
-    // La de agencia queda finalizada, como en la entrega normal.
+    // La IA vio el comprobante de una agencia: queda finalizada.
     expect(porNumero['T001-2']!['estado'], 'finalizado');
     // El comprobante leído con el número va con la entrega (y la que no
     // tiene manda null, para que el backend no lo vuelva a leer).

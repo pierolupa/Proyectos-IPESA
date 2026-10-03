@@ -400,7 +400,10 @@ function prepararGuia(datos, existentes, sucursales) {
   if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
     return { status: 400, error: 'Faltan campos obligatorios.' };
   }
-  if (!TIPOS_VALIDOS.has(tipoEntrega)) {
+  // El transportista ya no elige el tipo: es cliente final salvo que la IA
+  // vea un comprobante de agencia (aquí o al entregar). Si la app aún lo
+  // manda, se valida.
+  if (tipoEntrega !== undefined && !TIPOS_VALIDOS.has(tipoEntrega)) {
     return { status: 400, error: tipoInvalido(tipoEntrega) };
   }
   if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
@@ -442,7 +445,7 @@ function prepararGuia(datos, existentes, sucursales) {
     guia: {
       numero_guia: numeroGuia,
       estado: ESTADOS.EN_RUTA,
-      tipo_entrega: tipoEntrega,
+      tipo_entrega: tipoSegunComprobante(tipoEntrega, comprobante),
       origen: aqui ? aqui.nombre : origen,
       destino,
       transportista,
@@ -459,6 +462,18 @@ function prepararGuia(datos, existentes, sucursales) {
       ...columnasComprobante(comprobante),
     },
   };
+}
+
+/**
+ * Tipo de la guía nueva: agencia si en la foto vino el comprobante de una
+ * agencia; si no, el que mandó la app o cliente final.
+ */
+function tipoSegunComprobante(tipoEntrega, comprobante) {
+  const c = columnasComprobante(comprobante);
+  if (c.agencia_razon_social || c.agencia_ruc || c.agencia_monto !== '' || c.agencia_comprobante) {
+    return TIPOS_ENTREGA.AGENCIA;
+  }
+  return tipoEntrega || TIPOS_ENTREGA.CLIENTE_FINAL;
 }
 
 /**
@@ -782,9 +797,16 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
         ])
       : [{ url: null, aviso: null }, null];
     if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
-    if (comprobante) Object.assign(guia, comprobante);
+    if (comprobante) {
+      Object.assign(guia, comprobante);
+      // La IA vio el comprobante de una agencia: la entrega fue en agencia.
+      guia.tipo_entrega = TIPOS_ENTREGA.AGENCIA;
+    }
 
-    guia.estado = estado;
+    // Entrega en agencia: queda finalizada (aunque la app pidiera
+    // "entregado", porque no sabía que era agencia).
+    guia.estado =
+      estado === ESTADOS.ENTREGADO && comprobante ? ESTADOS.FINALIZADO : estado;
     guia.fecha_actualizacion = new Date().toISOString();
     // Si ya avanzó, un pedido de eliminación pendiente deja de valer, y un
     // transbordo sin aceptar también (el aceptado queda como historia).

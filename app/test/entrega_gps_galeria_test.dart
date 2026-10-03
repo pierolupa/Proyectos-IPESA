@@ -133,7 +133,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Foto de la guía firmada lista'), findsOneWidget);
 
-    await tester.tap(find.text('Firma del cliente capturada'));
+    await tester.tap(
+      find.text(
+        'La foto muestra la guía firmada o el comprobante de la agencia',
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirmar'));
     await tester.pumpAndSettle();

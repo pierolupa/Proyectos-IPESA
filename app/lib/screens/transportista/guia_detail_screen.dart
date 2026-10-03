@@ -25,9 +25,7 @@ class GuiaDetailScreen extends StatelessWidget {
       }
       return 'Confirmar recepción';
     }
-    return tipo == TipoEntrega.agencia
-        ? 'Registrar entrega en agencia'
-        : 'Registrar entrega a cliente';
+    return 'Registrar entrega';
   }
 
   @override
@@ -58,24 +56,11 @@ class GuiaDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          // El tipo lo pone la IA (agencia si ve su comprobante); solo el
+          // administrador lo corrige.
           _DetailRow(
             label: 'Tipo de entrega',
             value: guia.tipoEntrega.etiqueta,
-            accion: guia.esEditablePorTransportista
-                ? TextButton(
-                    onPressed: () async {
-                      final ok = await mostrarCambioTipo(context, guia);
-                      if (ok && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Tipo de entrega actualizado.'),
-                          ),
-                        );
-                      }
-                    },
-                    child: const Text('Cambiar'),
-                  )
-                : null,
           ),
           _DetailRow(label: 'Destinatario', value: guia.destinatario),
           _DetailRow(label: 'Punto de partida', value: guia.origen),
@@ -183,11 +168,10 @@ class GuiaDetailScreen extends StatelessWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value, this.accion});
+  const _DetailRow({required this.label, required this.value});
 
   final String label;
   final String value;
-  final Widget? accion;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +188,6 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
-          ?accion,
         ],
       ),
     );

@@ -113,7 +113,8 @@ void main() {
 
     await tester.tap(find.byTooltip('Más opciones'));
     await tester.pumpAndSettle();
-    expect(find.text('Cambiar tipo de entrega'), findsOneWidget);
+    // El tipo de entrega ya no lo elige el transportista (lo pone la IA).
+    expect(find.text('Cambiar tipo de entrega'), findsNothing);
     expect(find.text('Rechazar tarea'), findsOneWidget);
     expect(find.text('Eliminar tarea'), findsOneWidget);
     await tester.tapAt(const Offset(5, 5));

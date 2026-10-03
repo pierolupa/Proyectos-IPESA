@@ -913,12 +913,6 @@ class _TarjetaTarea extends StatelessWidget {
   Future<void> _opcion(BuildContext context, _Opcion opcion) async {
     final messenger = ScaffoldMessenger.of(context);
     switch (opcion) {
-      case _Opcion.tipo:
-        if (await mostrarCambioTipo(context, guia)) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Tipo de entrega actualizado.')),
-          );
-        }
       case _Opcion.transbordo:
         if (await mostrarTransbordo(context, guia)) {
           final actual = context.mounted
@@ -1158,15 +1152,6 @@ class _TarjetaTarea extends StatelessWidget {
                       onSelected: (o) => _opcion(context, o),
                       itemBuilder: (_) => [
                         if (g.esEditablePorTransportista)
-                          const PopupMenuItem(
-                            value: _Opcion.tipo,
-                            child: ListTile(
-                              leading: Icon(Icons.segment_rounded),
-                              title: Text('Cambiar tipo de entrega'),
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        if (g.esEditablePorTransportista)
                           PopupMenuItem(
                             value: g.transbordoPendiente
                                 ? _Opcion.cancelarTransbordo
@@ -1235,11 +1220,4 @@ class _TarjetaTarea extends StatelessWidget {
   }
 }
 
-enum _Opcion {
-  tipo,
-  transbordo,
-  cancelarTransbordo,
-  rechazar,
-  eliminar,
-  retirar,
-}
+enum _Opcion { transbordo, cancelarTransbordo, rechazar, eliminar, retirar }

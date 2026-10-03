@@ -255,7 +255,10 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
     });
   }
 
-  static EstadoGuia _estadoFinal(Guia g) => g.tipoEntrega == TipoEntrega.agencia
+  /// Agencia (finalizada) si ya lo era o si la IA vio el comprobante de
+  /// una agencia en la foto; si no, entregada a cliente final.
+  static EstadoGuia _estadoFinal(_Foto f) =>
+      f.guia!.tipoEntrega == TipoEntrega.agencia || f.comprobante != null
       ? EstadoGuia.finalizado
       : EstadoGuia.entregado;
 
@@ -286,7 +289,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
         try {
           await appState.actualizarEstado(
             g.numeroGuia,
-            _estadoFinal(g),
+            _estadoFinal(f),
             lat: latitud,
             lng: longitud,
             foto: f.bytes,

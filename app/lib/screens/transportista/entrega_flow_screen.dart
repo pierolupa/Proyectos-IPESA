@@ -62,8 +62,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
     with GpsTransportista {
   bool _tomandoFoto = false;
   Uint8List? _fotoBytes;
-  bool _firmaCapturada = false;
-  bool _comprobanteAdjunto = false;
+
+  /// Confirmó que la foto muestra la guía firmada o el comprobante.
+  bool _fotoConfirmada = false;
   bool _dentroDeGeocerca = false;
   bool _verificandoPerimetro = false;
   String? _resultadoPerimetro;
@@ -129,9 +130,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       }
       return 'Confirmar recepción en sucursal';
     }
-    return g.tipoEntrega == TipoEntrega.agencia
-        ? 'Registrar entrega en agencia'
-        : 'Registrar entrega a cliente final';
+    return 'Registrar entrega';
   }
 
   bool get _requiereFoto =>
@@ -145,10 +144,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       if (g.estado == EstadoGuia.enProcesoTrasbordo) return _dentroDeGeocerca;
       return _fotoSimulada;
     }
-    if (!_fotoSimulada) return false;
-    return g.tipoEntrega == TipoEntrega.agencia
-        ? _comprobanteAdjunto
-        : _firmaCapturada;
+    return _fotoSimulada && _fotoConfirmada;
   }
 
   Future<void> _confirmar(BuildContext context) async {
@@ -170,10 +166,12 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       }
     } else if (g.tipoEntrega == TipoEntrega.agencia) {
       nuevoEstado = EstadoGuia.finalizado;
-      mensaje = 'Entrega en agencia registrada con comprobante.';
+      mensaje = 'Entrega en agencia registrada.';
     } else {
+      // Si la IA ve en la foto el comprobante de una agencia, el servidor
+      // la marca como entrega en agencia (finalizada).
       nuevoEstado = EstadoGuia.entregado;
-      mensaje = 'Entrega a cliente final registrada con firma.';
+      mensaje = 'Entrega registrada.';
     }
 
     setState(() => _enviando = true);
@@ -205,6 +203,13 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         fechaCreacion: g.fechaCreacion,
       );
       if (!context.mounted) return;
+      final actualizada = appState.guiaActual(g);
+      if (nuevoEstado.esFinal &&
+          (actualizada?.tieneComprobanteAgencia ?? false)) {
+        mensaje =
+            'Entrega en agencia registrada · '
+            '${actualizada!.resumenComprobanteAgencia}';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(avisoFoto == null ? mensaje : '$mensaje\n$avisoFoto'),
@@ -352,19 +357,15 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
                 ),
               ),
               const SizedBox(height: 16),
-              if (g.tipoEntrega == TipoEntrega.agencia)
+              if (g.tipoEntrega != TipoEntrega.entreSucursales)
                 CheckboxListTile(
-                  value: _comprobanteAdjunto,
+                  value: _fotoConfirmada,
                   onChanged: (v) =>
-                      setState(() => _comprobanteAdjunto = v ?? false),
-                  title: const Text('Comprobante de agencia adjunto'),
-                )
-              else if (g.tipoEntrega == TipoEntrega.clienteFinal)
-                CheckboxListTile(
-                  value: _firmaCapturada,
-                  onChanged: (v) =>
-                      setState(() => _firmaCapturada = v ?? false),
-                  title: const Text('Firma del cliente capturada'),
+                      setState(() => _fotoConfirmada = v ?? false),
+                  title: const Text(
+                    'La foto muestra la guía firmada o el comprobante de la '
+                    'agencia',
+                  ),
                 ),
             ],
           ],

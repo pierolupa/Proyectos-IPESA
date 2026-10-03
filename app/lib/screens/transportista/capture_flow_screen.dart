@@ -58,10 +58,15 @@ class _Borrador {
   final origen = TextEditingController();
   final pedido = TextEditingController();
   final entrega = TextEditingController();
-  TipoEntrega tipo = TipoEntrega.clienteFinal;
 
   /// El comprobante de agencia pegado en la guía, si la IA lo encontró.
   ComprobanteAgencia? comprobante;
+
+  /// El transportista no lo elige: agencia si la IA vio el comprobante de
+  /// una agencia en la foto; si no, cliente final (al entregar se vuelve a
+  /// mirar).
+  TipoEntrega get tipo =>
+      comprobante != null ? TipoEntrega.agencia : TipoEntrega.clienteFinal;
   bool enCola = true;
   bool leyendo = false;
   String? avisoLectura;
@@ -690,28 +695,6 @@ class _TarjetaBorrador extends StatelessWidget {
                     )
                   else
                     campo(b.origen, 'Punto de partida'),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<TipoEntrega>(
-                    initialValue: b.tipo,
-                    isDense: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Tipo de entrega',
-                      isDense: true,
-                    ),
-                    items: [
-                      for (final tipo in tiposEntregaElegibles)
-                        DropdownMenuItem(
-                          value: tipo,
-                          child: Text(tipo.etiqueta),
-                        ),
-                    ],
-                    onChanged: ocupado
-                        ? null
-                        : (tipo) {
-                            if (tipo != null) b.tipo = tipo;
-                            onCambio();
-                          },
-                  ),
                   campo(b.destino, 'Destino'),
                   Row(
                     children: [

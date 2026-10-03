@@ -82,6 +82,13 @@ llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
 
+**Tipo de entrega:** el transportista ya no lo elige. Una guía nueva es de
+`cliente_final` salvo que en la foto venga el comprobante de una agencia
+(entonces `agencia`). Al entregar, si la IA ve el comprobante de una agencia
+en la foto de entrega, la guía pasa a `agencia` y queda `finalizado` (aunque
+la app pida `entregado`). El administrador puede corregir el tipo con
+`PATCH /api/guias/:numeroGuia/tipo`.
+
 `agencia_razon_social`, `agencia_ruc`, `agencia_monto`, `agencia_comprobante`: si en la foto de la
 guía viene pegado el comprobante de la agencia de transporte (boleta,
 factura o vale de encomienda), la IA lee quién lo emitió, su RUC y el total

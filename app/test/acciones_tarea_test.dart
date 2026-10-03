@@ -155,26 +155,17 @@ void main() {
     expect(find.text('Cambiar'), findsNothing);
   });
 
-  testWidgets('El transportista cambia el tipo de entrega', (tester) async {
-    final servidor = _Servidor(_guia());
+  testWidgets('El transportista ya no elige el tipo de entrega', (
+    tester,
+  ) async {
     await _abrir(
       tester,
-      servidor,
+      _Servidor(_guia()),
       const GuiaDetailScreen(numeroGuia: 'T001-500'),
     );
-
-    await tester.tap(find.text('Cambiar'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Agencia'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Guardar'));
-    await tester.pumpAndSettle();
-
-    final pedido = servidor.pedidos.last;
-    expect(pedido.method, 'PATCH');
-    expect(pedido.url.path, endsWith('/guias/T001-500/tipo'));
-    expect(jsonDecode(pedido.body)['tipoEntrega'], 'agencia');
-    expect(find.text('Tipo de entrega actualizado.'), findsOneWidget);
+    // Se ve, pero lo pone la IA (agencia si ve su comprobante).
+    expect(find.text('Tipo de entrega'), findsOneWidget);
+    expect(find.text('Cambiar'), findsNothing);
   });
 
   testWidgets('El administrador aprueba y la tarea se borra', (tester) async {
