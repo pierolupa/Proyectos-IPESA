@@ -1,0 +1,320 @@
+# IPESA · Tracking Distribución — Backend (Vercel)
+
+API HTTP que hace de intermediario entre la app y Google Sheets, según
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md) sección 2.3. La app **nunca**
+escribe directo a la hoja de cálculo.
+
+Se despliega en **Vercel** (plan gratuito "Hobby"). Autentica contra Google
+Sheets con una cuenta de servicio cuya clave se guarda como variable de
+entorno secreta en Vercel — no requiere el plan Blaze de Google Cloud. La
+lectura de la foto de la guía usa la API de Gemini, que tiene un nivel
+gratis con cuota diaria — ver sección "Leer la guía con IA" más abajo.
+
+## ⚠️ Antes de desplegar en serio
+
+El login (`POST /auth/login`) es deliberadamente simple: compara nombre y
+PIN en texto plano contra la hoja "Usuarios", sin tokens, sin expiración de
+sesión, sin hashing. Sirve para que el equipo pruebe la app internamente —
+**no es un mecanismo de autenticación real**. El resto de la API tampoco
+valida quién llama cada endpoint (ver `src/app.js`, nota al inicio del
+archivo): cualquiera con la URL puede llamar cualquier endpoint sin pasar
+por el login. **No debe usarse en producción con transportistas reales sin
+migrar a un proveedor de autenticación de verdad** (por ejemplo, Firebase
+Auth) y verificar un token en cada endpoint sensible.
+
+## Qué necesitas antes de desplegar (una sola vez, todo gratis)
+
+### 1. Habilitar la API de Google Sheets
+
+En https://console.cloud.google.com, con tu proyecto (el mismo que
+`ipesa---distribucion` si lo creaste desde Firebase) seleccionado:
+"APIs & Services" → "Library" → busca "Google Sheets API" → **Enable**.
+No requiere facturación activada.
+
+### 2. Crear la cuenta de servicio
+
+"IAM y administración" → "Cuentas de servicio" → **Crear cuenta de
+servicio**:
+- Nombre: `ipesa-guias-backend` (o el que prefieras).
+- No hace falta asignarle ningún rol de IAM (el acceso a la hoja se da
+  compartiéndola directamente, no por rol de proyecto).
+- Termina la creación, entra a la cuenta creada → pestaña **Claves** →
+  **Agregar clave** → **Crear clave nueva** → tipo **JSON** → se descarga
+  un archivo. Ese archivo es lo que va en `GOOGLE_SERVICE_ACCOUNT_KEY`.
+  **No lo subas a git ni lo compartas.**
+
+### 3. Crear la hoja de cálculo
+
+Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
+y esta fila de encabezados (columnas A a AC):
+
+```
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte | agencia_razon_social | agencia_ruc | agencia_monto | agencia_comprobante
+```
+
+Cada dato va **siempre en la misma columna** (la de la lista de arriba),
+sin importar cómo se llame su encabezado: A a S pueden tener tus propios
+nombres ("Nro Pedido", "Foto"...) y el servidor nunca los cambia. Solo
+escribe los encabezados de T a AC si están vacíos, y nunca agrega columnas
+en medio de las que ya existen. Lo que haya después de la AC se conserva
+tal cual. Las guías nuevas se escriben siempre desde la columna A en la
+fila siguiente a la última con datos, y una guía que haya quedado corrida
+a la derecha se devuelve sola a su lugar. Las filas sin `numero_guia` se
+ignoran.
+
+Si una versión anterior del servidor dejó datos después de la S con
+encabezados como `numero_pedido` o `foto_entrega_url` en T1 a AE1, el
+servidor los devuelve solo a su columna (la foto a la R, el pedido a la
+M...) la primera vez que lee la hoja, y vacía esas columnas sobrantes.
+
+Si ya tenías la hoja creada con menos columnas, agrega las que falten al
+final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
+`cierre_lng` en P1, `fecha_cierre` en Q1, `foto_entrega_url` en R1,
+`motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
+`transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1,
+`despacho_corte` en Y1, `agencia_razon_social` en Z1, `agencia_ruc` en AA1,
+`agencia_monto` en AB1, `agencia_comprobante` en AC1)
+— las filas existentes quedan
+igual y esas columnas se leen vacías para ellas.
+
+`geo_lat`/`geo_lng` guardan la ubicación del último evento. `cierre_*` se
+llenan solo cuando el transportista cierra la guía (entregado/finalizado)
+con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
+administrador no las llena.
+
+**Tipo de entrega:** el transportista ya no lo elige. Una guía nueva es de
+`cliente_final` salvo que en la foto venga el comprobante de una agencia
+(entonces `agencia`). Al entregar, si la IA ve el comprobante de una agencia
+en la foto de entrega, la guía pasa a `agencia` y queda `finalizado` (aunque
+la app pida `entregado`). El administrador puede corregir el tipo con
+`PATCH /api/guias/:numeroGuia/tipo`.
+
+`agencia_razon_social`, `agencia_ruc`, `agencia_monto`, `agencia_comprobante`: si en la foto de la
+guía viene pegado el comprobante de la agencia de transporte (boleta,
+factura o vale de encomienda), la IA lee quién lo emitió, su RUC y el total
+pagado, y el número del comprobante (así, si el mismo comprobante está en
+varias guías, el dashboard suma su monto una sola vez), aunque la entrega no
+esté marcada como agencia. Se leen al registrar
+la guía (de la foto de registro) y al entregarla (de la foto de entrega; si
+la IA tarda más de 6 s o falla, la entrega se guarda igual sin esos datos).
+
+`eliminacion` queda en `pendiente` cuando el transportista pide borrar una
+tarea en ruta (con su `motivo_eliminacion`); si el administrador lo aprueba,
+la fila se borra de la hoja, y si no, queda en `rechazada`.
+
+`transbordo_*`: el transportista puede pasar una tarea en ruta a otro
+transportista. Queda `transbordo_estado: pendiente` con `transbordo_a` = a
+quién se la pasa (sigue siendo suya hasta que el otro acepte). Si el otro
+acepta, `transportista` pasa a ser él, `transbordo_de` = quien la envió y
+`transbordo_estado: aceptado`; si la rechaza, `transbordo_estado: rechazado`
+y sigue con quien la envió. Si la tarea se entrega o se rechaza antes, un
+transbordo pendiente o rechazado se borra.
+
+`foto_entrega_url` guarda dónde quedó la foto de la entrega (la guía
+firmada por el cliente, o el comprobante de agencia): `drive:<id>` si está
+en Google Drive, o la URL del blob si está en Vercel Blob. Solo se guarda
+la foto de la entrega final. Es **privada**: no se abre directo, se ve en
+la app vía `GET /guias/:numeroGuia/foto`.
+
+### Fotos en Google Drive (recomendado, gratis)
+
+Las fotos quedan en la carpeta **IPESA · Fotos de entregas** del Drive de
+la cuenta de Google que instale el script (usa sus 15 GB gratis). La cuenta
+de servicio de la hoja no sirve para esto: Google no le da espacio en Drive.
+
+1. Entra a [script.google.com](https://script.google.com) con la cuenta de
+   IPESA → **Nuevo proyecto** → borra lo que haya y pega todo
+   `apps-script/fotos-drive.gs`. Ponle de nombre "IPESA fotos".
+2. En la línea `const CLAVE = 'ESCRIBE_AQUI_TU_CLAVE';` cambia el texto por
+   una clave larga que inventes (letras y números, 20 o más). Guarda (💾).
+3. Arriba elige la función **autorizar** → **Ejecutar** → acepta los
+   permisos (si dice "Google no verificó esta app": *Configuración
+   avanzada* → *Ir a IPESA fotos*). Se crea la carpeta en tu Drive.
+4. **Implementar → Nueva implementación** → tipo **Aplicación web** →
+   *Ejecutar como*: **Yo**; *Quién tiene acceso*: **Cualquier persona** →
+   Implementar. Copia la **URL de la aplicación web** (termina en `/exec`).
+5. En Vercel, proyecto del backend (**proyectos-ipesa**) → Settings →
+   Environment Variables, agrega:
+   - `DRIVE_FOTOS_URL` = la URL del paso 4
+   - `DRIVE_FOTOS_CLAVE` = la clave del paso 2
+6. Deployments → ⋯ → **Redeploy** para que tome las variables.
+
+"Cualquier persona" solo significa que el backend puede llamar al script
+sin iniciar sesión; sin la clave el script no guarda ni muestra nada, y
+solo entrega fotos de esa carpeta. Si cambias el código del script, vuelve
+a *Implementar → Gestionar implementaciones → editar → Nueva versión* (la
+URL no cambia). Para que el administrador pueda **borrar fotos** hace falta
+la versión del script con la acción `eliminar` (manda la foto a la papelera
+de Drive); con una versión anterior la foto se quita de la guía pero el
+archivo queda en la carpeta.
+
+### Fotos en Vercel Blob (alternativa, gratis en el plan Hobby)
+
+Si Drive está configurado se usa Drive; si no, Vercel Blob.
+
+1. En Vercel, abre el proyecto del backend → pestaña **Storage** →
+   **Create Database** → **Blob**.
+2. Nombre `ipesa-fotos`, acceso **Private**, y conéctalo a este proyecto
+   (todos los entornos). Vercel agrega solo la variable
+   `BLOB_READ_WRITE_TOKEN`; no hay que copiar ninguna clave.
+3. Vuelve a desplegar (Deployments → ⋯ → Redeploy) para que tome la variable.
+
+El plan Hobby incluye un cupo mensual gratis; si se llena, Vercel pausa el
+almacenamiento, **no cobra**. Sin Drive ni Blob configurados las guías se
+registran igual, solo que sin foto (la app muestra un aviso).
+
+La pestaña `Sucursales` (columnas `nombre | lat | lng | radio_m`) **se crea
+sola** la primera vez que la app la usa — no hace falta crearla a mano. Ahí
+se guardan los perímetros que el administrador marca en el mapa. Las guías
+"entre sucursales" guardan en `destino` el nombre exacto de la sucursal.
+
+Valores válidos de `estado`: `en_ruta`, `en_proceso_trasbordo`,
+`recepcion_sucursal`, `entregado`, `finalizado`, `rechazado`. `rechazado`
+lo pone el transportista con un motivo (`motivo_rechazo`, columna S) desde
+`POST /api/guias/:numeroGuia/rechazo`; no cuenta como entregada y el número
+de guía se puede volver a registrar.
+
+**Mismo número de guía:** se puede registrar más de una vez. Otro
+transportista (el que la lleva en el siguiente tramo) la puede registrar
+en cualquier momento; el mismo transportista, no el mismo día (hora de
+Perú) de su último registro de ese número: un transportista se asigna una
+guía una sola vez al día. Un registro rechazado no cuenta. Las rutas que usan el
+número reciben además `fechaCreacion` para actuar sobre ese registro
+exacto; sin ella, actúan sobre el más reciente.
+
+**Caché:** el backend guarda la lista de guías 10 segundos en memoria para
+no pasar el límite de lecturas de Google Sheets (~60 por minuto); cualquier
+escritura la borra, y las rutas que escriben siempre leen la hoja fresca.
+
+Valores válidos de `tipo_entrega` para guías nuevas: `cliente_final`,
+`agencia`. `entre_sucursales` ya no se acepta al registrar ni al cambiar el
+tipo (la sucursal se detecta sola por GPS); solo se conserva para leer y
+terminar guías antiguas.
+
+Agrega además una **segunda pestaña** llamada exactamente `Usuarios`, con
+esta fila de encabezados (columnas A a D):
+
+```
+nombre | rol | pin | activo
+```
+
+- `rol`: `transportista`, `administrador` o `comercial`. El equipo
+  comercial entra a la vista **Rastreo de guías** (todas las guías, solo
+  lectura, con filtros de fecha, número de guía, cliente, entrega y pedido).
+  Las cuentas `administrador` y `comercial` se crean a mano en la hoja; el
+  auto-registro siempre crea `transportista`.
+- `pin`: cualquier texto/número que uses como clave simple (ver advertencia
+  de seguridad arriba).
+- `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.
+
+Ejemplos de fila: `Juan Pérez | transportista | 1234 | true`,
+`Lucía Ramos | comercial | 5678 | true`.
+
+Copia el **ID de la hoja** de su URL:
+`https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit`.
+
+### 4. Compartir la hoja con la cuenta de servicio
+
+Abre el archivo JSON descargado en el paso 2, copia el valor de
+`client_email` (algo como
+`ipesa-guias-backend@ipesa---distribucion.iam.gserviceaccount.com`), y
+comparte la hoja con ese correo como **Editor** (botón "Compartir" en
+Google Sheets).
+
+## Leer la guía con IA (`GEMINI_API_KEY`)
+
+`POST /api/ocr/leer-guia` manda la foto a Gemini (con visión, ver
+`src/ocrAgente.js`) para extraer número de guía, destinatario, destino,
+número de pedido y número de entrega. Reemplaza el intento anterior de
+leerlo gratis en el navegador (Tesseract.js), que no lograba leer de forma
+confiable un formulario denso con tablas.
+
+Se usa Gemini (no Claude/OpenAI) porque tiene un **nivel gratis** con cuota
+diaria de solicitudes — de sobra para el volumen de IPESA, así que esto no
+debería generar ningún costo.
+
+Para activarlo:
+1. Entra a https://aistudio.google.com/apikey (Google AI Studio) con tu
+   cuenta de Google.
+2. **Create API Key** → elige o crea un proyecto de Google Cloud → copia la
+   clave.
+3. En el proyecto `proyectos-ipesa` de Vercel → **Settings → Environment
+   Variables** → agrega `GEMINI_API_KEY` con esa clave → guarda y vuelve a
+   desplegar (o espera al próximo push).
+
+Sin esta variable configurada, `/api/ocr/leer-guia` devuelve error 500 — el
+resto de la API sigue funcionando normal, y el formulario de la app sigue
+dejando escribir todos los campos a mano.
+
+El modelo por defecto es `gemini-3.1-flash-lite`. Si Google lo retira (el error
+dirá algo como "This model ... is no longer available"), agrega en Vercel
+la variable `GEMINI_MODEL` con el modelo que recomiende el mensaje y
+vuelve a desplegar — no hace falta cambiar código.
+
+## Desarrollo local
+
+```bash
+npm install
+npm test              # corre los tests (mockean Sheets, no requieren credenciales)
+cp .env.example .env   # completa SHEET_ID y GOOGLE_SERVICE_ACCOUNT_KEY
+npx vercel dev         # levanta la API localmente
+```
+
+## Desplegar en Vercel
+
+1. Sube este repo a GitHub (ya lo está) y entra a https://vercel.com con
+   tu cuenta (puedes iniciar sesión directo con GitHub).
+2. **Add New… → Project** → importa el repositorio `Proyectos-IPESA`.
+3. En "Root Directory" selecciona la carpeta **`backend`** (importante:
+   no la raíz del repo).
+4. En "Environment Variables" agrega:
+   - `SHEET_ID` → el ID de la hoja del paso 3.
+   - `GOOGLE_SERVICE_ACCOUNT_KEY` → pega el contenido completo del JSON
+     de la cuenta de servicio (todo el archivo, tal cual).
+   - `GEMINI_API_KEY` → ver sección "Leer la guía con IA" más abajo
+     (opcional para desplegar, pero sin ella el lector de fotos no
+     funciona).
+5. **Deploy**.
+
+Al terminar, Vercel te da una URL pública (algo como
+`https://ipesa-guias-backend.vercel.app`). La API queda disponible bajo
+`/api/...` (por ejemplo `https://ipesa-guias-backend.vercel.app/api/health`).
+
+## Endpoints
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (y, si viene pegado, el comprobante de la agencia: `agencia_razon_social`, `agencia_ruc`, `agencia_monto`) (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
+| `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
+| `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
+| `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
+| `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número el mismo día (hora de Perú); otro transportista, sí. |
+| `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
+| `POST` | `/api/despachos-corte` | Despacho Corte: igual que `/api/guias/lote`, pero todas las guías creadas llevan el mismo código en `despacho_corte` (ej. `DC-261001-1542-K7`). Responde `{ despacho_corte, resultados }`. |
+| `POST` | `/api/despachos-corte/:codigo/llegada` | Llegada del corte: `{ geo, transportista }`. Todas sus guías en camino pasan a `entregado` de una vez (sin foto), con la hora y el GPS de la llegada. |
+| `POST` | `/api/despachos-corte/:codigo/quitar` | Saca una guía del corte (`{ numeroGuia, fechaCreacion }`): sigue como tarea normal. Para rechazarla se usa `/api/guias/:numeroGuia/rechazo` como siempre. |
+| `PATCH` | `/api/guias/:numeroGuia/estado` | Cambia el estado (entrega, trasbordo, recepción). Requiere GPS salvo `porAdmin: true`. `recepcion_sucursal` solo se acepta con el GPS dentro del perímetro de la sucursal destino. En `entregado`/`finalizado`, opcional `foto: {base64, mediaType}` (se guarda como `foto_entrega_url`); si no se puede guardar, el estado cambia igual y la respuesta trae `aviso_foto`. |
+| `POST` | `/api/guias/:numeroGuia/rechazo` | El transportista rechaza una tarea abierta. Body `{motivo, geo?}`; el motivo es obligatorio (3–300 caracteres). 409 si la guía ya está cerrada. |
+| `GET` | `/api/guias/:numeroGuia/foto` | Devuelve la foto de la entrega (privada en Vercel Blob). |
+| `DELETE` | `/api/guias/:numeroGuia/foto` | Quita la foto de la entrega (administrador). Si el archivo no se puede borrar, se quita igual de la guía y la respuesta trae `aviso_foto`. |
+| `PATCH` | `/api/guias/:numeroGuia/tipo` | Cambia el tipo de entrega (`tipoEntrega`, `destino?`). El transportista solo mientras está `en_ruta`; `porAdmin: true` siempre. Ya no acepta `entre_sucursales`. |
+| `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista pide borrar una tarea `en_ruta` (`motivo` obligatorio). Queda `eliminacion: pendiente` hasta que el administrador decida. |
+| `DELETE` | `/api/guias/:numeroGuia/solicitud-eliminacion` | El transportista retira su pedido. |
+| `POST` | `/api/guias/:numeroGuia/solicitud-eliminacion/rechazo` | El administrador no aprueba el pedido (`eliminacion: rechazada`). |
+| `GET` | `/api/transportistas` | Nombres de los transportistas activos (para el transbordo; nunca el PIN). |
+| `POST` | `/api/guias/:numeroGuia/transbordo` | El transportista (`de`) pasa una tarea `en_ruta` a otro transportista activo (`a`). Queda pendiente hasta que el otro responda. |
+| `DELETE` | `/api/guias/:numeroGuia/transbordo` | Quien lo envió cancela un transbordo pendiente. |
+| `POST` | `/api/guias/:numeroGuia/transbordo/respuesta` | Quien lo recibe (`quien`) acepta (`acepta: true`, la tarea pasa a ser suya) o rechaza (`acepta: false`). |
+| `DELETE` | `/api/guias/:numeroGuia` | Borra la fila de la tarea (administrador). Solo si está `en_ruta`; 409 si no. |
+| `GET` | `/api/fotos/estado` | `{configurado}`: si el almacenamiento de fotos está conectado. |
+| `PATCH` | `/api/guias/:numeroGuia/numero` | Corrección manual del número (administrador). |
+| `GET` | `/api/sucursales` | Sucursales con su perímetro (centro + radio en metros). |
+| `PUT` | `/api/sucursales/:nombre` | Crea o actualiza el perímetro de una sucursal (`lat`, `lng`, `radioM` entre 20 y 5000). |
+| `DELETE` | `/api/sucursales/:nombre` | Elimina una sucursal. |
+| `GET` | `/api/guias?estado=en_ruta&desde=…&hasta=…` | Lista de guías; filtros opcionales por estado y por fecha de la tarea (`fecha_creacion`, ISO, `desde` incluido y `hasta` excluido). |
+| `GET` | `/api/guias/transportista/:nombre` | Tareas de un transportista, más las que otro le quiere pasar (transbordo pendiente). |
+
+Las rutas que actúan sobre una guía aceptan `fechaCreacion` (en el body o en
+la query) para elegir el registro exacto cuando el mismo número se registró
+más de una vez; sin ella usan el más reciente.
+| `GET` | `/api/health` | Chequeo de salud. |
