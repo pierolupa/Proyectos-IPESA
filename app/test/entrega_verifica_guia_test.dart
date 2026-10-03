@@ -137,8 +137,9 @@ void main() {
 
     await tester.tap(find.text('Entregar T501'));
     await tester.pumpAndSettle();
-    // La misma foto, ya verificada para T501.
-    expect(find.text('Guía T501 verificada en la foto'), findsOneWidget);
+    // La misma foto, ya verificada para T501: sin avisos.
+    expect(find.textContaining('Esta foto es de la guía'), findsNothing);
+    expect(find.textContaining('verificada'), findsNothing);
     await tester.tap(
       find.text(
         'La foto muestra la guía firmada o el comprobante de la agencia',
@@ -163,8 +164,9 @@ void main() {
     };
     await abrir(tester);
 
-    expect(find.text('Guía T500 verificada en la foto'), findsOneWidget);
-    expect(find.textContaining('SEÑOR DE LUREN EXPRESS'), findsOneWidget);
+    // Coincide: no sale ningún aviso, sigue su camino.
+    expect(find.textContaining('verificada'), findsNothing);
+    expect(find.textContaining('Esta foto es de la guía'), findsNothing);
     await tester.tap(find.text('Confirmar'));
     await tester.pumpAndSettle();
     final (numero, cuerpo) = entregas.single;

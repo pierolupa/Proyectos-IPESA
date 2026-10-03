@@ -359,12 +359,11 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
     }
   }
 
-  /// Lo que la IA leyó en la foto: guía verificada, de otra tarea, o no
-  /// se pudo leer (esto último no bloquea la entrega).
+  /// Avisa solo si la foto es de otra guía o no se pudo leer (esto último
+  /// no bloquea la entrega); si coincide, no muestra nada.
   Widget _avisoVerificacion() {
     final g = widget.guia;
     final leido = _lectura?.numero ?? '';
-    final comprobante = _lectura?.comprobante;
     Widget tarjeta({
       required Color color,
       required IconData icono,
@@ -407,7 +406,6 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         ],
       ),
     );
-    const verde = Color(0xFF1D6B41);
     const naranja = Color(0xFFB45309);
     final entregarIgual = TextButton(
       onPressed: () => setState(() => _entregarIgual = true),
@@ -418,14 +416,6 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         color: Ipesa.petroleo,
         icono: Icons.manage_search_rounded,
         titulo: 'Verificando el número de guía de la foto…',
-      ),
-      _Verificacion.coincide => tarjeta(
-        color: verde,
-        icono: Icons.verified_rounded,
-        titulo: 'Guía ${g.numeroGuia} verificada en la foto',
-        detalle: comprobante == null
-            ? null
-            : 'Comprobante de agencia: ${comprobante.resumen}',
       ),
       _Verificacion.otraTarea when !_entregarIgual => tarjeta(
         color: naranja,
@@ -461,7 +451,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         titulo: 'No se pudo leer el número de guía en la foto',
         detalle: 'Revisa que sea la guía ${g.numeroGuia} antes de confirmar.',
       ),
-      _Verificacion.ninguna => const SizedBox.shrink(),
+      // Si coincide, sigue sin avisos.
+      _Verificacion.ninguna ||
+      _Verificacion.coincide => const SizedBox.shrink(),
     };
   }
 
@@ -570,7 +562,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
                 ),
               ),
               const SizedBox(height: 12),
-              if (_verificacion != _Verificacion.ninguna) _avisoVerificacion(),
+              _avisoVerificacion(),
               const SizedBox(height: 4),
               if (g.tipoEntrega != TipoEntrega.entreSucursales)
                 CheckboxListTile(
