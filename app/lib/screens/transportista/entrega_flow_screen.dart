@@ -281,15 +281,13 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
 
     setState(() => _enviando = true);
     try {
-      // Se vuelve a leer el GPS al confirmar para registrar dónde se marcó
-      // realmente, no dónde se encendió el GPS (si el celular tarda, sirve
-      // la lectura de hace un momento).
-      Position? posicion;
-      try {
-        posicion = await Ubicacion.actual();
-      } catch (e) {
-        posicion = Ubicacion.reciente;
-        if (posicion == null) {
+      // La ubicación del momento: la que se leyó al poner la foto (hace
+      // segundos) o, si ya pasó un rato, una nueva. Así no se espera al GPS.
+      Position? posicion = Ubicacion.reciente;
+      if (posicion == null) {
+        try {
+          posicion = await Ubicacion.actual();
+        } catch (e) {
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('No se pudo leer tu ubicación: $e')),
@@ -297,26 +295,43 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
           return;
         }
       }
-      // La foto de la entrega final se guarda junto con el cambio de estado
-      // para que el administrador la vea en el detalle de la guía.
-      final avisoFoto = await appState.actualizarEstado(
-        g.numeroGuia,
-        nuevoEstado,
-        lat: posicion.latitude,
-        lng: posicion.longitude,
-        foto: nuevoEstado.esFinal ? _fotoBytes : null,
-        fechaCreacion: g.fechaCreacion,
-        // Ya se leyó con el número: el servidor no lo vuelve a pedir.
-        comprobante: _lectura == null ? null : (_lectura!.comprobante,),
-      );
-      if (!context.mounted) return;
-      final actualizada = appState.guiaActual(g);
-      if (nuevoEstado.esFinal &&
-          (actualizada?.tieneComprobanteAgencia ?? false)) {
-        mensaje =
-            'Entrega en agencia registrada · '
-            '${actualizada!.resumenComprobanteAgencia}';
+      // Ya se leyó con el número: el servidor no lo vuelve a pedir.
+      final comprobante = _lectura == null ? null : (_lectura!.comprobante,);
+      String? avisoFoto;
+      if (nuevoEstado.esFinal && g.tipoEntrega != TipoEntrega.entreSucursales) {
+        // La entrega queda registrada al instante y la foto se envía por
+        // detrás: el transportista sigue sin esperar a que se guarde.
+        appState.entregarEnSegundoPlano(
+          g,
+          nuevoEstado,
+          lat: posicion.latitude,
+          lng: posicion.longitude,
+          foto: _fotoBytes,
+          comprobante: comprobante,
+        );
+        if (_lectura?.comprobante case final c?) {
+          mensaje = 'Entrega en agencia registrada · ${c.resumen}';
+        }
+      } else {
+        avisoFoto = await appState.actualizarEstado(
+          g.numeroGuia,
+          nuevoEstado,
+          lat: posicion.latitude,
+          lng: posicion.longitude,
+          foto: nuevoEstado.esFinal ? _fotoBytes : null,
+          fechaCreacion: g.fechaCreacion,
+          comprobante: comprobante,
+        );
+        if (!context.mounted) return;
+        final actualizada = appState.guiaActual(g);
+        if (nuevoEstado.esFinal &&
+            (actualizada?.tieneComprobanteAgencia ?? false)) {
+          mensaje =
+              'Entrega en agencia registrada · '
+              '${actualizada!.resumenComprobanteAgencia}';
+        }
       }
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(avisoFoto == null ? mensaje : '$mensaje\n$avisoFoto'),

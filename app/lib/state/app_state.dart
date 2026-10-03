@@ -204,7 +204,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final rango = (_desdeTareas, _hastaTareas);
-      _guias = await _pedirGuias();
+      _guias = _conEntregasEnviando(await _pedirGuias());
       _rangoCargado = _pideRango ? rango : null;
     } catch (e) {
       error = e.toString();
@@ -226,7 +226,7 @@ class AppState extends ChangeNotifier {
     if (cargando) return const [];
     final List<Guia> nuevas;
     try {
-      nuevas = await _pedirGuias();
+      nuevas = _conEntregasEnviando(await _pedirGuias());
     } catch (_) {
       return const [];
     }
@@ -548,6 +548,102 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     return avisoFoto;
   }
+
+  /// Entregas ya confirmadas que aún se están enviando al servidor (clave de
+  /// la guía → cómo quedó en el celular). Mientras tanto, lo que llegue del
+  /// servidor no las devuelve a "En ruta".
+  final Map<String, Guia> _entregasEnviando = {};
+
+  /// Entregas que aún se están enviando.
+  int get entregasEnviando => _entregasEnviando.length;
+
+  /// Muestra un aviso en la pantalla que esté abierta (lo conecta la app).
+  void Function(String mensaje)? avisar;
+
+  /// Esperas entre reintentos cuando falla la señal.
+  @visibleForTesting
+  static List<Duration> esperasReintento = const [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+  ];
+
+  /// Registra la entrega al instante en el celular y la envía al servidor
+  /// por detrás (con reintentos), para que el transportista no espere a que
+  /// se guarde la foto. Si no se puede enviar, la tarea vuelve a "En ruta"
+  /// y se avisa.
+  void entregarEnSegundoPlano(
+    Guia guia,
+    EstadoGuia nuevoEstado, {
+    required double lat,
+    required double lng,
+    Uint8List? foto,
+    LecturaComprobante? comprobante,
+  }) {
+    final comp = comprobante?.$1;
+    final local = guia.copyWith(
+      estado: nuevoEstado,
+      tipoEntrega: comp != null ? TipoEntrega.agencia : null,
+      fechaActualizacion: DateTime.now().toUtc(),
+    );
+    _entregasEnviando[guia.clave] = local;
+    final i = _guias.indexWhere((g) => g.clave == guia.clave);
+    if (i != -1) _guias[i] = local;
+    notifyListeners();
+    _enviarEntrega(guia, local, lat, lng, foto, comprobante);
+  }
+
+  Future<void> _enviarEntrega(
+    Guia original,
+    Guia local,
+    double lat,
+    double lng,
+    Uint8List? foto,
+    LecturaComprobante? comprobante,
+  ) async {
+    Object? error;
+    for (var intento = 0; ; intento++) {
+      try {
+        final (actualizada, avisoFoto) = await _api.actualizarEstado(
+          original.numeroGuia,
+          local.estado,
+          lat: lat,
+          lng: lng,
+          foto: foto,
+          fechaCreacion: original.fechaCreacion,
+          comprobante: comprobante,
+        );
+        _entregasEnviando.remove(original.clave);
+        final i = _guias.indexWhere((g) => g.clave == original.clave);
+        if (i != -1) _guias[i] = actualizada;
+        notifyListeners();
+        if (avisoFoto != null) avisar?.call(avisoFoto);
+        return;
+      } on ApiException catch (e) {
+        error = e.mensaje;
+        // El servidor la rechazó (no es la señal): no sirve reintentar.
+        final codigo = e.codigo;
+        if (codigo != null && codigo >= 400 && codigo < 500) break;
+      } catch (e) {
+        error = e;
+      }
+      if (intento >= esperasReintento.length) break;
+      await Future<void>.delayed(esperasReintento[intento]);
+    }
+    _entregasEnviando.remove(original.clave);
+    final i = _guias.indexWhere((g) => g.clave == original.clave);
+    if (i != -1 && identical(_guias[i], local)) _guias[i] = original;
+    notifyListeners();
+    avisar?.call(
+      'No se pudo registrar la entrega de ${original.numeroGuia} '
+      '($error). Vuelve a entregarla.',
+    );
+  }
+
+  /// Lo que llegó del servidor, sin deshacer las entregas que aún se envían.
+  List<Guia> _conEntregasEnviando(List<Guia> guias) => _entregasEnviando.isEmpty
+      ? guias
+      : [for (final g in guias) _entregasEnviando[g.clave] ?? g];
 
   Future<Uint8List> fotoEntrega(Guia guia) => _api.fotoEntrega(guia);
 

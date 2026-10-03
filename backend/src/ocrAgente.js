@@ -149,6 +149,29 @@ function hayComprobante(c) {
   );
 }
 
+// Leer un número o un comprobante no necesita que la IA "piense": con el
+// razonamiento al mínimo responde bastante antes. Si el modelo configurado
+// en GEMINI_MODEL no acepta ese ajuste, se repite sin él (y ya no se pide).
+let pensarPocoAceptado = true;
+
+async function generarRapido(contents) {
+  const client = getClient();
+  const config = { responseMimeType: 'application/json' };
+  if (pensarPocoAceptado) {
+    try {
+      return await client.models.generateContent({
+        model: MODELO,
+        contents,
+        config: { ...config, thinkingConfig: { thinkingLevel: 'minimal' } },
+      });
+    } catch (err) {
+      if (err?.status !== 400) throw err;
+      if (/think/i.test(err.message || '')) pensarPocoAceptado = false;
+    }
+  }
+  return client.models.generateContent({ model: MODELO, contents, config });
+}
+
 function jsonDeLaIA(respuesta) {
   const texto = respuesta.text || '';
   try {
@@ -163,22 +186,17 @@ function jsonDeLaIA(respuesta) {
  * sube al entregar). Devuelve los 3 campos (null si no hay comprobante).
  */
 async function leerComprobante(imagenBase64, mediaType) {
-  const client = getClient();
-  const respuesta = await client.models.generateContent({
-    model: MODELO,
-    contents: [
-      { inlineData: { mimeType: mediaType, data: imagenBase64 } },
-      {
-        text: `Esta es la foto de la entrega de una guía de remisión de IPESA.
+  const respuesta = await generarRapido([
+    { inlineData: { mimeType: mediaType, data: imagenBase64 } },
+    {
+      text: `Esta es la foto de la entrega de una guía de remisión de IPESA.
 
 ${INSTRUCCIONES_COMPROBANTE}
 
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, con \
 esta forma: {${CAMPOS_COMPROBANTE}}. No inventes valores.`,
-      },
-    ],
-    config: { responseMimeType: 'application/json' },
-  });
+    },
+  ]);
   return comprobanteDe(jsonDeLaIA(respuesta));
 }
 
@@ -213,7 +231,6 @@ function claveGuia(numero) {
  * se compara también sin ceros a la izquierda ni confusiones O/0 o I/1.
  */
 async function leerNumeroGuia(imagenBase64, mediaType, candidatos = []) {
-  const client = getClient();
   const lista = candidatos.length
     ? `\n\nEl transportista tiene en ruta estas guías:\n${candidatos
         .map((c) => `- ${c}`)
@@ -222,22 +239,18 @@ cambien los ceros a la izquierda o los espacios), responde ese valor \
 EXACTAMENTE como está en la lista. Si no es ninguno, responde el número tal \
 como lo lees.`
     : '';
-  const respuesta = await client.models.generateContent({
-    model: MODELO,
-    contents: [
-      { inlineData: { mimeType: mediaType, data: imagenBase64 } },
-      {
-        text: `${PROMPT_NUMERO}${lista}
+  const respuesta = await generarRapido([
+    { inlineData: { mimeType: mediaType, data: imagenBase64 } },
+    {
+      text: `${PROMPT_NUMERO}${lista}
 
 Además: ${INSTRUCCIONES_COMPROBANTE}
 
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, con \
 esta forma: {"numero_guia": string|null, ${CAMPOS_COMPROBANTE}}. Si no se \
 ve el número de guía con confianza, usa null en vez de inventarlo.`,
-      },
-    ],
-    config: { responseMimeType: 'application/json' },
-  });
+    },
+  ]);
 
   const datos = jsonDeLaIA(respuesta);
   const comprobante = comprobanteDe(datos);

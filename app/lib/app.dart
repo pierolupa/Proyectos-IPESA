@@ -6,6 +6,8 @@ import 'screens/login_screen.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 
+final _avisos = GlobalKey<ScaffoldMessengerState>();
+
 class IpesaGuiasApp extends StatelessWidget {
   const IpesaGuiasApp({super.key, this.appState});
 
@@ -15,8 +17,17 @@ class IpesaGuiasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => appState ?? AppState(),
+      create: (_) => (appState ?? AppState())
+        // Avisos que llegan cuando ya se cerró la pantalla (p. ej. una
+        // entrega que no se pudo enviar).
+        ..avisar = (mensaje) => _avisos.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(mensaje),
+            duration: const Duration(seconds: 8),
+          ),
+        ),
       child: MaterialApp(
+        scaffoldMessengerKey: _avisos,
         title: 'IPESA · Tracking Distribución',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),

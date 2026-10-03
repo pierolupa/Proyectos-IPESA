@@ -101,3 +101,27 @@ describe('comprobante de agencia', () => {
     });
   });
 });
+
+describe('lectura rápida', () => {
+  beforeEach(() => mockGenerateContent.mockReset());
+
+  it('pide a la IA el razonamiento mínimo', async () => {
+    responde({ numero_guia: 'T001-1' });
+    await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T001-1']);
+    expect(mockGenerateContent.mock.calls[0][0].config.thinkingConfig).toEqual({ thinkingLevel: 'minimal' });
+  });
+
+  it('si el modelo no acepta ese ajuste, repite sin él y ya no lo pide', async () => {
+    mockGenerateContent.mockRejectedValueOnce(
+      Object.assign(new Error('thinking_level is not supported by this model'), { status: 400 }),
+    );
+    responde({ agencia_razon_social: null });
+    expect(await leerComprobante('ZmFrZQ==', 'image/jpeg')).toMatchObject({ agencia_razon_social: null });
+    expect(mockGenerateContent.mock.calls[1][0].config.thinkingConfig).toBeUndefined();
+
+    responde({ numero_guia: 'T001-1' });
+    await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', []);
+    expect(mockGenerateContent).toHaveBeenCalledTimes(3);
+    expect(mockGenerateContent.mock.calls[2][0].config.thinkingConfig).toBeUndefined();
+  });
+});
