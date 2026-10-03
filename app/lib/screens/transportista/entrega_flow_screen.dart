@@ -16,6 +16,7 @@ import '../../theme.dart';
 import '../../widgets/aviso_sucursal.dart';
 import '../../widgets/celebracion_jornada.dart';
 import '../../widgets/gps_transportista.dart';
+import 'entrega_ia_screen.dart' show claveGuia;
 
 /// Flujo de "Entrega" y "Entrega entre sucursales" (ARCHITECTURE.md,
 /// sección 4.2 y 4.3). El paso concreto depende del tipo de entrega y del
@@ -27,9 +28,14 @@ class EntregaFlowScreen extends StatefulWidget {
     super.key,
     required this.guia,
     this.desdeDetalle = true,
+    this.fotoInicial,
   });
 
   final Guia guia;
+
+  /// La foto ya elegida (cuando la IA vio que era de esta otra tarea y el
+  /// transportista pasó a entregarla).
+  final Uint8List? fotoInicial;
 
   /// Abierta desde el detalle de la guía: al entregar se cierra también el
   /// detalle. Desde "Mis tareas" solo se cierra esta pantalla.
@@ -58,10 +64,102 @@ Future<Uint8List?> _abrirFoto(ImageSource origen) async {
   return archivo?.readAsBytes();
 }
 
+/// Qué dice la IA del número de guía de la foto de entrega.
+enum _Verificacion { ninguna, leyendo, coincide, otraTarea, fuera, sinLeer }
+
 class _EntregaFlowScreenState extends State<EntregaFlowScreen>
     with GpsTransportista {
   bool _tomandoFoto = false;
   Uint8List? _fotoBytes;
+
+  // La IA lee el número de guía de la foto y lo compara con esta tarea,
+  // para que no se entregue una guía con la foto de otra.
+  _Verificacion _verificacion = _Verificacion.ninguna;
+  LecturaEntrega? _lectura;
+  Guia? _otraTarea;
+  bool _entregarIgual = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fotoInicial case final foto?) {
+      _fotoBytes = foto;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _verificarGuia(foto);
+      });
+    }
+  }
+
+  /// La foto es de otra guía (y no eligió entregar igual).
+  bool get _guiaEquivocada =>
+      !_entregarIgual &&
+      (_verificacion == _Verificacion.otraTarea ||
+          _verificacion == _Verificacion.fuera);
+
+  Future<void> _verificarGuia(Uint8List foto) async {
+    final g = widget.guia;
+    if (g.tipoEntrega == TipoEntrega.entreSucursales) return;
+    final appState = context.read<AppState>();
+    final pendientes = [
+      for (final t in appState.guiasDelTransportista(
+        appState.transportistaActual,
+      ))
+        if (t.estado == EstadoGuia.enRuta) t,
+    ];
+    setState(() {
+      _verificacion = _Verificacion.leyendo;
+      _lectura = null;
+      _otraTarea = null;
+      _entregarIgual = false;
+    });
+    LecturaEntrega? lectura;
+    try {
+      lectura = await appState.leerNumeroGuia(
+        foto,
+        candidatos: {
+          g.numeroGuia,
+          for (final t in pendientes) t.numeroGuia,
+        }.toList(),
+      );
+    } catch (_) {
+      lectura = null;
+    }
+    // Cambió la foto mientras tanto: esta lectura ya no vale.
+    if (!mounted || !identical(_fotoBytes, foto)) return;
+    final numero = lectura?.numero;
+    final clave = numero == null ? null : claveGuia(numero);
+    setState(() {
+      _lectura = lectura;
+      if (clave == null) {
+        _verificacion = _Verificacion.sinLeer;
+      } else if (clave == claveGuia(g.numeroGuia)) {
+        _verificacion = _Verificacion.coincide;
+      } else {
+        _otraTarea = pendientes
+            .where((t) => claveGuia(t.numeroGuia) == clave)
+            .firstOrNull;
+        _verificacion = _otraTarea != null
+            ? _Verificacion.otraTarea
+            : _Verificacion.fuera;
+      }
+    });
+  }
+
+  /// Pasa a entregar la tarea de la foto, con la misma foto.
+  void _entregarLaOtra() {
+    final otra = _otraTarea;
+    final foto = _fotoBytes;
+    if (otra == null || foto == null) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => EntregaFlowScreen(
+          guia: otra,
+          desdeDetalle: false,
+          fotoInicial: foto,
+        ),
+      ),
+    );
+  }
 
   /// Confirmó que la foto muestra la guía firmada o el comprobante.
   bool _fotoConfirmada = false;
@@ -111,6 +209,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       if (bytes == null || !mounted) return;
       setState(() => _fotoBytes = bytes);
       refrescarGps();
+      _verificarGuia(bytes);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -144,7 +243,10 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       if (g.estado == EstadoGuia.enProcesoTrasbordo) return _dentroDeGeocerca;
       return _fotoSimulada;
     }
-    return _fotoSimulada && _fotoConfirmada;
+    return _fotoSimulada &&
+        _fotoConfirmada &&
+        _verificacion != _Verificacion.leyendo &&
+        !_guiaEquivocada;
   }
 
   Future<void> _confirmar(BuildContext context) async {
@@ -165,6 +267,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         mensaje = 'Recepción en sucursal confirmada.';
       }
     } else if (g.tipoEntrega == TipoEntrega.agencia) {
+      nuevoEstado = EstadoGuia.finalizado;
+      mensaje = 'Entrega en agencia registrada.';
+    } else if (_lectura?.comprobante != null) {
       nuevoEstado = EstadoGuia.finalizado;
       mensaje = 'Entrega en agencia registrada.';
     } else {
@@ -201,6 +306,8 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         lng: posicion.longitude,
         foto: nuevoEstado.esFinal ? _fotoBytes : null,
         fechaCreacion: g.fechaCreacion,
+        // Ya se leyó con el número: el servidor no lo vuelve a pedir.
+        comprobante: _lectura == null ? null : (_lectura!.comprobante,),
       );
       if (!context.mounted) return;
       final actualizada = appState.guiaActual(g);
@@ -250,6 +357,112 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  /// Lo que la IA leyó en la foto: guía verificada, de otra tarea, o no
+  /// se pudo leer (esto último no bloquea la entrega).
+  Widget _avisoVerificacion() {
+    final g = widget.guia;
+    final leido = _lectura?.numero ?? '';
+    final comprobante = _lectura?.comprobante;
+    Widget tarjeta({
+      required Color color,
+      required IconData icono,
+      required String titulo,
+      String? detalle,
+      List<Widget> acciones = const [],
+    }) => Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icono, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                ),
+              ),
+            ],
+          ),
+          if (detalle != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 28),
+              child: Text(detalle, style: const TextStyle(fontSize: 13.5)),
+            ),
+          if (acciones.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 20),
+              child: Wrap(spacing: 8, runSpacing: 4, children: acciones),
+            ),
+        ],
+      ),
+    );
+    const verde = Color(0xFF1D6B41);
+    const naranja = Color(0xFFB45309);
+    final entregarIgual = TextButton(
+      onPressed: () => setState(() => _entregarIgual = true),
+      child: const Text('La foto es correcta, entregar igual'),
+    );
+    return switch (_verificacion) {
+      _Verificacion.leyendo => tarjeta(
+        color: Ipesa.petroleo,
+        icono: Icons.manage_search_rounded,
+        titulo: 'Verificando el número de guía de la foto…',
+      ),
+      _Verificacion.coincide => tarjeta(
+        color: verde,
+        icono: Icons.verified_rounded,
+        titulo: 'Guía ${g.numeroGuia} verificada en la foto',
+        detalle: comprobante == null
+            ? null
+            : 'Comprobante de agencia: ${comprobante.resumen}',
+      ),
+      _Verificacion.otraTarea when !_entregarIgual => tarjeta(
+        color: naranja,
+        icono: Icons.warning_amber_rounded,
+        titulo: 'Esta foto es de la guía $leido, no de ${g.numeroGuia}',
+        detalle:
+            '$leido es otra de tus tareas (${_otraTarea!.destinatario}). '
+            'Cambia la foto o entrega esa guía.',
+        acciones: [
+          FilledButton.tonal(
+            onPressed: _entregarLaOtra,
+            child: Text('Entregar $leido'),
+          ),
+          entregarIgual,
+        ],
+      ),
+      _Verificacion.fuera when !_entregarIgual => tarjeta(
+        color: naranja,
+        icono: Icons.warning_amber_rounded,
+        titulo: 'Esta foto es de la guía $leido, no de ${g.numeroGuia}',
+        detalle: '$leido no está en tus tareas en ruta. Revisa la foto.',
+        acciones: [entregarIgual],
+      ),
+      _Verificacion.otraTarea || _Verificacion.fuera => tarjeta(
+        color: naranja,
+        icono: Icons.info_outline_rounded,
+        titulo: 'Se entregará ${g.numeroGuia} con esta foto',
+        detalle: 'La IA leyó $leido; confirmaste que la foto es correcta.',
+      ),
+      _Verificacion.sinLeer => tarjeta(
+        color: Ipesa.textoSuave,
+        icono: Icons.info_outline_rounded,
+        titulo: 'No se pudo leer el número de guía en la foto',
+        detalle: 'Revisa que sea la guía ${g.numeroGuia} antes de confirmar.',
+      ),
+      _Verificacion.ninguna => const SizedBox.shrink(),
+    };
   }
 
   @override
@@ -356,7 +569,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+              if (_verificacion != _Verificacion.ninguna) _avisoVerificacion(),
+              const SizedBox(height: 4),
               if (g.tipoEntrega != TipoEntrega.entreSucursales)
                 CheckboxListTile(
                   value: _fotoConfirmada,
