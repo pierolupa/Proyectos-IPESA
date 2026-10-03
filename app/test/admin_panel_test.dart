@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ipesa_guias/models/guia.dart';
 import 'package:ipesa_guias/screens/admin/admin_dashboard_screen.dart';
+import 'package:ipesa_guias/screens/admin/admin_guia_edit_screen.dart';
 import 'package:ipesa_guias/screens/admin/dashboard.dart';
 import 'package:ipesa_guias/screens/admin/transportistas.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
@@ -120,6 +121,28 @@ void main() {
     // Ana entregó 2 de sus 3 guías; Juan, ninguna de 2.
     expect(find.text('2 de 3'), findsOneWidget);
     expect(find.text('0 de 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Tocar un número del dashboard muestra sus guías', (
+    tester,
+  ) async {
+    await _abrirPanel(tester);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+
+    // Ana entregó T001-4 y T001-5 (finalizada).
+    await tester.tap(find.text('Entregadas').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2 guías · Hoy'), findsOneWidget);
+    expect(find.byType(TarjetaGuiaAdmin), findsNWidgets(2));
+    expect(find.text('T001-4'), findsOneWidget);
+    expect(find.text('T001-1'), findsNothing);
+
+    // Tocar una abre su detalle.
+    await tester.tap(find.text('T001-4'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminGuiaEditScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -9,6 +9,7 @@ import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import 'admin_dashboard_screen.dart';
 import 'transportistas.dart';
 
 const _colorEnRuta = Color(0xFF2459A8);
@@ -27,6 +28,9 @@ class PuntoSerie {
   int entregadas = 0;
   int rechazadas = 0;
 
+  /// Las guías que cerraron en este punto (para ver el detalle).
+  final List<Guia> guias = [];
+
   int get total => entregadas + rechazadas;
 }
 
@@ -37,6 +41,9 @@ class FilaRanking {
   final String nombre;
   int entregadas = 0;
   int total = 0;
+
+  /// Sus guías del periodo.
+  final List<Guia> guias = [];
 
   double get cumplimiento => total == 0 ? 0 : entregadas / total;
 }
@@ -50,6 +57,9 @@ class FilaAgencia {
   String ruc = '';
   int pedidos = 0;
   double costo = 0;
+
+  /// Las guías con comprobante de esta agencia.
+  final List<Guia> guias = [];
 }
 
 /// "S/ 1,234.50".
@@ -81,6 +91,7 @@ class IndicadoresOperacion {
           : g.transportista.trim();
       final fila = ranking.putIfAbsent(nombre, () => FilaRanking(nombre));
       fila.total++;
+      fila.guias.add(g);
       switch (grupo) {
         case GrupoEstado.entregado:
           r.entregadas++;
@@ -90,6 +101,7 @@ class IndicadoresOperacion {
           if (!demora.isNegative) tiempos.add(demora);
           if (sucursalesMin.contains(g.destino.trim().toLowerCase())) {
             r.enSucursal++;
+            r.entregadasEnSucursal.add(g);
           }
         case GrupoEstado.rechazado:
           r.rechazadas++;
@@ -111,6 +123,7 @@ class IndicadoresOperacion {
           () => FilaAgencia(nombre),
         );
         fila.pedidos++;
+        fila.guias.add(g);
         if (fila.ruc.isEmpty) fila.ruc = g.agenciaRuc;
         if (g.agenciaMonto case final m?) {
           fila.costo += m;
@@ -156,6 +169,7 @@ class IndicadoresOperacion {
   int clienteFinal = 0;
   int agencia = 0;
   int enSucursal = 0;
+  final List<Guia> entregadasEnSucursal = [];
   int transportistasActivos = 0;
   Duration? tiempoPromedio;
   final List<Guia> atrasadas = [];
@@ -176,6 +190,12 @@ class IndicadoresOperacion {
       conMonto == 0 ? null : costoAgencias / conMonto;
 
   int get total => guias.length;
+
+  List<Guia> de(Set<GrupoEstado> grupos) =>
+      guias.where((g) => grupos.contains(g.estado.grupo)).toList();
+
+  List<Guia> get conComprobante =>
+      guias.where((g) => g.tieneComprobanteAgencia).toList();
 
   /// Cierre: las que ya terminaron (entregadas o rechazadas) sobre todas.
   double get cierre => total == 0 ? 0 : (entregadas + rechazadas) / total;
@@ -208,6 +228,7 @@ List<PuntoSerie> _serie(
   ];
   DateTime cierre(Guia g) => (g.fechaCierre ?? g.fechaActualizacion).toLocal();
   void sumar(PuntoSerie p, Guia g) {
+    p.guias.add(g);
     if (g.estado.grupo == GrupoEstado.rechazado) {
       p.rechazadas++;
     } else {
@@ -352,14 +373,23 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           final ancha = ancho >= 1000;
           const sep = 16.0;
 
+          void ver(String titulo, List<Guia> guias) => mostrarGuiasDelDashboard(
+            context,
+            titulo,
+            guias,
+            periodo: datos.periodo.etiqueta,
+          );
+          final entregadas = datos.de({GrupoEstado.entregado});
           final cifras = [
             _Cifra(
+              onTap: () => ver('Guías del periodo', datos.guias),
               etiqueta: 'Guías del periodo',
               valor: '${datos.total}',
               detalle:
                   '${datos.clienteFinal} cliente · ${datos.agencia} agencia',
             ),
             _Cifra(
+              onTap: () => ver('Entregadas', entregadas),
               etiqueta: 'Entregadas',
               valor: '${datos.entregadas}',
               detalle: datos.enSucursal == 0
@@ -368,6 +398,10 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               marca: _colorEntregado,
             ),
             _Cifra(
+              onTap: () => ver(
+                'En ruta',
+                datos.de({GrupoEstado.enRuta, GrupoEstado.trasbordo}),
+              ),
               etiqueta: 'En ruta',
               valor: '${datos.pendientes}',
               detalle: datos.atrasadas.isEmpty
@@ -376,12 +410,14 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               marca: _colorEnRuta,
             ),
             _Cifra(
+              onTap: () => ver('Rechazadas', datos.de({GrupoEstado.rechazado})),
               etiqueta: 'Rechazadas',
               valor: '${datos.rechazadas}',
               detalle: '${_porcentaje(datos.tasaRechazo)} del total',
               marca: _colorRechazado,
             ),
             _Cifra(
+              onTap: () => ver('Entregadas', entregadas),
               etiqueta: 'Tiempo promedio',
               valor: datos.tiempoPromedio == null
                   ? '—'
@@ -389,6 +425,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               detalle: 'hasta la entrega',
             ),
             _Cifra(
+              onTap: () => ver('Guías de los transportistas', datos.guias),
               etiqueta: 'Transportistas',
               valor: '${datos.transportistasActivos}',
               detalle: datos.transportistasActivos == 0
@@ -396,6 +433,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                   : 'activos en el periodo',
             ),
             _Cifra(
+              onTap: () => ver('Enviadas por agencia', datos.conComprobante),
               etiqueta: 'Costo de agencias',
               valor: soles(datos.costoAgencias),
               detalle: datos.comprobantes == 0
@@ -405,6 +443,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                   : '${datos.comprobantes} comprobantes',
             ),
             _Cifra(
+              onTap: () => ver('Enviadas por agencia', datos.conComprobante),
               etiqueta: 'Costo por pedido',
               valor: datos.costoPromedioAgencia == null
                   ? '—'
@@ -426,7 +465,10 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
                 SizedBox(width: anchoCifra, child: cifra),
             ],
           );
-          final hero = _Cumplimiento(datos: datos);
+          final hero = _Tocable(
+            onTap: () => ver('Guías del periodo', datos.guias),
+            child: _Cumplimiento(datos: datos),
+          );
           final grafico = _GraficoEntregas(datos: datos);
           final estados = _Estados(datos: datos);
           final ranking = _Ranking(datos: datos);
@@ -485,14 +527,31 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
 }
 
 class _Tarjeta extends StatelessWidget {
-  const _Tarjeta({required this.child, this.titulo, this.subtitulo});
+  const _Tarjeta({
+    required this.child,
+    this.titulo,
+    this.subtitulo,
+    this.onTap,
+  });
 
   final String? titulo;
   final String? subtitulo;
   final Widget child;
 
+  /// Si se puede tocar: abre el detalle (las guías detrás del número).
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
+    final tarjeta = _cuerpo();
+    if (onTap == null) return tarjeta;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: tarjeta),
+    );
+  }
+
+  Widget _cuerpo() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -533,7 +592,10 @@ class _Cifra extends StatelessWidget {
     required this.valor,
     required this.detalle,
     this.marca,
+    this.onTap,
   });
+
+  final VoidCallback? onTap;
 
   final String etiqueta;
   final String valor;
@@ -545,6 +607,7 @@ class _Cifra extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Tarjeta(
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -839,6 +902,11 @@ class _GraficoEntregas extends StatelessWidget {
                           for (var i = 0; i < serie.length; i++)
                             Expanded(
                               child: _Columna(
+                                onTap: () => mostrarGuiasDelDashboard(
+                                  context,
+                                  'Cierres · ${serie[i].detalle}',
+                                  serie[i].guias,
+                                ),
                                 punto: serie[i],
                                 tope: tope,
                                 alto: _alto,
@@ -875,8 +943,10 @@ class _Columna extends StatelessWidget {
     required this.tope,
     required this.alto,
     required this.conEtiqueta,
+    this.onTap,
   });
 
+  final VoidCallback? onTap;
   final PuntoSerie punto;
   final int tope;
   final double alto;
@@ -888,9 +958,6 @@ class _Columna extends StatelessWidget {
   }
 
   Widget _columna(double ancho) {
-    final altoEntregadas = alto * punto.entregadas / tope;
-    final altoRechazadas = alto * punto.rechazadas / tope;
-    const extremo = Radius.circular(4);
     final mensaje = punto.total == 0
         ? '${punto.detalle}\nSin cierres'
         : '${punto.detalle}\n'
@@ -899,64 +966,74 @@ class _Columna extends StatelessWidget {
     return Tooltip(
       message: mensaje,
       waitDuration: Duration.zero,
-      child: Container(
-        // Zona de toque de todo el alto, más ancha que la barra.
-        color: Colors.transparent,
-        height: alto + 24,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Center(
-              child: SizedBox(
-                // Hasta 22 px, dejando siempre aire entre columnas.
-                width: math.min(22, math.max(4, ancho - 6)),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (punto.rechazadas > 0)
-                      Container(
-                        height: altoRechazadas,
-                        decoration: const BoxDecoration(
-                          color: _colorRechazado,
-                          borderRadius: BorderRadius.vertical(top: extremo),
-                        ),
+      child: _Tocable(
+        onTap: punto.total == 0 ? null : onTap,
+        child: _barra(ancho),
+      ),
+    );
+  }
+
+  Widget _barra(double ancho) {
+    final altoEntregadas = alto * punto.entregadas / tope;
+    final altoRechazadas = alto * punto.rechazadas / tope;
+    const extremo = Radius.circular(4);
+    return Container(
+      // Zona de toque de todo el alto, más ancha que la barra.
+      color: Colors.transparent,
+      height: alto + 24,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Center(
+            child: SizedBox(
+              // Hasta 22 px, dejando siempre aire entre columnas.
+              width: math.min(22, math.max(4, ancho - 6)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (punto.rechazadas > 0)
+                    Container(
+                      height: altoRechazadas,
+                      decoration: const BoxDecoration(
+                        color: _colorRechazado,
+                        borderRadius: BorderRadius.vertical(top: extremo),
                       ),
-                    if (punto.rechazadas > 0 && punto.entregadas > 0)
-                      const SizedBox(height: 2),
-                    if (punto.entregadas > 0)
-                      Container(
-                        height: altoEntregadas,
-                        decoration: BoxDecoration(
-                          color: _colorEntregado,
-                          borderRadius: punto.rechazadas > 0
-                              ? null
-                              : const BorderRadius.vertical(top: extremo),
-                        ),
+                    ),
+                  if (punto.rechazadas > 0 && punto.entregadas > 0)
+                    const SizedBox(height: 2),
+                  if (punto.entregadas > 0)
+                    Container(
+                      height: altoEntregadas,
+                      decoration: BoxDecoration(
+                        color: _colorEntregado,
+                        borderRadius: punto.rechazadas > 0
+                            ? null
+                            : const BorderRadius.vertical(top: extremo),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
-            SizedBox(
-              height: 24,
-              child: conEtiqueta
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          punto.etiqueta,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Ipesa.textoSuave,
-                          ),
+          ),
+          SizedBox(
+            height: 24,
+            child: conEtiqueta
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        punto.etiqueta,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Ipesa.textoSuave,
                         ),
                       ),
-                    )
-                  : null,
-            ),
-          ],
-        ),
+                    ),
+                  )
+                : null,
+          ),
+        ],
       ),
     );
   }
@@ -1004,6 +1081,17 @@ class _Estados extends StatelessWidget {
       ('En ruta', datos.pendientes, _colorEnRuta),
       ('Rechazadas', datos.rechazadas, _colorRechazado),
     ];
+    final grupos = {
+      'Entregadas': {GrupoEstado.entregado},
+      'En ruta': {GrupoEstado.enRuta, GrupoEstado.trasbordo},
+      'Rechazadas': {GrupoEstado.rechazado},
+    };
+    void ver(String titulo, List<Guia> guias) => mostrarGuiasDelDashboard(
+      context,
+      titulo,
+      guias,
+      periodo: datos.periodo.etiqueta,
+    );
     final conValor = [
       for (final p in partes)
         if (p.$2 > 0) p,
@@ -1035,48 +1123,53 @@ class _Estados extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           for (final (nombre, n, color) in partes)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(2),
+            _Tocable(
+              onTap: n == 0
+                  ? null
+                  : () => ver(nombre, datos.de(grupos[nombre]!)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      nombre,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        nombre,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Ipesa.etiqueta,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$n',
                       style: const TextStyle(
                         fontSize: 15,
-                        color: Ipesa.etiqueta,
+                        fontWeight: FontWeight.w700,
+                        color: Ipesa.texto,
                       ),
                     ),
-                  ),
-                  Text(
-                    '$n',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Ipesa.texto,
-                    ),
-                  ),
-                  SizedBox(
-                    width: 52,
-                    child: Text(
-                      datos.total == 0 ? '' : _porcentaje(n / datos.total),
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Ipesa.textoSuave,
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        datos.total == 0 ? '' : _porcentaje(n / datos.total),
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Ipesa.textoSuave,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           const Divider(height: 20, color: Ipesa.segmento),
@@ -1091,9 +1184,32 @@ class _Estados extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              _Dato(valor: datos.clienteFinal, texto: 'Cliente final'),
-              _Dato(valor: datos.agencia, texto: 'Agencia'),
-              _Dato(valor: datos.enSucursal, texto: 'Entregadas en sucursal'),
+              _Dato(
+                valor: datos.clienteFinal,
+                texto: 'Cliente final',
+                onTap: () => ver(
+                  'Cliente final',
+                  datos.guias
+                      .where((g) => g.tipoEntrega != TipoEntrega.agencia)
+                      .toList(),
+                ),
+              ),
+              _Dato(
+                valor: datos.agencia,
+                texto: 'Agencia',
+                onTap: () => ver(
+                  'Entrega en agencia',
+                  datos.guias
+                      .where((g) => g.tipoEntrega == TipoEntrega.agencia)
+                      .toList(),
+                ),
+              ),
+              _Dato(
+                valor: datos.enSucursal,
+                texto: 'Entregadas en sucursal',
+                onTap: () =>
+                    ver('Entregadas en sucursal', datos.entregadasEnSucursal),
+              ),
             ],
           ),
         ],
@@ -1103,23 +1219,27 @@ class _Estados extends StatelessWidget {
 }
 
 class _Dato extends StatelessWidget {
-  const _Dato({required this.valor, required this.texto});
+  const _Dato({required this.valor, required this.texto, this.onTap});
 
   final int valor;
   final String texto;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$valor', style: Ipesa.titulo(20, color: Ipesa.texto)),
-          Text(
-            texto,
-            style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
-          ),
-        ],
+      child: _Tocable(
+        onTap: valor == 0 ? null : onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('$valor', style: Ipesa.titulo(20, color: Ipesa.texto)),
+            Text(
+              texto,
+              style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1150,7 +1270,15 @@ class _Ranking extends StatelessWidget {
           : Column(
               children: [
                 for (var i = 0; i < filas.length; i++)
-                  _FilaTransportista(puesto: i + 1, fila: filas[i]),
+                  _Tocable(
+                    onTap: () => mostrarGuiasDelDashboard(
+                      context,
+                      filas[i].nombre,
+                      filas[i].guias,
+                      periodo: datos.periodo.etiqueta,
+                    ),
+                    child: _FilaTransportista(puesto: i + 1, fila: filas[i]),
+                  ),
                 if (datos.ranking.length > _visibles)
                   Align(
                     alignment: Alignment.centerLeft,
@@ -1305,7 +1433,8 @@ class _Agencias extends StatelessWidget {
                   FilaAgencia('Otras ${todas.length - _visibles + 1} agencias'),
                   (otras, a) => otras
                     ..pedidos += a.pedidos
-                    ..costo += a.costo,
+                    ..costo += a.costo
+                    ..guias.addAll(a.guias),
                 ),
           ];
     final maximo = filas.fold<double>(0, (m, a) => math.max(m, a.costo));
@@ -1323,9 +1452,17 @@ class _Agencias extends StatelessWidget {
           : Column(
               children: [
                 for (final a in filas)
-                  _FilaAgencia(
-                    fila: a,
-                    fraccion: maximo == 0 ? 0 : a.costo / maximo,
+                  _Tocable(
+                    onTap: () => mostrarGuiasDelDashboard(
+                      context,
+                      a.nombre,
+                      a.guias,
+                      periodo: datos.periodo.etiqueta,
+                    ),
+                    child: _FilaAgencia(
+                      fila: a,
+                      fraccion: maximo == 0 ? 0 : a.costo / maximo,
+                    ),
                   ),
               ],
             ),
@@ -1415,4 +1552,104 @@ class _FilaAgencia extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Algo del dashboard que se puede tocar para ver su detalle.
+class _Tocable extends StatelessWidget {
+  const _Tocable({required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Las guías detrás de un número o gráfico del dashboard, de la más
+/// reciente a la más antigua; tocar una abre su detalle.
+void mostrarGuiasDelDashboard(
+  BuildContext context,
+  String titulo,
+  List<Guia> guias, {
+  String? periodo,
+}) {
+  final ordenadas = [...guias]
+    ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));
+  final cuantas = ordenadas.length == 1
+      ? '1 guía'
+      : '${ordenadas.length} guías';
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Ipesa.fondo,
+    constraints: const BoxConstraints(maxWidth: 760),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scroll) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(titulo, style: Ipesa.titulo(19, color: Ipesa.texto)),
+                      Text(
+                        periodo == null ? cuantas : '$cuantas · $periodo',
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          color: Ipesa.textoSuave,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cerrar',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ordenadas.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Sin guías.',
+                      style: TextStyle(color: Ipesa.textoSuave),
+                    ),
+                  )
+                : ListView.separated(
+                    controller: scroll,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    itemCount: ordenadas.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) => TarjetaGuiaAdmin(guia: ordenadas[i]),
+                  ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
