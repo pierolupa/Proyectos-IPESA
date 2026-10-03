@@ -63,28 +63,127 @@ class FilaAgencia {
 }
 
 /// Cuenta cada comprobante de agencia una vez aunque esté pegado en varias
-/// guías (el monto es uno solo).
+/// guías (el monto es uno solo), y junta las guías de una misma agencia
+/// aunque la IA haya leído su nombre de otra forma ("PerúBus" del logo y
+/// "EMPRESA DE TRANSPORTES PERU BUS S.A" de la razón social): son la misma
+/// si comparten RUC, N° de comprobante o el nombre sin palabras genéricas.
 class ContadorComprobantes {
-  ContadorComprobantes(Iterable<Guia> guias)
-    : _delDiaConNumero = {
-        for (final g in guias)
-          if (g.agenciaComprobante.isNotEmpty) _delDia(g),
-      };
+  ContadorComprobantes(Iterable<Guia> guias) {
+    final conComprobante = guias.where((g) => g.tieneComprobanteAgencia);
+    for (final g in conComprobante) {
+      final nodos = _nodos(g);
+      for (final n in nodos.skip(1)) {
+        _unir(nodos.first, n);
+      }
+    }
+    // El nombre de cada agencia: la razón social más completa leída.
+    for (final g in conComprobante) {
+      final grupo = grupoDe(g);
+      final razon = g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final actual = _nombres[grupo] ?? '';
+      if (razon.length > actual.length) _nombres[grupo] = razon;
+      if (g.agenciaRuc.isNotEmpty) _rucs.putIfAbsent(grupo, () => g.agenciaRuc);
+    }
+    _delDiaConNumero = {
+      for (final g in conComprobante)
+        if (g.agenciaComprobante.isNotEmpty) _delDia(g),
+    };
+  }
+
+  final _padre = <String, String>{};
+  final _nombres = <String, String>{};
+  final _rucs = <String, String>{};
 
   /// Si en otra guía sí se leyó el número, la que no lo tiene es esa misma.
-  final Set<String> _delDiaConNumero;
+  late final Set<String> _delDiaConNumero;
   final _vistos = <String>{};
 
-  /// La misma agencia escrita con otros espacios o mayúsculas es una.
-  static String nombreAgencia(Guia g) => g.agenciaRazonSocial.isNotEmpty
-      ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
-      : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
+  /// Palabras que no distinguen a una agencia de otra.
+  static const _genericas = {
+    'EMPRESA',
+    'DE',
+    'DEL',
+    'LA',
+    'LAS',
+    'EL',
+    'LOS',
+    'Y',
+    'E',
+    'EN',
+    'TRANSPORTES',
+    'TRANSPORTE',
+    'TRANSPORTS',
+    'TURISMO',
+    'INTERNACIONAL',
+    'SERVICIOS',
+    'SERVICIO',
+    'CORPORACION',
+    'GRUPO',
+    'CIA',
+    'COMPANIA',
+    'SA',
+    'SAC',
+    'SAA',
+    'EIRL',
+    'SRL',
+    'SCRL',
+  };
+
+  /// "EMPRESA DE TRANSPORTES PERU BUS S.A" y "PerúBus" → "PERUBUS".
+  static String nucleoNombre(String nombre) {
+    const tildes = {'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U', 'Ü': 'U'};
+    var t = nombre.toUpperCase();
+    tildes.forEach((k, v) => t = t.replaceAll(k, v));
+    return t
+        .split(RegExp(r'[^A-Z0-9Ñ]+'))
+        .where((p) => p.length > 1 && !_genericas.contains(p))
+        .join();
+  }
+
+  static List<String> _nodos(Guia g) {
+    final nucleo = nucleoNombre(g.agenciaRazonSocial);
+    final nodos = [
+      if (g.agenciaRuc.isNotEmpty) 'R|${g.agenciaRuc}',
+      if (g.agenciaComprobante.isNotEmpty) 'N|${g.agenciaComprobante}',
+      if (nucleo.isNotEmpty) 'M|$nucleo',
+    ];
+    return nodos.isEmpty ? ['?'] : nodos;
+  }
+
+  String _raiz(String n) {
+    var r = _padre[n] ?? n;
+    while (r != (_padre[r] ?? r)) {
+      r = _padre[r]!;
+    }
+    _padre[n] = r;
+    return r;
+  }
+
+  void _unir(String a, String b) {
+    final ra = _raiz(a);
+    final rb = _raiz(b);
+    if (ra != rb) _padre[rb] = ra;
+  }
+
+  /// La agencia de la guía (la misma para todas sus formas de escribirla).
+  String grupoDe(Guia g) => _raiz(_nodos(g).first);
+
+  /// El nombre con el que se muestra la agencia de la guía.
+  String nombreDe(Guia g) {
+    final grupo = grupoDe(g);
+    final nombre = _nombres[grupo] ?? '';
+    if (nombre.isNotEmpty) return nombre;
+    final ruc = _rucs[grupo] ?? '';
+    return ruc.isNotEmpty ? 'RUC $ruc' : 'Sin nombre';
+  }
+
+  String rucDe(Guia g) => _rucs[grupoDe(g)] ?? '';
 
   /// Sin número leído: el mismo monto de la misma agencia, del mismo
   /// transportista y el mismo día se toma como el mismo comprobante.
-  static String _delDia(Guia g) {
+  String _delDia(Guia g) {
     final creada = g.fechaCreacion.toLocal();
-    return '${nombreAgencia(g).toUpperCase()}|${g.agenciaMonto}'
+    return '${grupoDe(g)}|${g.agenciaMonto}'
         '|${g.transportista.trim().toLowerCase()}'
         '|${creada.year}-${creada.month}-${creada.day}';
   }
@@ -169,14 +268,12 @@ class IndicadoresOperacion {
       }
       if (g.eliminacionPendiente) r.pidenEliminar.add(g);
       if (g.tieneComprobanteAgencia) {
-        final nombre = ContadorComprobantes.nombreAgencia(g);
         final fila = agencias.putIfAbsent(
-          nombre.toUpperCase(),
-          () => FilaAgencia(nombre),
+          contador.grupoDe(g),
+          () => FilaAgencia(contador.nombreDe(g))..ruc = contador.rucDe(g),
         );
         fila.pedidos++;
         fila.guias.add(g);
-        if (fila.ruc.isEmpty) fila.ruc = g.agenciaRuc;
         if (contador.esNuevo(g)) {
           r.comprobantes++;
           if (g.agenciaMonto case final m?) {

@@ -627,6 +627,49 @@ void main() {
     expect((palomino.pedidos, palomino.costo), (4, 140.0));
   });
 
+  test('La misma agencia leída con otro nombre es una sola', () {
+    final ahora = DateTime(2026, 10, 3, 16);
+    Guia guia(String numero, String razon, String comprobante, num monto) =>
+        Guia.fromJson(
+          _guia(numero, 'finalizado', 'Victor Torres')
+            ..['fecha_creacion'] = DateTime(
+              2026,
+              10,
+              3,
+              9,
+            ).toUtc().toIso8601String()
+            ..['fecha_actualizacion'] = DateTime(
+              2026,
+              10,
+              3,
+              15,
+            ).toUtc().toIso8601String()
+            ..['agencia_razon_social'] = razon
+            ..['agencia_monto'] = monto
+            ..['agencia_comprobante'] = comprobante,
+        );
+    const larga = 'EMPRESA DE TRANSPORTES PERU BUS S.A';
+    final datos = IndicadoresOperacion.calcular(
+      [
+        guia('A', 'PerúBus', 'V001-00087381', 21),
+        guia('B', larga, 'V001-00087381', 21),
+        guia('C', larga, 'V001-00087381', 21),
+        guia('D', larga, 'V001-00087380', 35),
+        // Sin número: por el nombre también es Perú Bus.
+        guia('E', 'Peru Bus', '', 40),
+        guia('F', 'TURISMO CIVA S.A.C.', 'B001-1', 50),
+      ],
+      PeriodoResumen.hoy,
+      ahora: ahora,
+    );
+    final perubus = datos.agencias.firstWhere((a) => a.nombre == larga);
+    expect((perubus.pedidos, perubus.costo), (5, 96.0));
+    expect(datos.agencias, hasLength(2));
+    expect(datos.costoAgencias, 146);
+    expect(ContadorComprobantes.nucleoNombre(larga), 'PERUBUS');
+    expect(ContadorComprobantes.nucleoNombre('PerúBus'), 'PERUBUS');
+  });
+
   test('Un rechazo cierra la tarea pero no cuenta como entrega', () {
     final ahora = DateTime(2026, 9, 29, 18);
     Guia guia(String numero, String estado) => Guia.fromJson(
