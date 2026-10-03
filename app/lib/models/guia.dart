@@ -61,6 +61,10 @@ class Guia {
   final String agenciaRuc;
   final double? agenciaMonto;
 
+  /// Número del comprobante de la agencia (ej. F017-0034441): si el mismo
+  /// comprobante está en varias guías, su monto se cuenta una vez.
+  final String agenciaComprobante;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -90,6 +94,7 @@ class Guia {
     this.agenciaRazonSocial = '',
     this.agenciaRuc = '',
     this.agenciaMonto,
+    this.agenciaComprobante = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
@@ -99,12 +104,14 @@ class Guia {
   bool get tieneComprobanteAgencia =>
       agenciaRazonSocial.isNotEmpty ||
       agenciaRuc.isNotEmpty ||
-      agenciaMonto != null;
+      agenciaMonto != null ||
+      agenciaComprobante.isNotEmpty;
 
   /// El comprobante de agencia en una línea (vacío si no hay), ej.
   /// "PALOMINO S.A.C. · RUC 20515659324 · S/ 70.00".
   String get resumenComprobanteAgencia => [
     if (agenciaRazonSocial.isNotEmpty) agenciaRazonSocial,
+    if (agenciaComprobante.isNotEmpty) 'N° $agenciaComprobante',
     if (agenciaRuc.isNotEmpty) 'RUC $agenciaRuc',
     if (agenciaMonto case final m?) 'S/ ${m.toStringAsFixed(2)}',
   ].join(' · ');
@@ -180,6 +187,7 @@ class Guia {
       agenciaRazonSocial: '${json['agencia_razon_social'] ?? ''}'.trim(),
       agenciaRuc: '${json['agencia_ruc'] ?? ''}'.trim(),
       agenciaMonto: _coordenada(json['agencia_monto']),
+      agenciaComprobante: '${json['agencia_comprobante'] ?? ''}'.trim(),
     );
   }
 
@@ -233,6 +241,7 @@ class Guia {
       agenciaRazonSocial: agenciaRazonSocial,
       agenciaRuc: agenciaRuc,
       agenciaMonto: agenciaMonto,
+      agenciaComprobante: agenciaComprobante,
     );
   }
 }

@@ -79,6 +79,27 @@ class IndicadoresOperacion {
     final r = IndicadoresOperacion._(periodo);
     final ranking = <String, FilaRanking>{};
     final agencias = <String, FilaAgencia>{};
+    // Comprobantes ya contados: el mismo pegado en varias guías suma una vez.
+    final comprobantesVistos = <String>{};
+    // La misma agencia escrita con otros espacios o mayúsculas es una.
+    String nombreAgencia(Guia g) => g.agenciaRazonSocial.isNotEmpty
+        ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
+        : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
+    // Sin número leído: el mismo monto de la misma agencia, del mismo
+    // transportista y el mismo día se toma como el mismo comprobante.
+    String delDia(Guia g) {
+      final creada = g.fechaCreacion.toLocal();
+      return '${nombreAgencia(g).toUpperCase()}|${g.agenciaMonto}'
+          '|${g.transportista.trim().toLowerCase()}'
+          '|${creada.year}-${creada.month}-${creada.day}';
+    }
+
+    // Si en otra guía sí se leyó el número, la que no lo tiene es esa misma.
+    final delDiaConNumero = {
+      for (final g in todas)
+        if (g.agenciaComprobante.isNotEmpty && periodo.incluye(g, ahora))
+          delDia(g),
+    };
     final tiempos = <Duration>[];
     final sucursalesMin = {for (final s in sucursales) s.toLowerCase()};
 
@@ -114,10 +135,7 @@ class IndicadoresOperacion {
       }
       if (g.eliminacionPendiente) r.pidenEliminar.add(g);
       if (g.tieneComprobanteAgencia) {
-        // La misma agencia escrita con otros espacios o mayúsculas es una.
-        final nombre = g.agenciaRazonSocial.isNotEmpty
-            ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
-            : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
+        final nombre = nombreAgencia(g);
         final fila = agencias.putIfAbsent(
           nombre.toUpperCase(),
           () => FilaAgencia(nombre),
@@ -125,12 +143,19 @@ class IndicadoresOperacion {
         fila.pedidos++;
         fila.guias.add(g);
         if (fila.ruc.isEmpty) fila.ruc = g.agenciaRuc;
-        if (g.agenciaMonto case final m?) {
-          fila.costo += m;
-          r.costoAgencias += m;
-          r.conMonto++;
+        final conNumero = g.agenciaComprobante.isNotEmpty;
+        final nuevo = conNumero
+            ? comprobantesVistos.add('N|${g.agenciaComprobante}')
+            : !delDiaConNumero.contains(delDia(g)) &&
+                  comprobantesVistos.add('D|${delDia(g)}');
+        if (nuevo) {
+          r.comprobantes++;
+          if (g.agenciaMonto case final m?) {
+            fila.costo += m;
+            r.costoAgencias += m;
+          }
         }
-        r.comprobantes++;
+        if (g.agenciaMonto != null) r.pedidosConMonto++;
       }
       if (g.tipoEntrega == TipoEntrega.agencia) {
         r.agencia++;
@@ -177,17 +202,19 @@ class IndicadoresOperacion {
   List<FilaRanking> ranking = [];
   List<PuntoSerie> serie = [];
 
-  /// Comprobantes de agencia del periodo, cuántos traen monto y su total.
+  /// Comprobantes de agencia distintos del periodo y su total (cada
+  /// comprobante una vez, aunque esté en varias guías); pedidos con monto.
   int comprobantes = 0;
-  int conMonto = 0;
+  int pedidosConMonto = 0;
   double costoAgencias = 0;
 
   /// Por agencia, de la de más costo a la de menos.
   List<FilaAgencia> agencias = [];
 
-  /// Lo que costó en promedio cada pedido enviado por agencia.
+  /// Lo que costó en promedio cada pedido enviado por agencia (un
+  /// comprobante de dos pedidos cuenta la mitad para cada uno).
   double? get costoPromedioAgencia =>
-      conMonto == 0 ? null : costoAgencias / conMonto;
+      pedidosConMonto == 0 ? null : costoAgencias / pedidosConMonto;
 
   int get total => guias.length;
 
@@ -448,7 +475,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               valor: datos.costoPromedioAgencia == null
                   ? '—'
                   : soles(datos.costoPromedioAgencia!),
-              detalle: 'promedio por envío',
+              detalle: 'promedio por pedido',
             ),
           ];
 

@@ -46,17 +46,17 @@ servicio**:
 ### 3. Crear la hoja de cálculo
 
 Crea una hoja de Google Sheets con una pestaña llamada exactamente `Guias`
-y esta fila de encabezados (columnas A a AB):
+y esta fila de encabezados (columnas A a AC):
 
 ```
-numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte | agencia_razon_social | agencia_ruc | agencia_monto
+numero_guia | estado | tipo_entrega | origen | destino | transportista | destinatario | geo_lat | geo_lng | corregido_por_admin | fecha_creacion | fecha_actualizacion | numero_pedido | numero_entrega | cierre_lat | cierre_lng | fecha_cierre | foto_entrega_url | motivo_rechazo | eliminacion | motivo_eliminacion | transbordo_estado | transbordo_a | transbordo_de | despacho_corte | agencia_razon_social | agencia_ruc | agencia_monto | agencia_comprobante
 ```
 
 Cada dato va **siempre en la misma columna** (la de la lista de arriba),
 sin importar cómo se llame su encabezado: A a S pueden tener tus propios
 nombres ("Nro Pedido", "Foto"...) y el servidor nunca los cambia. Solo
-escribe los encabezados de T a AB si están vacíos, y nunca agrega columnas
-en medio de las que ya existen. Lo que haya después de la AB se conserva
+escribe los encabezados de T a AC si están vacíos, y nunca agrega columnas
+en medio de las que ya existen. Lo que haya después de la AC se conserva
 tal cual. Las guías nuevas se escriben siempre desde la columna A en la
 fila siguiente a la última con datos, y una guía que haya quedado corrida
 a la derecha se devuelve sola a su lugar. Las filas sin `numero_guia` se
@@ -73,7 +73,7 @@ final (`numero_pedido` en M1, `numero_entrega` en N1, `cierre_lat` en O1,
 `motivo_rechazo` en S1, `eliminacion` en T1, `motivo_eliminacion` en U1,
 `transbordo_estado` en V1, `transbordo_a` en W1, `transbordo_de` en X1,
 `despacho_corte` en Y1, `agencia_razon_social` en Z1, `agencia_ruc` en AA1,
-`agencia_monto` en AB1)
+`agencia_monto` en AB1, `agencia_comprobante` en AC1)
 — las filas existentes quedan
 igual y esas columnas se leen vacías para ellas.
 
@@ -82,10 +82,12 @@ llenan solo cuando el transportista cierra la guía (entregado/finalizado)
 con su GPS — es lo que el administrador ve en el mapa. Un cierre manual del
 administrador no las llena.
 
-`agencia_razon_social`, `agencia_ruc`, `agencia_monto`: si en la foto de la
+`agencia_razon_social`, `agencia_ruc`, `agencia_monto`, `agencia_comprobante`: si en la foto de la
 guía viene pegado el comprobante de la agencia de transporte (boleta,
 factura o vale de encomienda), la IA lee quién lo emitió, su RUC y el total
-pagado, aunque la entrega no esté marcada como agencia. Se leen al registrar
+pagado, y el número del comprobante (así, si el mismo comprobante está en
+varias guías, el dashboard suma su monto una sola vez), aunque la entrega no
+esté marcada como agencia. Se leen al registrar
 la guía (de la foto de registro) y al entregarla (de la foto de entrega; si
 la IA tarda más de 6 s o falla, la entrega se guarda igual sin esos datos).
 

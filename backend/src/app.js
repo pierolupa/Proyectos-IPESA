@@ -470,11 +470,13 @@ function columnasComprobante(comprobante) {
     agencia_razon_social: comprobante?.razonSocial,
     agencia_ruc: comprobante?.ruc,
     agencia_monto: comprobante?.monto,
+    agencia_comprobante: comprobante?.numero,
   });
   return {
     agencia_razon_social: c.agencia_razon_social || '',
     agencia_ruc: c.agencia_ruc || '',
     agencia_monto: c.agencia_monto ?? '',
+    agencia_comprobante: c.agencia_comprobante || '',
   };
 }
 
@@ -490,7 +492,9 @@ const ESPERA_COMPROBANTE_MS = 6000;
 async function comprobanteDeEntrega(body, foto) {
   if (body && Object.prototype.hasOwnProperty.call(body, 'comprobante')) {
     const c = columnasComprobante(body.comprobante);
-    return c.agencia_razon_social || c.agencia_ruc || c.agencia_monto !== '' ? c : null;
+    return c.agencia_razon_social || c.agencia_ruc || c.agencia_monto !== '' || c.agencia_comprobante
+      ? c
+      : null;
   }
   if (!fotos.esFotoValida(foto)) return null;
   let espera;
@@ -506,6 +510,7 @@ async function comprobanteDeEntrega(body, foto) {
       agencia_razon_social: leido.agencia_razon_social || '',
       agencia_ruc: leido.agencia_ruc || '',
       agencia_monto: leido.agencia_monto ?? '',
+      agencia_comprobante: leido.agencia_comprobante || '',
     };
   } catch (err) {
     console.error(err);

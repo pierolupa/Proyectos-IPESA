@@ -33,10 +33,15 @@ comprobante, aunque la guía no diga que es una entrega en agencia:
   de IPESA (${RUC_IPESA}) ni el del cliente.
 - agencia_monto: el importe TOTAL pagado (con IGV), como número con punto \
   decimal, sin "S/" (ej. 70.00). Si hay subtotal, IGV y total, es el total.
+- agencia_comprobante: el número de ESE comprobante, serie y número (ej. \
+  "F017-0034441", "G003-0072373", "FV54-00000936", "0059-00136016"). NO el \
+  número de la guía de IPESA (T001-..., T028-...).
 
-Si no hay comprobante de agencia en la foto, usa null en esos 3 campos.`;
+Si no hay comprobante de agencia en la foto, usa null en esos 4 campos.`;
 
-const CAMPOS_COMPROBANTE = '"agencia_razon_social": string|null, "agencia_ruc": string|null, "agencia_monto": number|null';
+const CAMPOS_COMPROBANTE =
+  '"agencia_razon_social": string|null, "agencia_ruc": string|null, '
+  + '"agencia_monto": number|null, "agencia_comprobante": string|null';
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
@@ -124,16 +129,24 @@ function comprobanteDe(datos) {
   const monto = montoDe(datos?.agencia_monto);
   const rucValido = ruc.length === 11 && ruc !== RUC_IPESA ? ruc : null;
   const esIpesa = /^ipesa\b/i.test(razon);
+  // "N° F017 - 0034441" → "F017-0034441"; nunca el número de la guía.
+  const numero = String(datos?.agencia_comprobante ?? '')
+    .toUpperCase()
+    .replace(/N[°º]|\s/g, '');
+  const esGuia = /^T\d{3}-/.test(numero);
   return {
     agencia_razon_social: razon && !esIpesa ? razon : null,
     agencia_ruc: rucValido,
     agencia_monto: monto,
+    agencia_comprobante: numero && !esGuia ? numero : null,
   };
 }
 
 /** true si se leyó algo del comprobante. */
 function hayComprobante(c) {
-  return Boolean(c && (c.agencia_razon_social || c.agencia_ruc || c.agencia_monto));
+  return Boolean(
+    c && (c.agencia_razon_social || c.agencia_ruc || c.agencia_monto || c.agencia_comprobante),
+  );
 }
 
 function jsonDeLaIA(respuesta) {

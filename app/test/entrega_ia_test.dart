@@ -226,6 +226,7 @@ void main() {
       'razonSocial': 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
       'ruc': '20601857457',
       'monto': 13.0,
+      'numero': '',
     });
     expect(porNumero['T001-1']!.containsKey('comprobante'), isTrue);
     expect(porNumero['T001-1']!['comprobante'], isNull);

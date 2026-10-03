@@ -199,6 +199,8 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
               [
                 if (guia.agenciaRazonSocial.isNotEmpty)
                   'Razón social: ${guia.agenciaRazonSocial}',
+                if (guia.agenciaComprobante.isNotEmpty)
+                  'N° de comprobante: ${guia.agenciaComprobante}',
                 if (guia.agenciaRuc.isNotEmpty) 'RUC: ${guia.agenciaRuc}',
                 if (guia.agenciaMonto case final m?)
                   'Monto pagado: S/ ${m.toStringAsFixed(2)}',

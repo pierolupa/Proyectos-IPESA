@@ -315,6 +315,8 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
                     const SizedBox(height: 10),
                     _Dato('Agencia', guia.agenciaRazonSocial),
                     const SizedBox(height: 10),
+                    _Dato('N° de comprobante', guia.agenciaComprobante),
+                    const SizedBox(height: 10),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

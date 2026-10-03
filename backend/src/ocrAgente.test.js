@@ -25,7 +25,7 @@ describe('leerNumeroGuia', () => {
   it('manda los candidatos a la IA y devuelve el de la lista', async () => {
     responde({ numero_guia: 'T001-93506' });
     const r = await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T001-93506', 'T001-93507']);
-    expect(r).toEqual({ numero_guia: 'T001-93506', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null });
+    expect(r).toEqual({ numero_guia: 'T001-93506', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null, agencia_comprobante: null });
     const prompt = mockGenerateContent.mock.calls[0][0].contents[1].text;
     expect(prompt).toContain('- T001-93507');
   });
@@ -33,14 +33,14 @@ describe('leerNumeroGuia', () => {
   it('si la IA lo lee con ceros u otra forma, lo cambia por el de la lista', async () => {
     responde({ numero_guia: 'TOO1 - 0093507' });
     const r = await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T001-93506', 'T001-93507']);
-    expect(r).toEqual({ numero_guia: 'T001-93507', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null });
+    expect(r).toEqual({ numero_guia: 'T001-93507', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null, agencia_comprobante: null });
   });
 
   it('si no es de la lista devuelve lo leído, y null si no se ve', async () => {
     responde({ numero_guia: 'X999-1' });
-    expect(await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T001-1'])).toEqual({ numero_guia: 'X999-1', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null });
+    expect(await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T001-1'])).toEqual({ numero_guia: 'X999-1', agencia_razon_social: null, agencia_ruc: null, agencia_monto: null, agencia_comprobante: null });
     responde({ numero_guia: null });
-    expect(await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', [])).toEqual({ numero_guia: null, agencia_razon_social: null, agencia_ruc: null, agencia_monto: null });
+    expect(await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', [])).toEqual({ numero_guia: null, agencia_razon_social: null, agencia_ruc: null, agencia_monto: null, agencia_comprobante: null });
   });
 });
 
@@ -58,12 +58,17 @@ describe('comprobante de agencia', () => {
       agencia_razon_social: 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
       agencia_ruc: '20515659324',
       agencia_monto: 70,
+      agencia_comprobante: null,
     });
     expect(comprobanteDe({ agencia_ruc: '20101639275', agencia_razon_social: 'IPESA S.A.C.' })).toEqual({
       agencia_razon_social: null,
       agencia_ruc: null,
       agencia_monto: null,
+      agencia_comprobante: null,
     });
+    // El número del comprobante, limpio; nunca el número de la guía.
+    expect(comprobanteDe({ agencia_comprobante: 'N° g003 - 0072373' }).agencia_comprobante).toBe('G003-0072373');
+    expect(comprobanteDe({ agencia_comprobante: 'T001-95178' }).agencia_comprobante).toBeNull();
     expect(comprobanteDe({ agencia_monto: '1.234,50' }).agencia_monto).toBe(1234.5);
     expect(comprobanteDe({ agencia_monto: '13,00' }).agencia_monto).toBe(13);
     expect(comprobanteDe({ agencia_ruc: '2060185745' }).agencia_ruc).toBeNull();
@@ -74,11 +79,13 @@ describe('comprobante de agencia', () => {
       agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
       agencia_ruc: '20601857457',
       agencia_monto: 13,
+      agencia_comprobante: 'G003-0072373',
     });
     expect(await leerComprobante('ZmFrZQ==', 'image/jpeg')).toEqual({
       agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
       agencia_ruc: '20601857457',
       agencia_monto: 13,
+      agencia_comprobante: 'G003-0072373',
     });
   });
 
@@ -90,6 +97,7 @@ describe('comprobante de agencia', () => {
       agencia_razon_social: 'ITTSA',
       agencia_ruc: '20132272418',
       agencia_monto: 24,
+      agencia_comprobante: null,
     });
   });
 });

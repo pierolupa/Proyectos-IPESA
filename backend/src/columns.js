@@ -1,7 +1,7 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..AB.
+ * El orden de este arreglo es el orden real de las columnas A..AC.
  * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
  * el transportista la cerró (entregado/finalizado), para el mapa del admin.
  * foto_entrega_url = dónde quedó la foto de la entrega en Vercel Blob
@@ -21,7 +21,9 @@
  * agencia_razon_social, agencia_ruc, agencia_monto = el comprobante que da
  * la agencia de transporte (boleta, factura o vale de encomienda) cuando
  * viene pegado en la foto de la guía: quién lo emitió, su RUC y el total
- * pagado. La IA los lee aunque la entrega no esté marcada como agencia.
+ * pagado; agencia_comprobante es su número (ej. F017-0034441), para no
+ * sumar dos veces el monto si el mismo comprobante está en varias guías.
+ * La IA los lee aunque la entrega no esté marcada como agencia.
  */
 const COLUMNS = [
   'numero_guia',
@@ -52,6 +54,7 @@ const COLUMNS = [
   'agencia_razon_social',
   'agencia_ruc',
   'agencia_monto',
+  'agencia_comprobante',
 ];
 
 const ELIMINACION = Object.freeze({

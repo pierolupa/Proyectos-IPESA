@@ -683,13 +683,19 @@ describe('comprobante de agencia', () => {
       transportista: 'Juan Pérez',
       destinatario: 'WILMAQ E.I.R.L.',
       geo: { lat: -12, lng: -77 },
-      comprobante: { razonSocial: 'TURISMO INTERNACIONAL PALOMINO S.A.C.', ruc: '20515659324', monto: '70.00' },
+      comprobante: {
+        razonSocial: 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
+        ruc: '20515659324',
+        monto: '70.00',
+        numero: 'F017-0034441',
+      },
     });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
       agencia_razon_social: 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
       agencia_ruc: '20515659324',
       agencia_monto: 70,
+      agencia_comprobante: 'F017-0034441',
     });
   });
 

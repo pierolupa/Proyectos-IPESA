@@ -485,6 +485,57 @@ void main() {
     expect(soles(1234.5), 'S/ 1,234.50');
   });
 
+  test('El mismo comprobante en varias guías suma su monto una vez', () {
+    final ahora = DateTime(2026, 10, 3, 15);
+    Guia guia(
+      String numero,
+      String transportista,
+      num monto, {
+      String comprobante = '',
+      String razon = 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
+    }) => Guia.fromJson(
+      _guia(numero, 'entregado', transportista)
+        ..['fecha_creacion'] = DateTime(
+          2026,
+          10,
+          3,
+          8,
+        ).toUtc().toIso8601String()
+        ..['fecha_actualizacion'] = DateTime(
+          2026,
+          10,
+          3,
+          10,
+        ).toUtc().toIso8601String()
+        ..['agencia_razon_social'] = razon
+        ..['agencia_monto'] = monto
+        ..['agencia_comprobante'] = comprobante,
+    );
+    final datos = IndicadoresOperacion.calcular(
+      [
+        // Un comprobante de S/ 70 pegado en dos guías.
+        guia('A', 'Juan Pérez', 70, comprobante: 'F017-0034441'),
+        guia('B', 'Juan Pérez', 70, comprobante: 'F017-0034441'),
+        // En la tercera foto la IA no leyó el número: es el mismo.
+        guia('C', 'Juan Pérez', 70),
+        // Otro comprobante de la misma agencia: sí suma.
+        guia('D', 'Juan Pérez', 70, comprobante: 'F017-0034442'),
+        // Sin número, otra agencia el mismo día: es otro comprobante.
+        guia('E', 'Juan Pérez', 13, razon: 'SEÑOR DE LUREN EXPRESS E.I.R.L.'),
+        guia('F', 'Juan Pérez', 13, razon: 'SEÑOR DE LUREN EXPRESS E.I.R.L.'),
+      ],
+      PeriodoResumen.hoy,
+      ahora: ahora,
+    );
+    // 70 + 70 + 13 (E y F, sin número, mismo día y monto: uno solo).
+    expect(datos.costoAgencias, 153);
+    expect(datos.comprobantes, 3);
+    // 6 pedidos con monto: S/ 153 / 6.
+    expect(datos.costoPromedioAgencia, closeTo(25.5, 0.001));
+    final palomino = datos.agencias.first;
+    expect((palomino.pedidos, palomino.costo), (4, 140.0));
+  });
+
   test('Un rechazo cierra la tarea pero no cuenta como entrega', () {
     final ahora = DateTime(2026, 9, 29, 18);
     Guia guia(String numero, String estado) => Guia.fromJson(

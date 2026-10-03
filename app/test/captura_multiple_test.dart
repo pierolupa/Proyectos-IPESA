@@ -274,6 +274,7 @@ void main() {
       'razonSocial': 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
       'ruc': '20515659324',
       'monto': 70.0,
+      'numero': '',
     });
   });
 

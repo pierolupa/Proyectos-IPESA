@@ -73,33 +73,51 @@ class SesionUsuario {
 /// El comprobante de una agencia de transporte (boleta, factura o vale de
 /// encomienda) pegado en la guía, leído por la IA de la foto.
 class ComprobanteAgencia {
-  const ComprobanteAgencia({this.razonSocial = '', this.ruc = '', this.monto});
+  const ComprobanteAgencia({
+    this.razonSocial = '',
+    this.ruc = '',
+    this.monto,
+    this.numero = '',
+  });
 
   final String razonSocial;
   final String ruc;
   final double? monto;
 
+  /// Serie y número del comprobante (ej. F017-0034441).
+  final String numero;
+
   /// De la respuesta de la IA (agencia_*); null si no había comprobante.
   static ComprobanteAgencia? desdeIA(Map<String, dynamic> json) {
     final razon = '${json['agencia_razon_social'] ?? ''}'.trim();
     final ruc = '${json['agencia_ruc'] ?? ''}'.trim();
+    final numero = '${json['agencia_comprobante'] ?? ''}'.trim();
     final valor = json['agencia_monto'];
     final monto = valor is num
         ? valor.toDouble()
         : double.tryParse('${valor ?? ''}'.trim());
-    if (razon.isEmpty && ruc.isEmpty && monto == null) return null;
-    return ComprobanteAgencia(razonSocial: razon, ruc: ruc, monto: monto);
+    if (razon.isEmpty && ruc.isEmpty && monto == null && numero.isEmpty) {
+      return null;
+    }
+    return ComprobanteAgencia(
+      razonSocial: razon,
+      ruc: ruc,
+      monto: monto,
+      numero: numero,
+    );
   }
 
   Map<String, dynamic> toJson() => {
     'razonSocial': razonSocial,
     'ruc': ruc,
     'monto': monto,
+    'numero': numero,
   };
 
   /// En una línea, ej. "PALOMINO S.A.C. · RUC 20515659324 · S/ 70.00".
   String get resumen => [
     if (razonSocial.isNotEmpty) razonSocial,
+    if (numero.isNotEmpty) 'N° $numero',
     if (ruc.isNotEmpty) 'RUC $ruc',
     if (monto case final m?) 'S/ ${m.toStringAsFixed(2)}',
   ].join(' · ');
