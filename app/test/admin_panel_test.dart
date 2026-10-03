@@ -180,6 +180,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Al ver una agencia, suma cada comprobante una vez y muestra '
+      'el total', (tester) async {
+    Guia guia(String numero, String comprobante, num monto) => Guia.fromJson(
+      _guia(numero, 'finalizado', 'Victor Torres')
+        ..['fecha_creacion'] = _hoy10.toUtc().toIso8601String()
+        ..['agencia_razon_social'] = 'EMPRESA DE TRANSPORTES PERU BUS S.A'
+        ..['agencia_monto'] = monto
+        ..['agencia_comprobante'] = comprobante,
+    );
+    // Un comprobante de S/ 21 en dos guías y otro de S/ 35.
+    final guias = [
+      guia('T001-95318', 'V001-00087381', 21),
+      guia('T001-95310', 'V001-00087381', 21),
+      guia('T032-9744', 'V001-00087380', 35),
+    ];
+    final datos = IndicadoresOperacion.calcular(
+      guias,
+      PeriodoResumen.hoy,
+      ahora: _hoy10.add(const Duration(hours: 2)),
+    );
+    expect(datos.agencias.single.costo, 56);
+
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: AppState(
+          api: GuiasApi(
+            client: MockClient((_) async => http.Response('[]', 200)),
+          ),
+        ),
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => mostrarGuiasDelDashboard(
+                context,
+                'EMPRESA DE TRANSPORTES PERU BUS S.A',
+                guias,
+                periodo: 'Hoy',
+              ),
+              child: const Text('ver'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('ver'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 guías · Hoy'), findsOneWidget);
+    expect(
+      find.text('Total pagado: S/ 56.00 · 2 comprobantes'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('El panel filtra por estado con una lista desplegable', (
     tester,
   ) async {

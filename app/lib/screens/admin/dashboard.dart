@@ -62,6 +62,57 @@ class FilaAgencia {
   final List<Guia> guias = [];
 }
 
+/// Cuenta cada comprobante de agencia una vez aunque esté pegado en varias
+/// guías (el monto es uno solo).
+class ContadorComprobantes {
+  ContadorComprobantes(Iterable<Guia> guias)
+    : _delDiaConNumero = {
+        for (final g in guias)
+          if (g.agenciaComprobante.isNotEmpty) _delDia(g),
+      };
+
+  /// Si en otra guía sí se leyó el número, la que no lo tiene es esa misma.
+  final Set<String> _delDiaConNumero;
+  final _vistos = <String>{};
+
+  /// La misma agencia escrita con otros espacios o mayúsculas es una.
+  static String nombreAgencia(Guia g) => g.agenciaRazonSocial.isNotEmpty
+      ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
+      : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
+
+  /// Sin número leído: el mismo monto de la misma agencia, del mismo
+  /// transportista y el mismo día se toma como el mismo comprobante.
+  static String _delDia(Guia g) {
+    final creada = g.fechaCreacion.toLocal();
+    return '${nombreAgencia(g).toUpperCase()}|${g.agenciaMonto}'
+        '|${g.transportista.trim().toLowerCase()}'
+        '|${creada.year}-${creada.month}-${creada.day}';
+  }
+
+  /// ¿Es un comprobante que aún no se contó? (y lo marca como contado).
+  bool esNuevo(Guia g) {
+    if (!g.tieneComprobanteAgencia) return false;
+    if (g.agenciaComprobante.isNotEmpty) {
+      return _vistos.add('N|${g.agenciaComprobante}');
+    }
+    final clave = _delDia(g);
+    return !_delDiaConNumero.contains(clave) && _vistos.add('D|$clave');
+  }
+
+  /// Cuántos comprobantes distintos hay en las guías y cuánto suman.
+  static ({int comprobantes, double costo}) total(Iterable<Guia> guias) {
+    final contador = ContadorComprobantes(guias);
+    var comprobantes = 0;
+    var costo = 0.0;
+    for (final g in guias) {
+      if (!contador.esNuevo(g)) continue;
+      comprobantes++;
+      costo += g.agenciaMonto ?? 0;
+    }
+    return (comprobantes: comprobantes, costo: costo);
+  }
+}
+
 /// "S/ 1,234.50".
 String soles(double monto) => 'S/ ${NumberFormat('#,##0.00').format(monto)}';
 
@@ -79,27 +130,10 @@ class IndicadoresOperacion {
     final r = IndicadoresOperacion._(periodo);
     final ranking = <String, FilaRanking>{};
     final agencias = <String, FilaAgencia>{};
-    // Comprobantes ya contados: el mismo pegado en varias guías suma una vez.
-    final comprobantesVistos = <String>{};
-    // La misma agencia escrita con otros espacios o mayúsculas es una.
-    String nombreAgencia(Guia g) => g.agenciaRazonSocial.isNotEmpty
-        ? g.agenciaRazonSocial.replaceAll(RegExp(r'\s+'), ' ').trim()
-        : (g.agenciaRuc.isNotEmpty ? 'RUC ${g.agenciaRuc}' : 'Sin nombre');
-    // Sin número leído: el mismo monto de la misma agencia, del mismo
-    // transportista y el mismo día se toma como el mismo comprobante.
-    String delDia(Guia g) {
-      final creada = g.fechaCreacion.toLocal();
-      return '${nombreAgencia(g).toUpperCase()}|${g.agenciaMonto}'
-          '|${g.transportista.trim().toLowerCase()}'
-          '|${creada.year}-${creada.month}-${creada.day}';
-    }
-
-    // Si en otra guía sí se leyó el número, la que no lo tiene es esa misma.
-    final delDiaConNumero = {
-      for (final g in todas)
-        if (g.agenciaComprobante.isNotEmpty && periodo.incluye(g, ahora))
-          delDia(g),
-    };
+    // Cada comprobante suma una vez aunque esté pegado en varias guías.
+    final contador = ContadorComprobantes(
+      todas.where((g) => periodo.incluye(g, ahora)),
+    );
     final tiempos = <Duration>[];
     final sucursalesMin = {for (final s in sucursales) s.toLowerCase()};
 
@@ -135,7 +169,7 @@ class IndicadoresOperacion {
       }
       if (g.eliminacionPendiente) r.pidenEliminar.add(g);
       if (g.tieneComprobanteAgencia) {
-        final nombre = nombreAgencia(g);
+        final nombre = ContadorComprobantes.nombreAgencia(g);
         final fila = agencias.putIfAbsent(
           nombre.toUpperCase(),
           () => FilaAgencia(nombre),
@@ -143,12 +177,7 @@ class IndicadoresOperacion {
         fila.pedidos++;
         fila.guias.add(g);
         if (fila.ruc.isEmpty) fila.ruc = g.agenciaRuc;
-        final conNumero = g.agenciaComprobante.isNotEmpty;
-        final nuevo = conNumero
-            ? comprobantesVistos.add('N|${g.agenciaComprobante}')
-            : !delDiaConNumero.contains(delDia(g)) &&
-                  comprobantesVistos.add('D|${delDia(g)}');
-        if (nuevo) {
+        if (contador.esNuevo(g)) {
           r.comprobantes++;
           if (g.agenciaMonto case final m?) {
             fila.costo += m;
@@ -1615,6 +1644,7 @@ void mostrarGuiasDelDashboard(
   final cuantas = ordenadas.length == 1
       ? '1 guía'
       : '${ordenadas.length} guías';
+  final pagado = ContadorComprobantes.total(ordenadas);
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -1648,6 +1678,20 @@ void mostrarGuiasDelDashboard(
                           color: Ipesa.textoSuave,
                         ),
                       ),
+                      // Lo pagado a agencias: cada comprobante una vez.
+                      if (pagado.comprobantes > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Total pagado: ${soles(pagado.costo)} · '
+                            '${pagado.comprobantes == 1 ? '1 comprobante' : '${pagado.comprobantes} comprobantes'}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Ipesa.petroleo,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
