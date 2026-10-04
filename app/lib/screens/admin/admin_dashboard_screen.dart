@@ -226,7 +226,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 void abrirGuiaAdmin(BuildContext context, Guia guia) {
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => AdminGuiaEditScreen(numeroGuia: guia.numeroGuia),
+      builder: (_) => AdminGuiaEditScreen(
+        numeroGuia: guia.numeroGuia,
+        fechaCreacion: guia.fechaCreacion,
+      ),
     ),
   );
 }

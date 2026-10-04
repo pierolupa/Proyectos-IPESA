@@ -19,9 +19,17 @@ import '../../widgets/seccion_ubicacion.dart';
 /// administrador tiene acceso total para cambiar el estado de cualquier
 /// tarea y corregir el número de guía cuando el OCR falló.
 class AdminGuiaEditScreen extends StatefulWidget {
-  const AdminGuiaEditScreen({super.key, required this.numeroGuia});
+  const AdminGuiaEditScreen({
+    super.key,
+    required this.numeroGuia,
+    this.fechaCreacion,
+  });
 
   final String numeroGuia;
+
+  /// Cuál de las tareas con ese número (la misma guía puede registrarse de
+  /// nuevo tras un rechazo).
+  final DateTime? fechaCreacion;
 
   @override
   State<AdminGuiaEditScreen> createState() => _AdminGuiaEditScreenState();
@@ -86,7 +94,10 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final guia = appState.buscarPorNumero(widget.numeroGuia);
+    final guia = appState.buscarPorNumero(
+      widget.numeroGuia,
+      fechaCreacion: widget.fechaCreacion,
+    );
 
     if (guia == null) {
       return const Scaffold(body: Center(child: Text('Guía no encontrada.')));

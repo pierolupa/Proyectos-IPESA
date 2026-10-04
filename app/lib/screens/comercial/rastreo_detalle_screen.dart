@@ -20,13 +20,24 @@ final _fechaSello = DateFormat('dd/MM/yyyy · HH:mm');
 /// que se imprime sobre el paisaje (con el camión abajo) y un sello con el
 /// estado. Solo lectura; se actualiza sola.
 class RastreoDetalleScreen extends StatelessWidget {
-  const RastreoDetalleScreen({super.key, required this.numeroGuia});
+  const RastreoDetalleScreen({
+    super.key,
+    required this.numeroGuia,
+    this.fechaCreacion,
+  });
 
   final String numeroGuia;
 
+  /// Cuál de las tareas con ese número (la misma guía puede registrarse de
+  /// nuevo tras un rechazo).
+  final DateTime? fechaCreacion;
+
   @override
   Widget build(BuildContext context) {
-    final guia = context.watch<AppState>().buscarPorNumero(numeroGuia);
+    final guia = context.watch<AppState>().buscarPorNumero(
+      numeroGuia,
+      fechaCreacion: fechaCreacion,
+    );
     final ancho = MediaQuery.sizeOf(context).width;
     final altoEscena = ancho < 600 ? 170.0 : 220.0;
 

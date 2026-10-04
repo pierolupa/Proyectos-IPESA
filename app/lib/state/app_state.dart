@@ -382,8 +382,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// El registro más reciente con ese número de guía.
-  Guia? buscarPorNumero(String numeroGuia) {
-    final i = _indiceDe(numeroGuia);
+  /// La tarea con ese número; si se indica [fechaCreacion], exactamente esa
+  /// (una guía rechazada y vuelta a registrar son dos tareas distintas).
+  Guia? buscarPorNumero(String numeroGuia, {DateTime? fechaCreacion}) {
+    final i = _indiceDeRegistro(numeroGuia, fechaCreacion);
     return i == -1 ? null : _guias[i];
   }
 

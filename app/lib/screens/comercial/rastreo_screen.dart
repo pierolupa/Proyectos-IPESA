@@ -166,7 +166,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => !sinDatos && encontradas.length == 1
-            ? RastreoDetalleScreen(numeroGuia: encontradas.single.numeroGuia)
+            ? RastreoDetalleScreen(
+                numeroGuia: encontradas.single.numeroGuia,
+                fechaCreacion: encontradas.single.fechaCreacion,
+              )
             : RastreoResultadosScreen(filtros: filtros),
       ),
     );

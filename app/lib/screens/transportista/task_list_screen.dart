@@ -906,7 +906,10 @@ class _TarjetaTarea extends StatelessWidget {
 
   void _abrirDetalle(BuildContext context) => Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => GuiaDetailScreen(numeroGuia: guia.numeroGuia),
+      builder: (_) => GuiaDetailScreen(
+        numeroGuia: guia.numeroGuia,
+        fechaCreacion: guia.fechaCreacion,
+      ),
     ),
   );
 

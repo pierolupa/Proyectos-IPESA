@@ -12,9 +12,17 @@ import 'entrega_flow_screen.dart';
 import 'rechazo_sheet.dart';
 
 class GuiaDetailScreen extends StatelessWidget {
-  const GuiaDetailScreen({super.key, required this.numeroGuia});
+  const GuiaDetailScreen({
+    super.key,
+    required this.numeroGuia,
+    this.fechaCreacion,
+  });
 
   final String numeroGuia;
+
+  /// Cuál de las tareas con ese número (la misma guía puede registrarse de
+  /// nuevo tras un rechazo).
+  final DateTime? fechaCreacion;
 
   String? _tituloSiguientePaso(EstadoGuia estado, TipoEntrega tipo) {
     if (estado.esCerrada) return null;
@@ -31,7 +39,10 @@ class GuiaDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final guia = appState.buscarPorNumero(numeroGuia);
+    final guia = appState.buscarPorNumero(
+      numeroGuia,
+      fechaCreacion: fechaCreacion,
+    );
 
     if (guia == null) {
       return const Scaffold(body: Center(child: Text('Guía no encontrada.')));

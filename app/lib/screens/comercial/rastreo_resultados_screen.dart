@@ -247,7 +247,10 @@ class _Resultados extends StatelessWidget {
   void _abrir(BuildContext context, Guia guia) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RastreoDetalleScreen(numeroGuia: guia.numeroGuia),
+        builder: (_) => RastreoDetalleScreen(
+          numeroGuia: guia.numeroGuia,
+          fechaCreacion: guia.fechaCreacion,
+        ),
       ),
     );
   }

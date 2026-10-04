@@ -225,6 +225,50 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('La misma guía rechazada y luego entregada: cada tarjeta abre '
+      'su propia tarea', (tester) async {
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    await _abrirRastreo(
+      tester,
+      datos: [
+        _guia(
+          'T001-95221',
+          'entregado',
+          'ALTAVISTA INVERSIONES GLOBALES',
+          salida: hoy.add(const Duration(hours: 2)),
+          cierre: hoy.add(const Duration(hours: 3)),
+        ),
+        {
+          ..._guia(
+            'T001-95221',
+            'rechazado',
+            'ALTAVISTA INVERSIONES GLOBALES',
+            salida: hoy.add(const Duration(hours: 1)),
+          ),
+          'motivo_rechazo': 'Cliente cerrado',
+        },
+      ],
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° de guía'),
+      '95221',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 guías encontradas'), findsOneWidget);
+
+    await tester.tap(find.text('Rechazada'));
+    await tester.pumpAndSettle();
+    expect(find.text('RECHAZADA'), findsOneWidget);
+    expect(find.text('Motivo: Cliente cerrado'), findsOneWidget);
+    expect(find.text('ENTREGADO'), findsNothing);
+    expect(find.text('Ver foto'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Si nada coincide lo avisa sin salir de la búsqueda', (
     tester,
   ) async {
