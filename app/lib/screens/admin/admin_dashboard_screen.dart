@@ -9,6 +9,7 @@ import '../../models/guia.dart';
 import '../../services/notificador.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/marca_rpa.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
@@ -322,12 +323,14 @@ class _MenuAdmin extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const MarcaRpa(tamano: 44, claro: true, conEslogan: true),
+                const SizedBox(height: 14),
                 Image.asset(
                   'assets/brand/ipesa_blanco.png',
-                  width: 72,
+                  width: 60,
                   semanticLabel: 'IPESA',
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 const Text(
                   'Administrador',
                   style: TextStyle(
@@ -409,6 +412,13 @@ class _Cabecera extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 20, 8),
       child: Row(
         children: [
+          // En celular, el logo de RPA va antes del título; en pantallas
+          // anchas, el logo con el nombre y el eslogan, a la derecha.
+          if (angosta)
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: MarcaRpa(tamano: 38, conNombre: false),
+            ),
           if (onMenu != null)
             Padding(
               padding: const EdgeInsets.only(right: 14),
@@ -446,6 +456,11 @@ class _Cabecera extends StatelessWidget {
               ],
             ),
           ),
+          if (!angosta)
+            const Padding(
+              padding: EdgeInsets.only(left: 12, right: 14),
+              child: MarcaRpa(tamano: 42, conEslogan: true),
+            ),
           Padding(
             padding: EdgeInsets.only(left: angosta ? 6 : 8),
             child: BotonNovedades(

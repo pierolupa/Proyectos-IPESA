@@ -7,6 +7,7 @@ import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/marca_rpa.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
@@ -463,6 +464,10 @@ class _MenuTransportista extends StatelessWidget {
               ),
             ),
           ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: MarcaRpa(tamano: 40, conEslogan: true),
+          ),
           const SizedBox(height: 8),
           opcion(
             Icons.inventory_2_outlined,
@@ -516,6 +521,7 @@ class _Cabecera extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     final iniciales = nombre
         .split(' ')
         .where((p) => p.isNotEmpty)
@@ -603,6 +609,17 @@ class _Cabecera extends StatelessWidget {
                           style: Ipesa.titulo(19, color: Colors.white),
                         ),
                       ],
+                    ),
+                  ),
+                  // El logo de RPA; con espacio, también el nombre y el
+                  // eslogan.
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, right: 10),
+                    child: MarcaRpa(
+                      tamano: 38,
+                      claro: true,
+                      conNombre: ancho >= 700,
+                      conEslogan: ancho >= 900,
                     ),
                   ),
                   IconButton(

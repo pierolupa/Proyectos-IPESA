@@ -8,6 +8,7 @@ import '../services/guias_api.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/carrusel_marcas.dart';
+import '../widgets/marca_rpa.dart';
 import '../widgets/splash_ipesa.dart';
 import '../services/splash_html.dart';
 import 'admin/admin_dashboard_screen.dart';
@@ -618,7 +619,7 @@ class _Portada extends StatelessWidget {
                         constraints: BoxConstraints(maxWidth: 300 * escala),
                         child: Text(
                           conMarcaRpa
-                              ? 'La IA lo vio, el cliente lo firmó.'
+                              ? esloganRpa
                               : 'Guías, entregas y rastreo para el equipo de '
                                     'distribución de IPESA.',
                           style: TextStyle(
@@ -680,79 +681,13 @@ class _MarcaRpa extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            Image.asset(
-              'assets/brand/rpa_logo.png',
-              width: 64,
-              height: 64,
-              excludeFromSemantics: true,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'RPA',
-                    style: TextStyle(
-                      fontFamily: Ipesa.fuenteTitulos,
-                      fontSize: 36,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'REGISTRO DE PEDIDOS ATENDIDOS',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.6,
-                      color: Ipesa.textoSuave,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
-          decoration: BoxDecoration(
-            color: Ipesa.menta,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.auto_awesome_rounded,
-                size: 18,
-                color: Ipesa.turquesa,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'La IA lo vio, el cliente lo firmó.',
-                  style: TextStyle(
-                    fontFamily: Ipesa.fuenteTitulos,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Ipesa.petroleo,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        MarcaRpa(tamano: 64, conDescripcion: true),
+        SizedBox(height: 16),
+        EsloganRpa(tamano: 19),
       ],
     );
   }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../models/filtros_rastreo.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/marca_rpa.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/escena_ruta.dart';
 import 'rastreo_detalle_screen.dart';
@@ -404,6 +405,13 @@ class _Cabecera extends StatelessWidget {
                   'assets/brand/ipesa_blanco.png',
                   height: 18,
                   semanticLabel: 'IPESA',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: MarcaRpa(
+                  tamano: 36,
+                  conEslogan: MediaQuery.sizeOf(context).width >= 600,
                 ),
               ),
               const Spacer(),
