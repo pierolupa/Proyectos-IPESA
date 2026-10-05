@@ -240,7 +240,11 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (context, constraints) => Stack(
               children: [
                 const Positioned.fill(
-                  child: _Portada(margenSuperior: 72, escala: 1.35),
+                  child: _Portada(
+                    margenSuperior: 72,
+                    escala: 1.35,
+                    conMarcaRpa: false,
+                  ),
                 ),
                 Positioned(
                   left: -60,
@@ -259,7 +263,15 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(48),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 400),
-                child: _formulario(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const _MarcaRpa(),
+                    const SizedBox(height: 40),
+                    _formulario(context),
+                  ],
+                ),
               ),
             ),
           ),
@@ -461,16 +473,21 @@ class _Portada extends StatelessWidget {
     required this.margenSuperior,
     this.escala = 1,
     this.reservaInferior = 0,
+    this.conMarcaRpa = true,
   });
 
   final double margenSuperior;
   final double escala;
 
+  /// Con el logo y el nombre RPA arriba y el eslogan (celular). En
+  /// computadora van junto al formulario ([_MarcaRpa]).
+  final bool conMarcaRpa;
+
   /// Alto libre al pie (donde pasa la cinta verde): el contenido no lo usa.
   final double reservaInferior;
 
   // Alto (aprox.) de cada parte, para acomodar la portada al espacio.
-  static const _altoEtiqueta = 40.0;
+  double get _altoEtiqueta => conMarcaRpa ? 40.0 : 0.0;
   static const _proporcionLogo = 98 / 331;
 
   @override
@@ -545,49 +562,50 @@ class _Portada extends StatelessWidget {
                   children: [
                     // El nombre de la app: RPA, con su logo (la IA y la
                     // ruta) y lo que significa la sigla.
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Image.asset(
-                          'assets/brand/rpa_logo.png',
-                          width: 40,
-                          height: 40,
-                          excludeFromSemantics: true,
-                        ),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'RPA',
-                                style: TextStyle(
-                                  fontFamily: Ipesa.fuenteTitulos,
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  height: 1.05,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                              const Text(
-                                'REGISTRO DE PEDIDOS ATENDIDOS',
-                                maxLines: 1,
-                                overflow: TextOverflow.fade,
-                                softWrap: false,
-                                style: TextStyle(
-                                  color: Color(0xFFC9CFCD),
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.6,
-                                ),
-                              ),
-                            ],
+                    if (conMarcaRpa)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset(
+                            'assets/brand/rpa_logo.png',
+                            width: 40,
+                            height: 40,
+                            excludeFromSemantics: true,
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'RPA',
+                                  style: TextStyle(
+                                    fontFamily: Ipesa.fuenteTitulos,
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    height: 1.05,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                const Text(
+                                  'REGISTRO DE PEDIDOS ATENDIDOS',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.fade,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: Color(0xFFC9CFCD),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     SizedBox(height: espacio),
                     Image.asset(
                       'assets/brand/ipesa_blanco.png',
@@ -599,7 +617,10 @@ class _Portada extends StatelessWidget {
                       ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: 300 * escala),
                         child: Text(
-                          'La IA lo vio, el cliente lo firmó.',
+                          conMarcaRpa
+                              ? 'La IA lo vio, el cliente lo firmó.'
+                              : 'Guías, entregas y rastreo para el equipo de '
+                                    'distribución de IPESA.',
                           style: TextStyle(
                             fontSize: 17 * (escala > 1 ? 1.15 : 1),
                             height: 1.45,
@@ -648,6 +669,91 @@ class _CintaMarcas extends StatelessWidget {
           difuminar: false,
         ),
       ),
+    );
+  }
+}
+
+/// En computadora, arriba del formulario: el logo de RPA, qué significa la
+/// sigla y el eslogan.
+class _MarcaRpa extends StatelessWidget {
+  const _MarcaRpa();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Image.asset(
+              'assets/brand/rpa_logo.png',
+              width: 64,
+              height: 64,
+              excludeFromSemantics: true,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'RPA',
+                    style: TextStyle(
+                      fontFamily: Ipesa.fuenteTitulos,
+                      fontSize: 36,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'REGISTRO DE PEDIDOS ATENDIDOS',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.6,
+                      color: Ipesa.textoSuave,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+          decoration: BoxDecoration(
+            color: Ipesa.menta,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: Ipesa.turquesa,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'La IA lo vio, el cliente lo firmó.',
+                  style: TextStyle(
+                    fontFamily: Ipesa.fuenteTitulos,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Ipesa.petroleo,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
