@@ -433,10 +433,20 @@ class _Cabecera extends StatelessWidget {
                 icon: const Icon(Icons.menu_rounded, color: Colors.white),
               ),
             ),
-          if (!angosta) ...[
-            const MarcaRpa(tamano: 44, conEslogan: true),
-            const Spacer(),
-          ],
+          // La marca toma el espacio libre; si no alcanza, se achica (y
+          // sin el eslogan en pantallas medianas).
+          if (!angosta)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: MarcaRpa(
+                  tamano: 44,
+                  conEslogan: MediaQuery.sizeOf(context).width >= 1100,
+                ),
+              ),
+            ),
+          // En celular el título ocupa el espacio; en computadora mide lo
+          // que necesita y la marca toma el resto.
           Flexible(
             flex: angosta ? 1 : 0,
             fit: angosta ? FlexFit.tight : FlexFit.loose,
