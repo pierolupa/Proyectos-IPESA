@@ -218,17 +218,24 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 : 190.0;
             final suelo = math.max(altoEscena - 56, 112.0);
             final centrar = ancho >= 600;
-            Widget cabecera({bool conBarra = true, bool conSaludo = true}) =>
-                _Cabecera(
-                  saludo: saludo,
-                  conBarra: conBarra,
-                  conSaludo: conSaludo,
-                  onVolver: widget.desdeAdmin
-                      ? () => Navigator.of(context).pop()
-                      : null,
-                  onActualizar: appState.cargarGuias,
-                  onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
-                );
+            // En pantallas anchas la marca va grande en la esquina superior
+            // izquierda; en las demás, sobre el saludo.
+            final marcaEnEsquina = ancho >= 1000;
+            Widget cabecera({
+              bool conBarra = true,
+              bool conSaludo = true,
+              bool conMarca = true,
+            }) => _Cabecera(
+              saludo: saludo,
+              conBarra: conBarra,
+              conSaludo: conSaludo,
+              conMarca: conMarca,
+              onVolver: widget.desdeAdmin
+                  ? () => Navigator.of(context).pop()
+                  : null,
+              onActualizar: appState.cargarGuias,
+              onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
+            );
             final tarjeta = _TarjetaBusqueda(
               guia: _guia,
               cliente: _cliente,
@@ -317,7 +324,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                           20,
                                           24,
                                         ),
-                                        child: cabecera(conBarra: false),
+                                        child: cabecera(
+                                          conBarra: false,
+                                          conMarca: !marcaEnEsquina,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -334,14 +344,30 @@ class _RastreoScreenState extends State<RastreoScreen> {
                                     ),
                                   ),
                                 ),
-                                // Un poco más arriba que el centro exacto.
-                                if (centrar) const SizedBox(height: 48),
+                                // Más arriba que el centro exacto.
+                                if (centrar)
+                                  SizedBox(
+                                    height: _altoSinTeclado >= 900 ? 150 : 64,
+                                  ),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
+                    if (marcaEnEsquina)
+                      Positioned(
+                        left: 48,
+                        top: MediaQuery.paddingOf(context).top + 64,
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarcaRpa(tamano: 76, conDescripcion: true),
+                            SizedBox(height: 14),
+                            EsloganRpa(tamano: 20),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -361,6 +387,7 @@ class _Cabecera extends StatelessWidget {
     required this.saludo,
     this.conBarra = true,
     this.conSaludo = true,
+    this.conMarca = true,
     required this.onVolver,
     required this.onActualizar,
     required this.onCerrarSesion,
@@ -369,6 +396,9 @@ class _Cabecera extends StatelessWidget {
   final String saludo;
   final bool conBarra;
   final bool conSaludo;
+
+  /// La marca RPA sobre el saludo (no, si ya va en la esquina).
+  final bool conMarca;
   final VoidCallback? onVolver;
   final VoidCallback onActualizar;
   final VoidCallback? onCerrarSesion;
@@ -439,7 +469,9 @@ class _Cabecera extends StatelessWidget {
         if (conSaludo) ...[
           // La marca de la app sobre el saludo: grande, o más compacta en
           // celulares bajitos para que todo entre sin deslizar.
-          if (MediaQuery.sizeOf(context).height >= 800 ||
+          if (!conMarca)
+            const SizedBox.shrink()
+          else if (MediaQuery.sizeOf(context).height >= 800 ||
               MediaQuery.sizeOf(context).width >= 600) ...[
             const MarcaRpa(tamano: 60, conDescripcion: true),
             const SizedBox(height: 10),
