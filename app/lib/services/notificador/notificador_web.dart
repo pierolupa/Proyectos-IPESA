@@ -43,7 +43,7 @@ class Notificador {
     if (!permitido) return;
     final opciones = web.NotificationOptions(
       body: cuerpo,
-      icon: 'icons/Icon-192.png',
+      icon: 'icons/rpa-192.png',
       tag: tag,
       renotify: true,
     );
