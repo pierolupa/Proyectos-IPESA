@@ -407,13 +407,6 @@ class _Cabecera extends StatelessWidget {
                   semanticLabel: 'IPESA',
                 ),
               ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: MarcaRpa(
-                  tamano: 36,
-                  conEslogan: MediaQuery.sizeOf(context).width >= 600,
-                ),
-              ),
               const Spacer(),
               PopupMenuButton<VoidCallback>(
                 tooltip: 'Opciones',
@@ -444,6 +437,18 @@ class _Cabecera extends StatelessWidget {
           ),
         if (conBarra && conSaludo) const SizedBox(height: 12),
         if (conSaludo) ...[
+          // La marca de la app sobre el saludo: grande, o más compacta en
+          // celulares bajitos para que todo entre sin deslizar.
+          if (MediaQuery.sizeOf(context).height >= 800 ||
+              MediaQuery.sizeOf(context).width >= 600) ...[
+            const MarcaRpa(tamano: 60, conDescripcion: true),
+            const SizedBox(height: 10),
+            const EsloganRpa(tamano: 17),
+            const SizedBox(height: 22),
+          ] else ...[
+            const MarcaRpa(tamano: 48, conEslogan: true),
+            const SizedBox(height: 14),
+          ],
           Text(saludo, style: Ipesa.titulo(28)),
           const Text(
             'Sigue el recorrido de tus guías en tiempo real.',
