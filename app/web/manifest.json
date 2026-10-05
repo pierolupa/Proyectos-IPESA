@@ -1,11 +1,11 @@
 {
-    "name": "IPESA · Tracking Distribución",
-    "short_name": "IPESA",
+    "name": "RPA · Registro de Pedidos Atendidos",
+    "short_name": "RPA",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#000000",
     "theme_color": "#000000",
-    "description": "Guías, entregas y rastreo de IPESA.",
+    "description": "La IA lo vio, el cliente lo firmó. Registro de Pedidos Atendidos de IPESA.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

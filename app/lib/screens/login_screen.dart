@@ -90,6 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _precargarImagenes() async {
     final rutas = [
       'assets/brand/ipesa_blanco.png',
+      'assets/brand/rpa_logo.png',
       for (final (_, archivo) in marcasIpesa) 'assets/marcas/$archivo.png',
     ];
     try {
@@ -469,7 +470,7 @@ class _Portada extends StatelessWidget {
   final double reservaInferior;
 
   // Alto (aprox.) de cada parte, para acomodar la portada al espacio.
-  static const _altoEtiqueta = 18.0;
+  static const _altoEtiqueta = 40.0;
   static const _proporcionLogo = 98 / 331;
 
   @override
@@ -542,30 +543,47 @@ class _Portada extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // El nombre de la app: RPA, con su logo (la IA y la
+                    // ruta) y lo que significa la sigla.
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: _verdeIpesa,
-                            shape: BoxShape.circle,
-                          ),
+                        Image.asset(
+                          'assets/brand/rpa_logo.png',
+                          width: 40,
+                          height: 40,
+                          excludeFromSemantics: true,
                         ),
-                        const SizedBox(width: 10),
-                        const Flexible(
-                          child: Text(
-                            'TRACKING DISTRIBUCIÓN',
-                            maxLines: 1,
-                            overflow: TextOverflow.fade,
-                            softWrap: false,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 3,
-                            ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'RPA',
+                                style: TextStyle(
+                                  fontFamily: Ipesa.fuenteTitulos,
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 2,
+                                ),
+                              ),
+                              const Text(
+                                'REGISTRO DE PEDIDOS ATENDIDOS',
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                style: TextStyle(
+                                  color: Color(0xFFC9CFCD),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.6,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -581,8 +599,7 @@ class _Portada extends StatelessWidget {
                       ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: 300 * escala),
                         child: Text(
-                          'Guías, entregas y rastreo para el equipo de '
-                          'distribución de IPESA.',
+                          'La IA lo vio, el cliente lo firmó.',
                           style: TextStyle(
                             fontSize: 17 * (escala > 1 ? 1.15 : 1),
                             height: 1.45,

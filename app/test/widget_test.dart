@@ -69,6 +69,10 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
 
+    // El nombre de la app, lo que significa y su eslogan.
+    expect(find.text('RPA'), findsOneWidget);
+    expect(find.text('REGISTRO DE PEDIDOS ATENDIDOS'), findsOneWidget);
+    expect(find.text('La IA lo vio, el cliente lo firmó.'), findsOneWidget);
     expect(find.text('Ingresa a tu cuenta'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
     expect(find.text('Crea tu cuenta'), findsOneWidget);

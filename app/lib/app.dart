@@ -28,7 +28,7 @@ class IpesaGuiasApp extends StatelessWidget {
         ),
       child: MaterialApp(
         scaffoldMessengerKey: _avisos,
-        title: 'IPESA · Tracking Distribución',
+        title: 'RPA · Registro de Pedidos Atendidos',
         debugShowCheckedModeBanner: false,
         theme: buildAppTheme(),
         // Calendarios y textos de Material (p. ej. el selector de fechas
