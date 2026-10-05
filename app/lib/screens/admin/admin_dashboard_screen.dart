@@ -412,8 +412,9 @@ class _Cabecera extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 20, 20, 8),
       child: Row(
         children: [
-          // En celular, el logo de RPA va antes del título; en pantallas
-          // anchas, el logo con el nombre y el eslogan, a la derecha.
+          // En celular: el logo de RPA y el título a la izquierda. En
+          // pantallas anchas: la marca (logo, nombre y eslogan) a la
+          // izquierda, junto al menú, y el título de la sección a la derecha.
           if (angosta)
             const Padding(
               padding: EdgeInsets.only(right: 12),
@@ -432,15 +433,25 @@ class _Cabecera extends StatelessWidget {
                 icon: const Icon(Icons.menu_rounded, color: Colors.white),
               ),
             ),
-          Expanded(
+          if (!angosta) ...[
+            const MarcaRpa(tamano: 44, conEslogan: true),
+            const Spacer(),
+          ],
+          Flexible(
+            flex: angosta ? 1 : 0,
+            fit: angosta ? FlexFit.tight : FlexFit.loose,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: angosta
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.end,
               children: [
                 // En celular, con los botones al lado, el título se
                 // achica en vez de partirse en dos líneas.
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: angosta
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
                   child: Text(
                     titulo,
                     maxLines: 1,
@@ -456,11 +467,7 @@ class _Cabecera extends StatelessWidget {
               ],
             ),
           ),
-          if (!angosta)
-            const Padding(
-              padding: EdgeInsets.only(left: 12, right: 14),
-              child: MarcaRpa(tamano: 42, conEslogan: true),
-            ),
+          if (!angosta) const SizedBox(width: 10),
           Padding(
             padding: EdgeInsets.only(left: angosta ? 6 : 8),
             child: BotonNovedades(
