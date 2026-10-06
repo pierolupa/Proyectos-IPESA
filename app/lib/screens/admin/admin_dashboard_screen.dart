@@ -14,6 +14,7 @@ import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
 import '../../widgets/estado_badge.dart';
+import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/mapa_ubicacion.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
@@ -848,11 +849,11 @@ class TarjetaGuiaAdmin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final enSucursal =
-        guia.estado.esFinal &&
-        context.read<AppState>().sucursalPorNombre(guia.destino) != null;
+    // La sucursal y la fecha de entrega van en sus propias líneas
+    // (LugaresSucursal); aquí solo cuánto hace.
+    final enSucursal = sucursalDeEntrega(context, guia) != null;
     final detalle = enSucursal
-        ? 'entregada en ${guia.destino} ${haceCuanto(guia.fechaActualizacion)}'
+        ? haceCuanto(guia.fechaActualizacion)
         : guia.estado.esFinal && guia.tieneUbicacionCierre
         ? 'cerrada ${haceCuanto(guia.fechaActualizacion)} · ver en el mapa'
         : haceCuanto(guia.fechaActualizacion);
@@ -889,6 +890,7 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     : detalle,
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              LugaresSucursal(guia: guia, conCierre: true),
               if (guia.enDespachoCorte)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),

@@ -10,6 +10,7 @@ import '../../models/guia.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/escena_ruta.dart';
+import '../../widgets/lugares_sucursal.dart';
 import 'rastreo_detalle_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
@@ -422,8 +423,17 @@ class _FilaTabla extends StatelessWidget {
                 texto(1, g.destinatario),
                 texto(2, g.numeroPedido),
                 texto(3, g.numeroEntrega),
-                texto(4, _fechaHora.format(g.fechaCreacion.toLocal())),
-                texto(5, _fechaEntrega(g)),
+                texto(
+                  4,
+                  [
+                    _fechaHora.format(g.fechaCreacion.toLocal()),
+                    ?sucursalDeRecojo(context, g),
+                  ].join('\n'),
+                ),
+                texto(
+                  5,
+                  [_fechaEntrega(g), ?sucursalDeEntrega(context, g)].join('\n'),
+                ),
                 celda(
                   6,
                   // "En proceso de trasbordo" es largo: se achica para caber.
@@ -494,6 +504,7 @@ class _Tarjeta extends StatelessWidget {
                 '${guia.estado.esFinal ? ' · entregada ${_fechaEntrega(guia)}' : ''}',
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
+              LugaresSucursal(guia: guia),
             ],
           ),
         ),

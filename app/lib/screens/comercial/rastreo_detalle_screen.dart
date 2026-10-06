@@ -11,6 +11,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/escena_ruta.dart';
 import '../../widgets/foto_entrega.dart';
+import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/seccion_ubicacion.dart';
 
 final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
@@ -246,6 +247,8 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final guia = widget.guia;
     final (sello, fechaSello) = _textoSello(guia);
+    final recojo = sucursalDeRecojo(context, guia);
+    final entrega = sucursalDeEntrega(context, guia);
     final color = guia.estado.color;
 
     final boleto = DecoratedBox(
@@ -341,6 +344,17 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
                                 : 'S/ ${guia.agenciaMonto!.toStringAsFixed(2)}',
                           ),
                         ),
+                      ],
+                    ),
+                  ],
+                  if (recojo != null || entrega != null) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _Dato('Recogida en', recojo ?? '—')),
+                        const SizedBox(width: 16),
+                        Expanded(child: _Dato('Entregada en', entrega ?? '—')),
                       ],
                     ),
                   ],
