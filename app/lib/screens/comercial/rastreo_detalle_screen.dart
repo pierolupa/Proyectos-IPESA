@@ -70,11 +70,16 @@ class RastreoDetalleScreen extends StatelessWidget {
                         const _BarraSuperior(),
                         Center(
                           child: ConstrainedBox(
-                            // En la PC la guía se abre a lo ancho (datos a
-                            // la izquierda, sello a la derecha) para que
-                            // todo entre en una sola vista.
+                            // Con comprobante de agencia (más datos), en la
+                            // PC la guía se abre a lo ancho (datos a la
+                            // izquierda, sello a la derecha) para que todo
+                            // entre en una sola vista; si no, como siempre.
                             constraints: BoxConstraints(
-                              maxWidth: ancho >= 900 ? 880 : 440,
+                              maxWidth:
+                                  ancho >= 900 &&
+                                      (guia?.tieneComprobanteAgencia ?? false)
+                                  ? 880
+                                  : 440,
                             ),
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),

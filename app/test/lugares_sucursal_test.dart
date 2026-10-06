@@ -203,4 +203,31 @@ void main() {
       expect(find.text('Agencia'), findsOneWidget);
     },
   );
+
+  testWidgets('En la PC solo la guía de agencia se abre a lo ancho', (
+    tester,
+  ) async {
+    final appState = await _estado();
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Future<bool> talonAlCostado(String numero) async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: appState,
+          child: MaterialApp(
+            key: ValueKey(numero),
+            home: RastreoDetalleScreen(numeroGuia: numero),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Al costado, «Ver foto» queda más arriba que el transportista.
+      return tester.getTopLeft(find.text('Ver foto')).dy <
+          tester.getTopLeft(find.text('Transportista')).dy;
+    }
+
+    expect(await talonAlCostado('T028-5'), isTrue);
+    expect(await talonAlCostado('T028-2'), isFalse);
+  });
 }
