@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-/// Fondo de la pantalla de carga: el negro del logo de IPESA.
-const colorSplash = Color(0xFF000000);
+/// Fondo de la pantalla de carga: el del ícono de RPA (el mismo de
+/// web/index.html y manifest.json).
+const colorSplash = Color(0xFF14232A);
 
 /// Pantalla de carga: logo IPESA, "CARGANDO DATOS" y una ruedita.
 ///

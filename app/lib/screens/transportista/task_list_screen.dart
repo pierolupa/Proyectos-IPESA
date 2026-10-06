@@ -246,7 +246,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
           child: _TodoEntregado(
             entregadasHoy: entregadasHoy,
             onNuevaGuia: _nuevaGuia,
-            onDespachoCorte: _despachoCorte,
           ),
         ),
       );
@@ -728,12 +727,10 @@ class _TodoEntregado extends StatelessWidget {
   const _TodoEntregado({
     required this.entregadasHoy,
     required this.onNuevaGuia,
-    required this.onDespachoCorte,
   });
 
   final int entregadasHoy;
   final VoidCallback onNuevaGuia;
-  final VoidCallback onDespachoCorte;
 
   @override
   Widget build(BuildContext context) {
@@ -793,18 +790,6 @@ class _TodoEntregado extends StatelessWidget {
                   onPressed: onNuevaGuia,
                   icon: const Icon(Icons.photo_camera_outlined),
                   label: const Text('Nueva guía'),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: onDespachoCorte,
-                  icon: const Icon(Icons.inventory_2_outlined),
-                  label: const Text('Despacho Corte'),
                 ),
               ],
             ),

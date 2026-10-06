@@ -101,6 +101,8 @@ void main() {
     expect(find.textContaining('Entregaste 2 guías hoy'), findsOneWidget);
     // "Nueva guía" queda en la tarjeta (sin el botón flotante repetido).
     expect(find.text('Nueva guía'), findsOneWidget);
+    // Despacho Corte solo está en el menú ☰, no en la vista principal.
+    expect(find.text('Despacho Corte'), findsNothing);
     // No hay nada que buscar.
     expect(find.byType(TextField), findsNothing);
     expect(find.text('100%'), findsOneWidget);
