@@ -1127,8 +1127,11 @@ class _Columna extends StatelessWidget {
   }
 
   Widget _barra(double ancho) {
-    final altoEntregadas = alto * punto.entregadas / tope;
-    final altoRechazadas = alto * punto.rechazadas / tope;
+    // El separador de 2 px entre los dos tramos sale del mismo alto, para
+    // que la barra más alta no se pase de la columna.
+    final hueco = punto.rechazadas > 0 && punto.entregadas > 0 ? 2.0 : 0.0;
+    final altoEntregadas = (alto - hueco) * punto.entregadas / tope;
+    final altoRechazadas = (alto - hueco) * punto.rechazadas / tope;
     const extremo = Radius.circular(4);
     return Container(
       // Zona de toque de todo el alto, más ancha que la barra.
@@ -1152,8 +1155,7 @@ class _Columna extends StatelessWidget {
                         borderRadius: BorderRadius.vertical(top: extremo),
                       ),
                     ),
-                  if (punto.rechazadas > 0 && punto.entregadas > 0)
-                    const SizedBox(height: 2),
+                  if (hueco > 0) SizedBox(height: hueco),
                   if (punto.entregadas > 0)
                     Container(
                       height: altoEntregadas,
