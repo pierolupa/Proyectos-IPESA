@@ -27,21 +27,30 @@ Señor de Luren, ITTSA, GH Bus, Shalom, Marvisur). Si lo hay, lee de ESE \
 comprobante, aunque la guía no diga que es una entrega en agencia:
 
 - agencia_razon_social: la razón social de la empresa que EMITE el \
-  comprobante (la agencia, la del logo/encabezado). NO es IPESA ni el \
-  cliente ni el consignado.
+  comprobante (la agencia, la del logo/encabezado), copiada tal cual está \
+  impresa (ej. "SHALOM EMPRESARIAL S.A.C."). NO es IPESA ni el cliente ni \
+  el consignado.
 - agencia_ruc: el RUC de esa agencia (11 dígitos, solo números). NO el RUC \
   de IPESA (${RUC_IPESA}) ni el del cliente.
 - agencia_monto: el importe TOTAL pagado (con IGV), como número con punto \
   decimal, sin "S/" (ej. 70.00). Si hay subtotal, IGV y total, es el total.
-- agencia_comprobante: el número de ESE comprobante, serie y número (ej. \
-  "F017-0034441", "G003-0072373", "FV54-00000936", "0059-00136016"). NO el \
-  número de la guía de IPESA (T001-..., T028-...).
+- agencia_comprobante: el número propio de ESE comprobante: su serie y \
+  número (ej. "F017-0034441", "G003-0072373", "FV54-00000936", \
+  "0059-00136016"). Si es un ticket sin serie y número de boleta o factura, \
+  usa su número de orden o de ticket (ej. en Shalom, "NRO. ORDEN: 98678356" \
+  → "98678356"). NUNCA el número de la guía de IPESA (T001-..., T028-...), \
+  ni la guía que el ticket solo menciona (GRR, "guía de remisión", ej. \
+  "GRR: 001-0095448"), ni el código o la clave de seguridad.
+- agencia_guia_referida: la guía de remisión que el comprobante menciona \
+  (GRR o similar), tal cual; null si no menciona ninguna. Sirve para no \
+  confundirla con el número del comprobante.
 
-Si no hay comprobante de agencia en la foto, usa null en esos 4 campos.`;
+Si no hay comprobante de agencia en la foto, usa null en esos 5 campos.`;
 
 const CAMPOS_COMPROBANTE =
   '"agencia_razon_social": string|null, "agencia_ruc": string|null, '
-  + '"agencia_monto": number|null, "agencia_comprobante": string|null';
+  + '"agencia_monto": number|null, "agencia_comprobante": string|null, '
+  + '"agencia_guia_referida": string|null';
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
@@ -130,10 +139,13 @@ function comprobanteDe(datos) {
   const rucValido = ruc.length === 11 && ruc !== RUC_IPESA ? ruc : null;
   const esIpesa = /^ipesa\b/i.test(razon);
   // "N° F017 - 0034441" → "F017-0034441"; nunca el número de la guía.
-  const numero = String(datos?.agencia_comprobante ?? '')
-    .toUpperCase()
-    .replace(/N[°º]|\s/g, '');
-  const esGuia = /^T\d{3}-/.test(numero);
+  const limpio = (v) => String(v ?? '').toUpperCase().replace(/N[°º]|\s/g, '');
+  const numero = limpio(datos?.agencia_comprobante);
+  // Ni la guía de IPESA ni la guía que el ticket solo menciona (GRR).
+  const referida = limpio(datos?.agencia_guia_referida).replace(/^GRR:?/, '');
+  const esGuia = /^T\d{3}-/.test(numero)
+    || /^GRR/.test(numero)
+    || (referida !== '' && numero === referida);
   return {
     agencia_razon_social: razon && !esIpesa ? razon : null,
     agencia_ruc: rucValido,

@@ -69,6 +69,10 @@ describe('comprobante de agencia', () => {
     // El número del comprobante, limpio; nunca el número de la guía.
     expect(comprobanteDe({ agencia_comprobante: 'N° g003 - 0072373' }).agencia_comprobante).toBe('G003-0072373');
     expect(comprobanteDe({ agencia_comprobante: 'T001-95178' }).agencia_comprobante).toBeNull();
+    // Ticket de Shalom: la GRR que menciona no es su número; su N° de orden sí.
+    expect(comprobanteDe({ agencia_comprobante: '001-0095448', agencia_guia_referida: 'GRR: 001-0095448' }).agencia_comprobante).toBeNull();
+    expect(comprobanteDe({ agencia_comprobante: 'GRR: 001-0095448' }).agencia_comprobante).toBeNull();
+    expect(comprobanteDe({ agencia_comprobante: '98678356', agencia_guia_referida: '001-0095448' }).agencia_comprobante).toBe('98678356');
     expect(comprobanteDe({ agencia_monto: '1.234,50' }).agencia_monto).toBe(1234.5);
     expect(comprobanteDe({ agencia_monto: '13,00' }).agencia_monto).toBe(13);
     expect(comprobanteDe({ agencia_ruc: '2060185745' }).agencia_ruc).toBeNull();
