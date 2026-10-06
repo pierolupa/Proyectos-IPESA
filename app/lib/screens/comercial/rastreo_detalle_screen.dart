@@ -248,7 +248,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
     final guia = widget.guia;
     final (sello, fechaSello) = _textoSello(guia);
     final recojo = sucursalDeRecojo(context, guia);
-    final entrega = sucursalDeEntrega(context, guia);
+    final entrega = lugarDeEntrega(context, guia);
     final color = guia.estado.color;
 
     final boleto = DecoratedBox(
@@ -352,9 +352,20 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: _Dato('Recogida en', recojo ?? '—')),
-                        const SizedBox(width: 16),
-                        Expanded(child: _Dato('Entregada en', entrega ?? '—')),
+                        // El recojo solo cuando fue en una de las nuestras.
+                        if (recojo != null) ...[
+                          Expanded(child: _Dato('Recogida en', recojo)),
+                          const SizedBox(width: 16),
+                        ],
+                        Expanded(
+                          child: _Dato(
+                            'Entregada en',
+                            entrega ??
+                                (guia.estado == EstadoGuia.rechazado
+                                    ? 'No se entregó'
+                                    : 'Aún en ruta'),
+                          ),
+                        ),
                       ],
                     ),
                   ],

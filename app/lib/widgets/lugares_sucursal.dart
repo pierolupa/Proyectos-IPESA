@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
+import '../models/tipo_entrega.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 
@@ -28,6 +29,20 @@ String? sucursalDeRecojo(BuildContext context, Guia g) =>
 String? sucursalDeEntrega(BuildContext context, Guia g) => g.estado.esFinal
     ? context.read<AppState>().sucursalPorNombre(g.destino)?.nombre
     : null;
+
+/// Dónde se entregó la guía: la sucursal si fue en una de las nuestras;
+/// si no, "Agencia" (con su nombre si se leyó el comprobante) o
+/// "Cliente". null si todavía no se entregó.
+String? lugarDeEntrega(BuildContext context, Guia g) {
+  if (!g.estado.esFinal) return null;
+  final sucursal = sucursalDeEntrega(context, g);
+  if (sucursal != null) return sucursal;
+  if (g.tipoEntrega == TipoEntrega.agencia) {
+    final nombre = g.agenciaRazonSocial.trim();
+    return nombre.isEmpty ? 'Agencia' : 'Agencia $nombre';
+  }
+  return 'Cliente';
+}
 
 /// Dónde se recogió y dónde se entregó la guía, solo cuando es una de
 /// nuestras sucursales. Con [conCierre] agrega además la fecha y hora en
@@ -70,7 +85,11 @@ class LugaresSucursal extends StatelessWidget {
           icono: rechazada
               ? Icons.block_rounded
               : Icons.event_available_outlined,
-          texto: '${rechazada ? 'Rechazada' : 'Entregada'} $fecha',
+          texto: rechazada
+              ? 'Rechazada $fecha'
+              : guia.tipoEntrega == TipoEntrega.agencia
+              ? 'Entregada en agencia · $fecha'
+              : 'Entregada al cliente · $fecha',
           color: guia.estado.color,
         ),
     ];

@@ -22,10 +22,13 @@ Map<String, dynamic> _guia(
   String origen = 'Almacen Ate',
   String destino = 'Almacen Ate',
   bool cerrada = true,
+  String tipo = 'cliente_final',
+  String agencia = '',
 }) => {
   'numero_guia': numero,
   'estado': estado,
-  'tipo_entrega': 'cliente_final',
+  'tipo_entrega': tipo,
+  'agencia_razon_social': agencia,
   'origen': origen,
   'destino': destino,
   'transportista': 'Victor Torres',
@@ -49,6 +52,15 @@ final _datos = [
   // Salió de la sucursal y sigue en ruta.
   _guia('T028-3', 'en_ruta', destino: 'Jr. Lima 100', cerrada: false),
   _guia('T028-4', 'rechazado', destino: 'Jr. Lima 100'),
+  // Enviada por agencia, desde una dirección cualquiera.
+  _guia(
+    'T028-5',
+    'finalizado',
+    origen: 'Av. Nicolás Ayllón 2241, Ate',
+    destino: 'Pucallpa',
+    tipo: 'agencia',
+    agencia: 'SHALOM EMPRESARIAL S.A.C.',
+  ),
 ];
 
 Future<AppState> _estado() async {
@@ -107,7 +119,7 @@ void main() {
 
     expect(find.textContaining('Recogida en'), findsNothing);
     expect(find.textContaining('Entregada en'), findsNothing);
-    expect(find.text('Entregada $hora'), findsOneWidget);
+    expect(find.text('Entregada al cliente · $hora'), findsOneWidget);
   });
 
   testWidgets('En ruta muestra solo la sucursal de recojo; rechazada su hora', (
@@ -151,4 +163,42 @@ void main() {
     expect(find.text('Entregada en'), findsOneWidget);
     expect(find.text('Almacen Ate'), findsNWidgets(2));
   });
+
+  testWidgets(
+    'Fuera de sucursales dice si se entregó al cliente o en agencia',
+    (tester) async {
+      final appState = await _estado();
+      await _tarjeta(
+        tester,
+        appState,
+        appState.guias.indexWhere((g) => g.numeroGuia == 'T028-5'),
+      );
+      expect(find.text('Entregada en agencia · $hora'), findsOneWidget);
+
+      tester.view.physicalSize = const Size(400, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      Future<void> detalle(String numero) async {
+        await tester.pumpWidget(
+          ChangeNotifierProvider.value(
+            value: appState,
+            child: MaterialApp(
+              key: ValueKey(numero),
+              home: RastreoDetalleScreen(numeroGuia: numero),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await detalle('T028-2');
+      expect(find.text('Recogida en'), findsNothing);
+      expect(find.text('Entregada en'), findsOneWidget);
+      // La etiqueta «Cliente» del destinatario y el lugar de entrega.
+      expect(find.text('Cliente'), findsNWidgets(2));
+
+      await detalle('T028-5');
+      expect(find.text('Agencia SHALOM EMPRESARIAL S.A.C.'), findsOneWidget);
+    },
+  );
 }
