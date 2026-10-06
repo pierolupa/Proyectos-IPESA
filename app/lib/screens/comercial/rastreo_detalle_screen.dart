@@ -70,7 +70,12 @@ class RastreoDetalleScreen extends StatelessWidget {
                         const _BarraSuperior(),
                         Center(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 440),
+                            // En la PC la guía se abre a lo ancho (datos a
+                            // la izquierda, sello a la derecha) para que
+                            // todo entre en una sola vista.
+                            constraints: BoxConstraints(
+                              maxWidth: ancho >= 900 ? 880 : 440,
+                            ),
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
                               child: guia == null
@@ -248,8 +253,157 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
     final guia = widget.guia;
     final (sello, fechaSello) = _textoSello(guia);
     final recojo = sucursalDeRecojo(context, guia);
-    final entrega = lugarDeEntrega(context, guia);
+    // Con el comprobante a la vista, el nombre de la agencia no se repite.
+    final entrega =
+        guia.tieneComprobanteAgencia &&
+            sucursalDeEntrega(context, guia) == null &&
+            guia.tipoEntrega == TipoEntrega.agencia &&
+            guia.estado.esFinal
+        ? 'Agencia'
+        : lugarDeEntrega(context, guia);
     final color = guia.estado.color;
+
+    final datos = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _Etiqueta('N° de guía'),
+          Text(guia.numeroGuia, style: Ipesa.titulo(30, color: Ipesa.texto)),
+          const SizedBox(height: 10),
+          const _Etiqueta('Cliente'),
+          Text(
+            guia.destinatario.isEmpty ? '—' : guia.destinatario,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Ipesa.texto,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _Dato('N° pedido', guia.numeroPedido)),
+              const SizedBox(width: 16),
+              Expanded(child: _Dato('N° entrega', guia.numeroEntrega)),
+            ],
+          ),
+          if (guia.tieneComprobanteAgencia) ...[
+            const SizedBox(height: 12),
+            _BloqueAgencia(guia: guia),
+          ],
+          if (recojo != null || entrega != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // El recojo solo cuando fue en una de las nuestras.
+                if (recojo != null) ...[
+                  Expanded(child: _Dato('Recogida en', recojo)),
+                  const SizedBox(width: 16),
+                ],
+                Expanded(
+                  child: _Dato(
+                    'Entregada en',
+                    entrega ??
+                        (guia.estado == EstadoGuia.rechazado
+                            ? 'No se entregó'
+                            : 'Aún en ruta'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _Dato(
+                  'Salió',
+                  _fechaHora.format(guia.fechaCreacion.toLocal()),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _Dato(
+                  'Transportista',
+                  guia.transbordoAceptado && guia.transbordoDe.isNotEmpty
+                      ? '${guia.transportista} (transbordo de '
+                            '${guia.transbordoDe})'
+                      : guia.transportista,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    final talon = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: FadeTransition(
+              opacity: _opacidadSello,
+              child: ScaleTransition(
+                scale: _escalaSello,
+                // Inclinado, sus esquinas salen de su caja: el
+                // margen vertical las deja libres; y si el texto es
+                // largo (EN TRASBORDO) se achica para caber.
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 14, 8, 14),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Transform.rotate(
+                      angle: -9 * math.pi / 180,
+                      child: _Sello(
+                        texto: sello,
+                        fecha: fechaSello,
+                        color: color,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (guia.motivoRechazo.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Motivo: ${guia.motivoRechazo}',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: color),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              if (guia.estado.esFinal) ...[
+                Expanded(
+                  child: _BotonBoleto(
+                    texto: 'Ver foto',
+                    icono: Icons.photo_camera_outlined,
+                    onPressed: _verFoto,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: _BotonBoleto(
+                  texto: 'Ubicación',
+                  icono: Icons.place_outlined,
+                  onPressed: _verUbicacion,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
 
     final boleto = DecoratedBox(
       decoration: BoxDecoration(
@@ -268,196 +422,33 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              color: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/brand/ipesa_blanco.png',
-                    height: 18,
-                    semanticLabel: 'IPESA',
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Text(
-                      'GUÍA DE REMISIÓN',
-                      textAlign: TextAlign.right,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Color(0xFFC9CFCD),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 2.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            const _Encabezado(),
             Container(height: 4, color: const Color(0xFF0E7A3A)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _Etiqueta('N° de guía'),
-                  Text(
-                    guia.numeroGuia,
-                    style: Ipesa.titulo(30, color: Ipesa.texto),
-                  ),
-                  const SizedBox(height: 10),
-                  const _Etiqueta('Cliente'),
-                  Text(
-                    guia.destinatario.isEmpty ? '—' : guia.destinatario,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Ipesa.texto,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _Dato('N° pedido', guia.numeroPedido)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _Dato('N° entrega', guia.numeroEntrega)),
-                    ],
-                  ),
-                  if (guia.tieneComprobanteAgencia) ...[
-                    const SizedBox(height: 10),
-                    _Dato('Agencia', guia.agenciaRazonSocial),
-                    const SizedBox(height: 10),
-                    _Dato('N° de comprobante', guia.agenciaComprobante),
-                    const SizedBox(height: 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: _Dato('RUC agencia', guia.agenciaRuc)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _Dato(
-                            'Monto pagado',
-                            guia.agenciaMonto == null
-                                ? ''
-                                : 'S/ ${guia.agenciaMonto!.toStringAsFixed(2)}',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (recojo != null || entrega != null) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // El recojo solo cuando fue en una de las nuestras.
-                        if (recojo != null) ...[
-                          Expanded(child: _Dato('Recogida en', recojo)),
-                          const SizedBox(width: 16),
-                        ],
-                        Expanded(
-                          child: _Dato(
-                            'Entregada en',
-                            entrega ??
-                                (guia.estado == EstadoGuia.rechazado
-                                    ? 'No se entregó'
-                                    : 'Aún en ruta'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _Dato(
-                          'Salió',
-                          _fechaHora.format(guia.fechaCreacion.toLocal()),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _Dato(
-                          'Transportista',
-                          guia.transbordoAceptado &&
-                                  guia.transbordoDe.isNotEmpty
-                              ? '${guia.transportista} (transbordo de '
-                                    '${guia.transbordoDe})'
-                              : guia.transportista,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const _Corte(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: FadeTransition(
-                      opacity: _opacidadSello,
-                      child: ScaleTransition(
-                        scale: _escalaSello,
-                        // Inclinado, sus esquinas salen de su caja: el
-                        // margen vertical las deja libres; y si el texto es
-                        // largo (EN TRASBORDO) se achica para caber.
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 14, 8, 14),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Transform.rotate(
-                              angle: -9 * math.pi / 180,
-                              child: _Sello(
-                                texto: sello,
-                                fecha: fechaSello,
-                                color: color,
-                              ),
+            LayoutBuilder(
+              builder: (context, c) => c.maxWidth >= 700
+                  // Ancho: el talón con el sello va al costado, como el de
+                  // un boleto, y la guía entra en una sola vista.
+                  ? IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: datos),
+                          const _CorteVertical(),
+                          SizedBox(
+                            width: 330,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [talon],
                             ),
                           ),
-                        ),
+                        ],
                       ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [datos, const _Corte(), talon],
                     ),
-                  ),
-                  if (guia.motivoRechazo.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      'Motivo: ${guia.motivoRechazo}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: color),
-                    ),
-                  ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      if (guia.estado.esFinal) ...[
-                        Expanded(
-                          child: _BotonBoleto(
-                            texto: 'Ver foto',
-                            icono: Icons.photo_camera_outlined,
-                            onPressed: _verFoto,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                      ],
-                      Expanded(
-                        child: _BotonBoleto(
-                          texto: 'Ubicación',
-                          icono: Icons.place_outlined,
-                          onPressed: _verUbicacion,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -563,12 +554,155 @@ class _MediaLuna extends StatelessWidget {
   );
 }
 
+/// La franja negra de arriba, con el logo de IPESA.
+class _Encabezado extends StatelessWidget {
+  const _Encabezado();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: Colors.black,
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    child: Row(
+      children: [
+        Image.asset(
+          'assets/brand/ipesa_blanco.png',
+          height: 18,
+          semanticLabel: 'IPESA',
+        ),
+        const SizedBox(width: 16),
+        const Expanded(
+          child: Text(
+            'GUÍA DE REMISIÓN',
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Color(0xFFC9CFCD),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2.4,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Los datos del comprobante de agencia, juntos en un recuadro para que no
+/// alarguen la guía.
+class _BloqueAgencia extends StatelessWidget {
+  const _BloqueAgencia({required this.guia});
+
+  final Guia guia;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Ipesa.fondo,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Ipesa.borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.receipt_long_outlined,
+                size: 16,
+                color: Ipesa.petroleo,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  guia.agenciaRazonSocial.isEmpty
+                      ? 'Comprobante de agencia'
+                      : guia.agenciaRazonSocial,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Ipesa.texto,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 4,
+                child: _Dato('N° comprobante', guia.agenciaComprobante),
+              ),
+              const SizedBox(width: 10),
+              Expanded(flex: 4, child: _Dato('RUC', guia.agenciaRuc)),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 3,
+                child: _Dato(
+                  'Monto',
+                  guia.agenciaMonto == null
+                      ? ''
+                      : 'S/ ${guia.agenciaMonto!.toStringAsFixed(2)}',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// El corte del boleto cuando el talón va al costado: línea punteada
+/// vertical con las medias lunas arriba y abajo.
+class _CorteVertical extends StatelessWidget {
+  const _CorteVertical();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 22,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            top: 20,
+            bottom: 20,
+            child: CustomPaint(painter: _LineaPunteada(vertical: true)),
+          ),
+          const Positioned(top: -11, left: 0, child: _MediaLuna()),
+          const Positioned(bottom: -11, left: 0, child: _MediaLuna()),
+        ],
+      ),
+    );
+  }
+}
+
 class _LineaPunteada extends CustomPainter {
+  _LineaPunteada({this.vertical = false});
+
+  final bool vertical;
+
   @override
   void paint(Canvas canvas, Size size) {
     final pintura = Paint()
       ..color = Ipesa.borde
       ..strokeWidth = 2;
+    if (vertical) {
+      final x = size.width / 2;
+      for (var y = 0.0; y < size.height; y += 10) {
+        canvas.drawLine(
+          Offset(x, y),
+          Offset(x, math.min(y + 5, size.height)),
+          pintura,
+        );
+      }
+      return;
+    }
     final y = size.height / 2;
     for (var x = 0.0; x < size.width; x += 10) {
       canvas.drawLine(
@@ -580,7 +714,7 @@ class _LineaPunteada extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LineaPunteada anterior) => false;
+  bool shouldRepaint(_LineaPunteada anterior) => anterior.vertical != vertical;
 }
 
 /// Sello de goma: solo el borde y el texto, sin fondo.

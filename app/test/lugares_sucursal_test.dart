@@ -198,7 +198,9 @@ void main() {
       expect(find.text('Cliente'), findsNWidgets(2));
 
       await detalle('T028-5');
-      expect(find.text('Agencia SHALOM EMPRESARIAL S.A.C.'), findsOneWidget);
+      // El nombre va una vez, en el recuadro del comprobante.
+      expect(find.text('SHALOM EMPRESARIAL S.A.C.'), findsOneWidget);
+      expect(find.text('Agencia'), findsOneWidget);
     },
   );
 }
