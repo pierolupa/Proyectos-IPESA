@@ -62,3 +62,7 @@ Future<void> compartirImagen(
 ) async {
   await web.window.navigator.share(_datosCompartir(bytes, nombre, tipo)).toDart;
 }
+
+/// Guarda un archivo cualquiera (la descarga el navegador).
+Future<void> descargarArchivo(Uint8List bytes, String nombre, String tipo) =>
+    descargarImagen(bytes, nombre, tipo);

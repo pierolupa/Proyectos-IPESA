@@ -16,3 +16,7 @@ bool puedeCompartirImagen(Uint8List bytes, String nombre, String tipo) => false;
 /// Abre el menú de compartir del dispositivo con la imagen.
 Future<void> compartirImagen(Uint8List bytes, String nombre, String tipo) =>
     Future.error(UnsupportedError('Solo disponible en el navegador.'));
+
+/// Guarda un archivo cualquiera (en web, lo descarga el navegador).
+Future<void> descargarArchivo(Uint8List bytes, String nombre, String tipo) =>
+    Future.error(UnsupportedError('Solo disponible en el navegador.'));

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -7,10 +8,13 @@ import 'package:provider/provider.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
+import '../../services/archivo_imagen.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import 'admin_dashboard_screen.dart';
 import 'transportistas.dart';
+
+part 'analisis_agencias.dart';
 
 const _colorEnRuta = Color(0xFF2459A8);
 const _colorEntregado = Color(0xFF1D6B41);
@@ -86,7 +90,8 @@ class ContadorComprobantes {
     }
     _delDiaConNumero = {
       for (final g in conComprobante)
-        if (g.agenciaComprobante.isNotEmpty) _delDia(g),
+        if (g.agenciaComprobante.isNotEmpty)
+          _delDia(g): 'N|${g.agenciaComprobante}',
     };
   }
 
@@ -95,7 +100,7 @@ class ContadorComprobantes {
   final _rucs = <String, String>{};
 
   /// Si en otra guía sí se leyó el número, la que no lo tiene es esa misma.
-  late final Set<String> _delDiaConNumero;
+  late final Map<String, String> _delDiaConNumero;
   final _vistos = <String>{};
 
   /// Palabras que no distinguen a una agencia de otra.
@@ -188,14 +193,23 @@ class ContadorComprobantes {
         '|${creada.year}-${creada.month}-${creada.day}';
   }
 
+  /// El comprobante de la guía: el mismo para todas las guías que lo
+  /// llevan pegado; null si la guía no tiene comprobante.
+  String? claveDe(Guia g) {
+    if (!g.tieneComprobanteAgencia) return null;
+    if (g.agenciaComprobante.isNotEmpty) return 'N|${g.agenciaComprobante}';
+    final clave = _delDia(g);
+    return _delDiaConNumero[clave] ?? 'D|$clave';
+  }
+
   /// ¿Es un comprobante que aún no se contó? (y lo marca como contado).
   bool esNuevo(Guia g) {
-    if (!g.tieneComprobanteAgencia) return false;
-    if (g.agenciaComprobante.isNotEmpty) {
-      return _vistos.add('N|${g.agenciaComprobante}');
-    }
-    final clave = _delDia(g);
-    return !_delDiaConNumero.contains(clave) && _vistos.add('D|$clave');
+    final clave = claveDe(g);
+    if (clave == null) return false;
+    // Sin número pero del mismo día que uno con número: es ese, y ese se
+    // cuenta en su propia guía.
+    if (clave.startsWith('N|') && g.agenciaComprobante.isEmpty) return false;
+    return _vistos.add(clave);
   }
 
   /// Cuántos comprobantes distintos hay en las guías y cuánto suman.
@@ -508,8 +522,28 @@ class PestanaDashboard extends StatefulWidget {
 class _PestanaDashboardState extends State<PestanaDashboard> {
   PeriodoResumen _periodo = PeriodoResumen.hoy;
 
+  /// Viendo "Análisis de agencias" en vez del resumen general.
+  bool _agencias = false;
+
   @override
   Widget build(BuildContext context) {
+    final vista = _Segmentos(
+      opciones: const ['General', 'Análisis de agencias'],
+      iconos: const {
+        0: Icons.bar_chart_rounded,
+        1: Icons.local_shipping_outlined,
+      },
+      elegido: _agencias ? 1 : 0,
+      onCambio: (i) => setState(() => _agencias = i == 1),
+    );
+    if (_agencias) {
+      return RefreshIndicator(
+        onRefresh: () => context.read<AppState>().cargarGuias(),
+        child: VistaAnalisisAgencias(
+          cabecera: Align(alignment: Alignment.centerLeft, child: vista),
+        ),
+      );
+    }
     final appState = context.watch<AppState>();
     final datos = IndicadoresOperacion.calcular(
       appState.guias,
@@ -625,7 +659,10 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           final grafico = _GraficoEntregas(datos: datos);
           final estados = _Estados(datos: datos);
           final ranking = _Ranking(datos: datos);
-          final agencias = _Agencias(datos: datos);
+          final agencias = _Agencias(
+            datos: datos,
+            onAnalisis: () => setState(() => _agencias = true),
+          );
 
           Widget fila(List<Widget> hijos, List<int> flex) => IntrinsicHeight(
             child: Row(
@@ -642,12 +679,16 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: SelectorPeriodo(
-                  periodo: _periodo,
-                  onCambio: (p) => setState(() => _periodo = p),
-                ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  vista,
+                  SelectorPeriodo(
+                    periodo: _periodo,
+                    onCambio: (p) => setState(() => _periodo = p),
+                  ),
+                ],
               ),
               const SizedBox(height: sep),
               if (ancha) ...[
@@ -1568,9 +1609,12 @@ class _FilaTransportista extends StatelessWidget {
 /// Pedidos y costo por agencia de transporte (de los comprobantes leídos de
 /// las fotos): una barra por agencia, larga según lo que se le pagó.
 class _Agencias extends StatelessWidget {
-  const _Agencias({required this.datos});
+  const _Agencias({required this.datos, this.onAnalisis});
 
   final IndicadoresOperacion datos;
+
+  /// Abre "Análisis de agencias".
+  final VoidCallback? onAnalisis;
 
   static const _visibles = 8;
 
@@ -1617,6 +1661,16 @@ class _Agencias extends StatelessWidget {
                     child: _FilaAgencia(
                       fila: a,
                       fraccion: maximo == 0 ? 0 : a.costo / maximo,
+                    ),
+                  ),
+                if (onAnalisis != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onAnalisis,
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                      label: const Text('Ver análisis de agencias'),
                     ),
                   ),
               ],
