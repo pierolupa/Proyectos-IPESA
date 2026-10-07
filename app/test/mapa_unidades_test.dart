@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
@@ -100,5 +101,59 @@ void main() {
   ) async {
     await _mapa(tester, guias.take(2).toList(), recorrido: true);
     expect(find.text('Oscar Aspur'), findsNothing);
+  });
+
+  Guia entregada({required double geoLat, String origen = 'Almacén Callao'}) =>
+      Guia.fromJson({
+        'numero_guia': 'T9',
+        'estado': 'entregado',
+        'tipo_entrega': 'cliente_final',
+        'origen': origen,
+        'destino': 'Lima',
+        'transportista': 'Oscar Aspur',
+        'destinatario': 'Cliente T9',
+        'fecha_creacion': _hoy.toUtc().toIso8601String(),
+        'fecha_actualizacion': _hoy
+            .add(const Duration(hours: 2))
+            .toUtc()
+            .toIso8601String(),
+        'fecha_cierre': _hoy
+            .add(const Duration(hours: 2))
+            .toUtc()
+            .toIso8601String(),
+        'corregido_por_admin': false,
+        'geo_lat': geoLat,
+        'geo_lng': -77.04,
+        'cierre_lat': -12.20,
+        'cierre_lng': -77.04,
+      });
+
+  testWidgets(
+    'Una guía entregada muestra dónde se recogió y dónde se entregó',
+    (tester) async {
+      await _mapa(tester, [entregada(geoLat: -12.00)], recorrido: true);
+      final mensajes = tester
+          .widgetList<Tooltip>(find.byType(Tooltip))
+          .map((t) => t.message ?? '')
+          .toList();
+      expect(mensajes.where((m) => m.contains('recogida')), hasLength(1));
+      expect(find.text('Recogida'), findsOneWidget);
+      // El recorrido va del punto de recojo al de entrega.
+      final linea = tester
+          .widget<PolylineLayer>(find.byType(PolylineLayer))
+          .polylines
+          .single;
+      expect(linea.points.first.latitude, -12.00);
+      expect(linea.points.last.latitude, -12.20);
+    },
+  );
+
+  testWidgets('Sin punto de recojo distinto ni sucursal, no se inventa uno', (
+    tester,
+  ) async {
+    // Entregada antes del cambio: geo_* quedó igual al punto de entrega.
+    await _mapa(tester, [entregada(geoLat: -12.20)], recorrido: true);
+    expect(find.text('Recogida'), findsNothing);
+    expect(find.byType(PolylineLayer), findsNothing);
   });
 }

@@ -1015,23 +1015,56 @@ class MapaGuias extends StatelessWidget {
     return null;
   }
 
+  /// Dónde se recogió una guía ya entregada: geo_* (que al entregar ya no
+  /// se pisa). En las entregadas antes de eso geo_* es el mismo punto de
+  /// la entrega; si salió de una de nuestras sucursales, se usa esa.
+  static LatLng? _recojo(Guia g, AppState app) {
+    if (!g.tieneUbicacionCierre) return null;
+    final lat = g.ultimaLat, lng = g.ultimaLng;
+    final mismoQueCierre =
+        lat != null &&
+        lng != null &&
+        (lat - g.cierreLat!).abs() < 0.0002 &&
+        (lng - g.cierreLng!).abs() < 0.0002;
+    if (lat != null && lng != null && !mismoQueCierre) return LatLng(lat, lng);
+    final sucursal = app.sucursalPorNombre(g.origen);
+    return sucursal == null ? null : LatLng(sucursal.lat, sucursal.lng);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sucursales = context.watch<AppState>().sucursales;
+    final app = context.watch<AppState>();
+    final sucursales = app.sucursales;
     final conPunto = [
       for (final g in guias)
         if (_punto(g) case final p?) (g, p),
     ];
-    final puntos = [for (final (_, p) in conPunto) p];
-    // Los eventos conocidos del transportista, del más antiguo al último.
-    final camino = recorrido
-        ? ([...conPunto]..sort(
-                (a, b) =>
-                    a.$1.fechaActualizacion.compareTo(b.$1.fechaActualizacion),
-              ))
-              .map((e) => e.$2)
-              .toList()
-        : const <LatLng>[];
+    final recojos = [
+      for (final g in guias)
+        if (_recojo(g, app) case final p?) (g, p),
+    ];
+    final puntos = [
+      for (final (_, p) in conPunto) p,
+      for (final (_, p) in recojos) p,
+    ];
+    // Los eventos conocidos del transportista, del más antiguo al último:
+    // dónde recogió cada guía y dónde la entregó.
+    final eventos = <(DateTime, LatLng)>[
+      for (final (g, p) in recojos) (g.fechaCreacion, p),
+      for (final (g, p) in conPunto)
+        (
+          g.tieneUbicacionCierre
+              ? g.fechaCierre ?? g.fechaActualizacion
+              : g.fechaActualizacion,
+          p,
+        ),
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
+    final camino = <LatLng>[];
+    if (recorrido) {
+      for (final (_, p) in eventos) {
+        if (camino.isEmpty || camino.last != p) camino.add(p);
+      }
+    }
 
     // En la vista general, cada transportista en su última posición
     // conocida: el punto de su guía con el movimiento más reciente.
@@ -1092,6 +1125,22 @@ class MapaGuias extends StatelessWidget {
                 ),
               MarkerLayer(
                 markers: [
+                  for (final (g, p) in recojos)
+                    Marker(
+                      point: p,
+                      width: 24,
+                      height: 24,
+                      child: Tooltip(
+                        message:
+                            '${g.numeroGuia} · recogida '
+                            '${DateFormat('dd/MM HH:mm').format(g.fechaCreacion.toLocal())}'
+                            '${g.origen.trim().isEmpty ? '' : ' · ${g.origen}'}',
+                        child: GestureDetector(
+                          onTap: () => abrirGuiaAdmin(context, g),
+                          child: const _PuntoRecojo(),
+                        ),
+                      ),
+                    ),
                   for (final (g, p) in conPunto)
                     Marker(
                       point: p,
@@ -1171,6 +1220,12 @@ class MapaGuias extends StatelessWidget {
                 children: [
                   const _Leyenda(color: Color(0xFF2459A8), texto: 'En ruta'),
                   const _Leyenda(color: Color(0xFF1D6B41), texto: 'Entregado'),
+                  if (recojos.isNotEmpty)
+                    const _Leyenda(
+                      color: _colorRecojo,
+                      texto: 'Recogida',
+                      anillo: true,
+                    ),
                   if (recorrido)
                     const _Leyenda(color: _colorRecorrido, texto: 'Recorrido')
                   else ...[
@@ -1196,6 +1251,30 @@ class MapaGuias extends StatelessWidget {
 
 // Se ve sobre el mapa oscuro.
 const _colorRecorrido = Color(0xFF7FD1C7);
+const _colorRecojo = Color(0xFF2459A8);
+
+/// Dónde se recogió una guía ya entregada: un anillo pequeño, para no
+/// confundirlo con el pin de la entrega.
+class _PuntoRecojo extends StatelessWidget {
+  const _PuntoRecojo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: _colorRecojo, width: 3),
+        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4)],
+      ),
+      child: const Icon(
+        Icons.inventory_2_rounded,
+        size: 11,
+        color: _colorRecojo,
+      ),
+    );
+  }
+}
 
 /// Un transportista en el mapa: su nombre arriba y la unidad (camión)
 /// justo sobre su última posición.

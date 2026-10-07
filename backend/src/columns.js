@@ -2,8 +2,10 @@
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
  * El orden de este arreglo es el orden real de las columnas A..AC.
- * geo_lat/geo_lng = ubicación del último evento; cierre_* = dónde y cuándo
- * el transportista la cerró (entregado/finalizado), para el mapa del admin.
+ * geo_lat/geo_lng = ubicación del último evento mientras está abierta (al
+ * registrarla, dónde se recogió); al entregarla no se toca, así el mapa
+ * del admin muestra dónde se recogió. cierre_* = dónde y cuándo el
+ * transportista la cerró (entregado/finalizado).
  * foto_entrega_url = dónde quedó la foto de la entrega en Vercel Blob
  * (privada; se ve con GET /guias/:numeroGuia/foto, ver fotos.js).
  * motivo_rechazo = por qué el transportista rechazó la tarea (estado

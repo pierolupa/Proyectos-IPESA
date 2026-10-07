@@ -189,6 +189,7 @@ describe('Despacho Corte', () => {
     for (const g of actualizadas) {
       expect(g.estado).toBe(ESTADOS.ENTREGADO);
       expect(g.cierre_lat).toBe(-12.1);
+      expect(g.geo_lat).toBe(-12.05); // donde se recogió
       expect(g.fecha_cierre).toBe(g.fecha_actualizacion);
     }
     expect(res.body.guias).toHaveLength(2);
@@ -325,6 +326,8 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     expect(res.body.cierre_lat).toBe(-12.1);
     expect(res.body.cierre_lng).toBe(-77.02);
     expect(res.body.fecha_cierre).toBe(res.body.fecha_actualizacion);
+    // El punto donde se recogió no se pierde.
+    expect(res.body.geo_lat).toBe(-12.05);
   });
 
   it('con la fecha de creación actualiza ese registro, no el más reciente del número', async () => {

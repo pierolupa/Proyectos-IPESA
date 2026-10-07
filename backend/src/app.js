@@ -703,8 +703,7 @@ app.post('/despachos-corte/:codigo/llegada', async (req, res, next) => {
       guia.estado = ESTADOS.ENTREGADO;
       guia.fecha_actualizacion = ahora;
       guia.fecha_cierre = ahora;
-      guia.geo_lat = geo.lat;
-      guia.geo_lng = geo.lng;
+      // geo_* se queda donde se recogió; la llegada va en cierre_*.
       guia.cierre_lat = geo.lat;
       guia.cierre_lng = geo.lng;
       guia.eliminacion = '';
@@ -815,13 +814,16 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       guia.motivo_eliminacion = '';
       limpiarTransbordoAbierto(guia);
     }
-    if (geo) {
+    const cierra = !porAdmin && ESTADOS_FINALES.has(estado);
+    // Al entregar, geo_* se queda donde se recogió (para el mapa del
+    // recorrido) y el punto de entrega va en cierre_*.
+    if (geo && !cierra) {
       guia.geo_lat = geo.lat;
       guia.geo_lng = geo.lng;
     }
     if (porAdmin) {
       guia.corregido_por_admin = true;
-    } else if (ESTADOS_FINALES.has(estado)) {
+    } else if (cierra) {
       guia.cierre_lat = geo.lat;
       guia.cierre_lng = geo.lng;
       guia.fecha_cierre = guia.fecha_actualizacion;
