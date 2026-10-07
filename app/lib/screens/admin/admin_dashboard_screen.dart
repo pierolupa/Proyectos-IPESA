@@ -1033,6 +1033,21 @@ class MapaGuias extends StatelessWidget {
               .toList()
         : const <LatLng>[];
 
+    // En la vista general, cada transportista en su última posición
+    // conocida: el punto de su guía con el movimiento más reciente.
+    final unidades = <String, (Guia, LatLng)>{};
+    if (!recorrido) {
+      for (final (g, p) in conPunto) {
+        final nombre = g.transportista.trim();
+        if (nombre.isEmpty) continue;
+        final actual = unidades[nombre];
+        if (actual == null ||
+            g.fechaActualizacion.isAfter(actual.$1.fechaActualizacion)) {
+          unidades[nombre] = (g, p);
+        }
+      }
+    }
+
     final opciones = puntos.length >= 2
         ? MapOptions(
             initialCameraFit: CameraFit.coordinates(
@@ -1089,6 +1104,25 @@ class MapaGuias extends StatelessWidget {
                         ),
                       ),
                     ),
+                  for (final MapEntry(key: nombre, value: (g, p))
+                      in unidades.entries)
+                    Marker(
+                      point: p,
+                      width: 170,
+                      height: 66,
+                      alignment: Alignment.topCenter,
+                      child: Tooltip(
+                        message:
+                            '$nombre · última posición '
+                            '${haceCuanto(g.fechaActualizacion)} · '
+                            '${g.numeroGuia}',
+                        // Tapa el pin de esa guía: tocarla la abre.
+                        child: GestureDetector(
+                          onTap: () => abrirGuiaAdmin(context, g),
+                          child: _Unidad(nombre: nombre),
+                        ),
+                      ),
+                    ),
                   if (camino.isNotEmpty)
                     Marker(
                       point: camino.last,
@@ -1132,12 +1166,17 @@ class MapaGuias extends StatelessWidget {
                   const _Leyenda(color: Color(0xFF1D6B41), texto: 'Entregado'),
                   if (recorrido)
                     const _Leyenda(color: _colorRecorrido, texto: 'Recorrido')
-                  else
+                  else ...[
+                    const _Leyenda(
+                      color: Ipesa.petroleo,
+                      texto: 'Unidad (última posición)',
+                    ),
                     const _Leyenda(
                       color: Ipesa.turquesa,
                       texto: 'Perímetro de sucursal',
                       anillo: true,
                     ),
+                  ],
                 ],
               ),
             ),
@@ -1150,6 +1189,62 @@ class MapaGuias extends StatelessWidget {
 
 // Se ve sobre el mapa oscuro.
 const _colorRecorrido = Color(0xFF7FD1C7);
+
+/// Un transportista en el mapa: su nombre arriba y la unidad (camión)
+/// justo sobre su última posición.
+class _Unidad extends StatelessWidget {
+  const _Unidad({required this.nombre});
+
+  final String nombre;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 170),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [
+              BoxShadow(color: Color(0x40000000), blurRadius: 6),
+            ],
+          ),
+          child: Text(
+            nombre,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Ipesa.petroleo,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: Ipesa.petroleo,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: const [
+              BoxShadow(color: Color(0x55000000), blurRadius: 6),
+            ],
+          ),
+          child: const Icon(
+            Icons.local_shipping_rounded,
+            size: 17,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _Leyenda extends StatelessWidget {
   const _Leyenda({
