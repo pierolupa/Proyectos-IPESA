@@ -260,4 +260,46 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('La cuenta queda guardada y escrita al volver a abrir la app', (
+    WidgetTester tester,
+  ) async {
+    final client = _clienteConSesion(
+      nombre: 'Juan Pérez',
+      rol: 'transportista',
+    );
+    _pantallaCelular(tester);
+    await tester.pumpWidget(
+      IpesaGuiasApp(
+        appState: AppState(api: GuiasApi(client: client)),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Juan Pérez');
+    await tester.enterText(find.byType(TextField).at(1), '1234');
+    await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
+    await tester.pumpAndSettle();
+
+    // Cerrar sesión borra la sesión, pero no la cuenta recordada.
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.cerrarSesion();
+    expect(await appState.cuentaGuardada(), ('Juan Pérez', '1234'));
+
+    // Al abrir la app de nuevo, nombre y PIN ya están escritos.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(IpesaGuiasApp(appState: appState));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    final campos = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .toList();
+    expect(campos[0].controller!.text, 'Juan Pérez');
+    expect(campos[1].controller!.text, '1234');
+
+    // Un toque y entra.
+    await tester.tap(find.widgetWithText(FilledButton, 'Ingresar'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Pendientes'), findsOneWidget);
+  });
 }

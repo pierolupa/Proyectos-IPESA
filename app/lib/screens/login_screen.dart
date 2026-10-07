@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/rol_usuario.dart';
@@ -70,6 +71,16 @@ class _LoginScreenState extends State<LoginScreen> {
     ]);
     if (!mounted) return;
     final rol = appState.rolActual;
+    // Sin sesión abierta, la última cuenta de este equipo queda escrita:
+    // basta con tocar «Ingresar».
+    if (rol == null) {
+      final cuenta = await appState.cuentaGuardada();
+      if (!mounted) return;
+      if (cuenta != null && _nombreController.text.isEmpty) {
+        _nombreController.text = cuenta.$1;
+        _pinController.text = cuenta.$2;
+      }
+    }
     if (rol != null) {
       // Sin transición: la pantalla de carga la tapa y se desvanece encima.
       Navigator.of(context).push(
@@ -119,6 +130,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         await appState.iniciarSesion(nombre, pin);
       }
+      // El navegador o el celular ofrecen guardar la cuenta.
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       final destino = _pantallaDeInicio(appState.rolActual!);
       // push (no pushReplacement): LoginScreen es la ruta raíz de la app,
@@ -169,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
         constraints: const BoxConstraints(maxWidth: 460),
         child: Padding(
           padding: EdgeInsets.fromLTRB(28, 46, 28, 18 + relleno.bottom),
-          child: _formulario(context),
+          child: AutofillGroup(child: _formulario(context)),
         ),
       ),
     );
@@ -270,7 +283,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const _MarcaRpa(),
                     const SizedBox(height: 40),
-                    _formulario(context),
+                    AutofillGroup(child: _formulario(context)),
                   ],
                 ),
               ),
@@ -308,6 +321,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const _EtiquetaLinea('NOMBRE'),
         TextField(
           controller: _nombreController,
+          autofillHints: const [AutofillHints.username],
           textCapitalization: TextCapitalization.words,
           style: const TextStyle(fontSize: 18, color: Colors.black),
           decoration: _decoracionLinea(pista: 'Juan Pérez'),
@@ -317,6 +331,7 @@ class _LoginScreenState extends State<LoginScreen> {
         const _EtiquetaLinea('PIN'),
         TextField(
           controller: _pinController,
+          autofillHints: const [AutofillHints.password],
           obscureText: !_verPin,
           keyboardType: TextInputType.number,
           style: const TextStyle(

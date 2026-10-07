@@ -50,6 +50,11 @@ class CambioGuia {
 
 const _prefRol = 'sesion_rol';
 
+// La última cuenta usada en este equipo: queda guardada aunque se cierre
+// sesión, para no tener que escribir nombre y PIN cada vez.
+const _prefCuentaNombre = 'cuenta_nombre';
+const _prefCuentaPin = 'cuenta_pin';
+
 /// Rastrear (y lo que se pide al servidor para el equipo comercial) busca
 /// por defecto en los últimos días, hoy incluido.
 const diasRastreoPorDefecto = 10;
@@ -128,13 +133,41 @@ class AppState extends ChangeNotifier {
   /// Deja que el ApiException se propague para que la pantalla de login
   /// muestre el mensaje de error.
   Future<void> iniciarSesion(String nombre, String pin) async {
-    await _establecerSesion(await _api.login(nombre, pin));
+    final sesion = await _api.login(nombre, pin);
+    await _recordarCuenta(sesion.nombre, pin);
+    await _establecerSesion(sesion);
   }
 
   /// Auto-registro; siempre crea la cuenta como transportista (ver
   /// backend/src/app.js).
   Future<void> registrarUsuario(String nombre, String pin) async {
-    await _establecerSesion(await _api.registrar(nombre, pin));
+    final sesion = await _api.registrar(nombre, pin);
+    await _recordarCuenta(sesion.nombre, pin);
+    await _establecerSesion(sesion);
+  }
+
+  /// La última cuenta con la que se entró en este equipo (nombre y PIN),
+  /// para dejarla escrita en el login; null si no hay ninguna.
+  Future<(String, String)?> cuentaGuardada() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final nombre = prefs.getString(_prefCuentaNombre);
+      final pin = prefs.getString(_prefCuentaPin);
+      if (nombre == null || pin == null) return null;
+      return (nombre, pin);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _recordarCuenta(String nombre, String pin) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefCuentaNombre, nombre);
+      await prefs.setString(_prefCuentaPin, pin);
+    } catch (_) {
+      // Sin almacenamiento solo se pierde el recuerdo.
+    }
   }
 
   static DateTime _inicioPorDefecto() =>
