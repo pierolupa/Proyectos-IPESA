@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
@@ -72,6 +73,14 @@ void main() {
     expect(find.text('Jaime Bravo'), findsOneWidget);
     expect(find.byIcon(Icons.local_shipping_rounded), findsNWidgets(2));
     expect(find.text('Unidad (última posición)'), findsOneWidget);
+    // Con la fecha y hora de su última posición (T2 para Oscar).
+    expect(
+      find.text(
+        DateFormat('dd/MM/yyyy HH:mm')
+            .format(_hoy.add(const Duration(minutes: 90))),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('La unidad está en el punto de su último movimiento', (

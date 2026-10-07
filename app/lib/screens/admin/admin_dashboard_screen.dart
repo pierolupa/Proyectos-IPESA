@@ -1052,7 +1052,11 @@ class MapaGuias extends StatelessWidget {
         ? MapOptions(
             initialCameraFit: CameraFit.coordinates(
               coordinates: puntos,
-              padding: const EdgeInsets.all(56),
+              // Arriba más aire: la etiqueta de la unidad (nombre y hora)
+              // va sobre su punto y no debe cortarse en el borde.
+              padding: recorrido
+                  ? const EdgeInsets.all(56)
+                  : const EdgeInsets.fromLTRB(56, 100, 56, 56),
               maxZoom: 15,
             ),
             backgroundColor: fondoMapa,
@@ -1109,7 +1113,7 @@ class MapaGuias extends StatelessWidget {
                     Marker(
                       point: p,
                       width: 170,
-                      height: 66,
+                      height: 82,
                       alignment: Alignment.topCenter,
                       child: Tooltip(
                         message:
@@ -1119,7 +1123,10 @@ class MapaGuias extends StatelessWidget {
                         // Tapa el pin de esa guía: tocarla la abre.
                         child: GestureDetector(
                           onTap: () => abrirGuiaAdmin(context, g),
-                          child: _Unidad(nombre: nombre),
+                          child: _Unidad(
+                            nombre: nombre,
+                            cuando: g.fechaActualizacion,
+                          ),
                         ),
                       ),
                     ),
@@ -1193,9 +1200,14 @@ const _colorRecorrido = Color(0xFF7FD1C7);
 /// Un transportista en el mapa: su nombre arriba y la unidad (camión)
 /// justo sobre su última posición.
 class _Unidad extends StatelessWidget {
-  const _Unidad({required this.nombre});
+  const _Unidad({required this.nombre, required this.cuando});
 
   final String nombre;
+
+  /// Cuándo marcó esa última posición.
+  final DateTime cuando;
+
+  static final _formato = DateFormat('dd/MM/yyyy HH:mm');
 
   @override
   Widget build(BuildContext context) {
@@ -1212,15 +1224,29 @@ class _Unidad extends StatelessWidget {
               BoxShadow(color: Color(0x40000000), blurRadius: 6),
             ],
           ),
-          child: Text(
-            nombre,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Ipesa.petroleo,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                nombre,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Ipesa.petroleo,
+                ),
+              ),
+              Text(
+                _formato.format(cuando.toLocal()),
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Ipesa.textoSuave,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 3),
