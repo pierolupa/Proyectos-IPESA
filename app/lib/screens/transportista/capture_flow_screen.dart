@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../models/sucursal.dart';
 import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
+import '../../services/ubicacion.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/aviso_sucursal.dart';
@@ -135,10 +136,41 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
   }
 
   /// La sucursal donde está el transportista (por el GPS), si hay.
+  /// Con una ubicación aproximada no se sabe: no se adivina.
   Sucursal? _sucursalAqui(AppState appState) =>
-      gpsActivo && lat != null && lng != null
+      gpsActivo && !gpsAproximado && lat != null && lng != null
       ? appState.sucursalEnPunto(lat!, lng!)
       : null;
+
+  /// Ubicación aproximada: se pide confirmar antes de registrar, porque
+  /// las guías quedarían marcadas lejos de donde se recogieron.
+  Future<bool> _confirmarAproximada() async {
+    if (!gpsAproximado) return true;
+    final precision = Ubicacion.textoPrecision(posicionGps!);
+    final seguir = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ubicación aproximada'),
+        content: Text(
+          'Tu celular da una ubicación con un error de $precision. Las '
+          'guías quedarán marcadas en ese punto y no en la sucursal o lugar '
+          'donde las recoges.\n\nActiva la ubicación precisa o lee de '
+          'nuevo antes de registrar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Registrar igual'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Corregir ubicación'),
+          ),
+        ],
+      ),
+    );
+    return seguir ?? false;
+  }
 
   Future<void> _agregarFotos(Future<List<Uint8List>> Function() origen) async {
     setState(() => _abriendoFotos = true);
@@ -289,6 +321,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         if (!b.enviando && _falta(b, appState) == null) b,
     ];
     if (listas.isEmpty || !gpsActivo) return;
+    if (!await _confirmarAproximada() || !mounted) return;
     setState(() {
       _registrando = true;
       for (final b in listas) {

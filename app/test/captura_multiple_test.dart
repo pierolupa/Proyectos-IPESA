@@ -421,4 +421,88 @@ void main() {
     expect(registradas, ['T200']);
     expect(origenes, ['Trp San Luis']);
   });
+
+  Position posicion(double lat, double precision) => Position(
+    latitude: lat,
+    longitude: -77.04,
+    timestamp: DateTime.now(),
+    accuracy: precision,
+    altitude: 0,
+    altitudeAccuracy: 0,
+    heading: 0,
+    headingAccuracy: 0,
+    speed: 0,
+    speedAccuracy: 0,
+  );
+
+  test(
+    'Una ubicación aproximada se vuelve a leer y gana la más precisa',
+    () async {
+      final lecturas = [posicion(-12.03, 1800), posicion(-12.05, 12)];
+      var veces = 0;
+      Ubicacion.leer = () async => lecturas[veces++ < 1 ? 0 : 1];
+      final p = await Ubicacion.actual();
+      expect(p.accuracy, 12);
+      expect(veces, 2);
+      expect(Ubicacion.reciente, isNotNull);
+
+      // Si nunca mejora, queda la aproximada y no se reutiliza como reciente.
+      Ubicacion.olvidarUltima();
+      veces = 0;
+      Ubicacion.leer = () async {
+        veces++;
+        return posicion(-12.03, 1800);
+      };
+      final aprox = await Ubicacion.actual();
+      expect(Ubicacion.esAproximada(aprox), isTrue);
+      expect(Ubicacion.textoPrecision(aprox), '± 1,8 km');
+      expect(veces, 4);
+      expect(Ubicacion.reciente, isNull);
+    },
+  );
+
+  testWidgets('Con ubicación aproximada avisa y pide confirmar antes de '
+      'registrar, sin adivinar la sucursal', (tester) async {
+    // La lectura cae dentro del perímetro, pero con ± 1,8 km no se sabe.
+    sucursales = jsonEncode([
+      {
+        'nombre': 'Trp San Luis',
+        'lat': -12.0501,
+        'lng': -77.0401,
+        'radio_m': 150,
+      },
+    ]);
+    Ubicacion.leer = () async => posicion(-12.05, 1800);
+    leidas = ['T200'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    Ubicacion.permisoConcedido = () async => true;
+    await abrir(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ubicación aproximada (± 1,8 km)'), findsOneWidget);
+    expect(find.textContaining('Usar ubicación precisa'), findsOneWidget);
+    expect(find.text('Estás en Trp San Luis'), findsNothing);
+
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(find.text('Registrar igual'), findsOneWidget);
+
+    // Corregir: no se registra nada.
+    await tester.tap(find.text('Corregir ubicación'));
+    await tester.pumpAndSettle();
+    expect(registradas, isEmpty);
+
+    // Con el GPS ya fijado, "Leer de nuevo" quita el aviso.
+    Ubicacion.leer = () async => posicion(-12.05, 8);
+    await tester.tap(find.text('Leer de nuevo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ubicación aproximada (± 1,8 km)'), findsNothing);
+    expect(find.text('Estás en Trp San Luis'), findsOneWidget);
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(registradas, ['T200']);
+    expect(origenes, ['Trp San Luis']);
+  });
 }

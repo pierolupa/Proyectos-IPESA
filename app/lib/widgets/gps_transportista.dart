@@ -13,6 +13,13 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
   double? lat;
   double? lng;
 
+  /// La última lectura, para saber si es aproximada.
+  Position? posicionGps;
+
+  /// La ubicación tiene demasiado error para saber en qué sucursal está.
+  bool get gpsAproximado =>
+      posicionGps != null && Ubicacion.esAproximada(posicionGps!);
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +49,7 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
     gpsActivo = true;
     lat = posicion.latitude;
     lng = posicion.longitude;
+    posicionGps = posicion;
   });
 
   Future<void> activarGps() async {
@@ -66,6 +74,7 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
       gpsActivo = false;
       lat = null;
       lng = null;
+      posicionGps = null;
     });
     Ubicacion.recordar(false);
   }
@@ -79,8 +88,16 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
       setState(() {
         lat = posicion.latitude;
         lng = posicion.longitude;
+        posicionGps = posicion;
       });
     } catch (_) {}
+  }
+
+  /// Lee de nuevo mostrando que está leyendo (botón "Leer de nuevo").
+  Future<void> releerGps() async {
+    setState(() => cargandoGps = true);
+    await refrescarGps();
+    if (mounted) setState(() => cargandoGps = false);
   }
 
   /// Interruptor "GPS activo" de la pantalla.
@@ -88,8 +105,13 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
     required String textoActivo,
     required String textoApagado,
   }) {
-    return Card(
-      color: gpsActivo ? Ipesa.menta : Colors.red[50],
+    final aproximado = gpsActivo && gpsAproximado;
+    final tarjeta = Card(
+      color: aproximado
+          ? const Color(0xFFFFF4DB)
+          : gpsActivo
+          ? Ipesa.menta
+          : Colors.red[50],
       child: SwitchListTile(
         value: gpsActivo,
         onChanged: cargandoGps
@@ -98,7 +120,9 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
         title: const Text('GPS activo'),
         subtitle: Text(
           cargandoGps
-              ? 'Activando la ubicación de tu celular...'
+              ? 'Leyendo la ubicación de tu celular...'
+              : aproximado
+              ? 'Ubicación aproximada (${Ubicacion.textoPrecision(posicionGps!)})'
               : gpsActivo
               ? textoActivo
               : textoApagado,
@@ -110,9 +134,83 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : Icon(
-                gpsActivo ? Icons.gps_fixed : Icons.gps_off,
-                color: gpsActivo ? Colors.green : Colors.red,
+                aproximado
+                    ? Icons.gps_not_fixed
+                    : gpsActivo
+                    ? Icons.gps_fixed
+                    : Icons.gps_off,
+                color: aproximado
+                    ? const Color(0xFFA86500)
+                    : gpsActivo
+                    ? Colors.green
+                    : Colors.red,
               ),
+      ),
+    );
+    if (!aproximado) return tarjeta;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        tarjeta,
+        AvisoUbicacionAproximada(
+          precision: Ubicacion.textoPrecision(posicionGps!),
+          onReleer: cargandoGps ? null : releerGps,
+        ),
+      ],
+    );
+  }
+}
+
+/// Qué hacer cuando el celular da una ubicación aproximada: casi siempre es
+/// la "ubicación precisa" apagada para el navegador, o el GPS sin señal
+/// todavía (bajo techo).
+class AvisoUbicacionAproximada extends StatelessWidget {
+  const AvisoUbicacionAproximada({
+    super.key,
+    required this.precision,
+    required this.onReleer,
+  });
+
+  final String precision;
+  final VoidCallback? onReleer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4DB),
+        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+        border: Border.all(color: const Color(0xFFE9C46A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Tu celular da una ubicación con un error de $precision: la '
+            'guía puede quedar marcada lejos de donde estás.',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6B4100),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '1. Activa la ubicación precisa: Ajustes › Aplicaciones › '
+            'Chrome › Permisos › Ubicación › "Usar ubicación precisa".\n'
+            '2. Sal a un lugar abierto unos segundos y vuelve a leer.',
+            style: TextStyle(fontSize: 13.5, color: Color(0xFF6B4100)),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onReleer,
+              icon: const Icon(Icons.my_location, size: 18),
+              label: const Text('Leer de nuevo'),
+            ),
+          ),
+        ],
       ),
     );
   }
