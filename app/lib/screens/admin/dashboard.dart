@@ -541,6 +541,8 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
         onRefresh: () => context.read<AppState>().cargarGuias(),
         child: VistaAnalisisAgencias(
           cabecera: Align(alignment: Alignment.centerLeft, child: vista),
+          periodo: _periodo,
+          onPeriodo: (p) => setState(() => _periodo = p),
         ),
       );
     }
@@ -659,8 +661,15 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
           final grafico = _GraficoEntregas(datos: datos);
           final estados = _Estados(datos: datos);
           final ranking = _Ranking(datos: datos);
+          // Con el mismo cálculo que "Análisis de agencias".
           final agencias = _Agencias(
-            datos: datos,
+            analisis: AnalisisAgencias.calcular(
+              appState.guias,
+              _periodo,
+              ahora: DateTime.now(),
+              sucursales: [for (final s in appState.sucursales) s.nombre],
+              conAnterior: false,
+            ),
             onAnalisis: () => setState(() => _agencias = true),
           );
 
@@ -1607,11 +1616,12 @@ class _FilaTransportista extends StatelessWidget {
 }
 
 /// Pedidos y costo por agencia de transporte (de los comprobantes leídos de
-/// las fotos): una barra por agencia, larga según lo que se le pagó.
+/// las fotos), igual que el ranking de "Análisis de agencias": una barra
+/// por agencia, larga según lo que se le pagó.
 class _Agencias extends StatelessWidget {
-  const _Agencias({required this.datos, this.onAnalisis});
+  const _Agencias({required this.analisis, this.onAnalisis});
 
-  final IndicadoresOperacion datos;
+  final AnalisisAgencias analisis;
 
   /// Abre "Análisis de agencias".
   final VoidCallback? onAnalisis;
@@ -1620,7 +1630,7 @@ class _Agencias extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final todas = datos.agencias;
+    final todas = analisis.agencias;
     // Más de [_visibles]: las de menos costo se juntan en "Otras".
     final filas = todas.length <= _visibles
         ? todas
@@ -1629,135 +1639,62 @@ class _Agencias extends StatelessWidget {
             todas
                 .skip(_visibles - 1)
                 .fold(
-                  FilaAgencia('Otras ${todas.length - _visibles + 1} agencias'),
+                  FilaAnalisis(
+                    'Otras ${todas.length - _visibles + 1} agencias',
+                  ),
                   (otras, a) => otras
-                    ..pedidos += a.pedidos
                     ..costo += a.costo
-                    ..guias.addAll(a.guias),
+                    ..guias.addAll(a.guias)
+                    ..comprobantes.addAll(a.comprobantes),
                 ),
           ];
     final maximo = filas.fold<double>(0, (m, a) => math.max(m, a.costo));
     return _Tarjeta(
       titulo: 'Agencias',
       subtitulo: 'Pedidos enviados y costo pagado a cada agencia en el periodo',
-      child: filas.isEmpty
-          ? const Padding(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (filas.isEmpty)
+            const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 'Sin comprobantes de agencia en este periodo.',
                 style: TextStyle(color: Ipesa.textoSuave),
               ),
-            )
-          : Column(
-              children: [
-                for (final a in filas)
-                  _Tocable(
-                    onTap: () => mostrarGuiasDelDashboard(
-                      context,
-                      a.nombre,
-                      a.guias,
-                      periodo: datos.periodo.etiqueta,
-                    ),
-                    child: _FilaAgencia(
-                      fila: a,
-                      fraccion: maximo == 0 ? 0 : a.costo / maximo,
-                    ),
-                  ),
-                if (onAnalisis != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: onAnalisis,
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-                      label: const Text('Ver análisis de agencias'),
-                    ),
-                  ),
-              ],
             ),
-    );
-  }
-}
-
-class _FilaAgencia extends StatelessWidget {
-  const _FilaAgencia({required this.fila, required this.fraccion});
-
-  final FilaAgencia fila;
-  final double fraccion;
-
-  @override
-  Widget build(BuildContext context) {
-    final pedidos = fila.pedidos == 1 ? '1 pedido' : '${fila.pedidos} pedidos';
-    return Tooltip(
-      message: [
-        fila.nombre,
-        if (fila.ruc.isNotEmpty) 'RUC ${fila.ruc}',
-        '$pedidos · ${soles(fila.costo)}',
-      ].join('\n'),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Text(
-                    fila.nombre,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Ipesa.texto,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  pedidos,
-                  style: const TextStyle(fontSize: 13.5, color: Ipesa.etiqueta),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 104,
-                  child: Text(
-                    soles(fila.costo),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: Ipesa.texto,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            // Barra fina con el extremo redondeado, sobre un riel suave.
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: SizedBox(
-                height: 8,
-                child: Stack(
-                  children: [
-                    Container(color: Ipesa.menta),
-                    FractionallySizedBox(
-                      widthFactor: fraccion.clamp(0, 1).toDouble(),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Ipesa.turquesa,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+          for (final a in filas)
+            _Tocable(
+              onTap: () => mostrarGuiasDelDashboard(
+                context,
+                a.nombre,
+                a.guias,
+                periodo: analisis.periodo.etiqueta,
+              ),
+              child: _FilaBarra(
+                nombre: a.nombre,
+                tooltip: [
+                  a.nombre,
+                  if (a.ruc.isNotEmpty) 'RUC ${a.ruc}',
+                ].join('\n'),
+                derecha: soles(a.costo),
+                detalle:
+                    '${_plural(a.guias.length, 'guía')} · '
+                    '${_plural(a.comprobantes.length, 'comprobante')}',
+                fraccion: maximo == 0 ? 0 : a.costo / maximo,
               ),
             ),
-          ],
-        ),
+          if (onAnalisis != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onAnalisis,
+                iconAlignment: IconAlignment.end,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                label: const Text('Ver análisis de agencias'),
+              ),
+            ),
+        ],
       ),
     );
   }

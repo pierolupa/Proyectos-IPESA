@@ -519,10 +519,19 @@ enum _Orden { gasto, guias, comprobantes }
 
 /// "Análisis de Agencias", dentro de Dashboard.
 class VistaAnalisisAgencias extends StatefulWidget {
-  const VistaAnalisisAgencias({super.key, required this.cabecera});
+  const VistaAnalisisAgencias({
+    super.key,
+    required this.cabecera,
+    required this.periodo,
+    required this.onPeriodo,
+  });
 
   /// Va arriba de todo (el selector General / Análisis de agencias).
   final Widget cabecera;
+
+  /// El mismo periodo del resumen General: los números coinciden.
+  final PeriodoResumen periodo;
+  final ValueChanged<PeriodoResumen> onPeriodo;
 
   @override
   State<VistaAnalisisAgencias> createState() => _VistaAnalisisAgenciasState();
@@ -544,8 +553,6 @@ PeriodoResumen _esteMes() {
 }
 
 class _VistaAnalisisAgenciasState extends State<VistaAnalisisAgencias> {
-  // Un solo día dice poco del gasto: por defecto, el mes en curso.
-  PeriodoResumen _periodo = _esteMes();
   FiltrosAgencias _filtros = const FiltrosAgencias();
   _Orden _orden = _Orden.gasto;
   bool _porSucursal = false;
@@ -582,7 +589,7 @@ class _VistaAnalisisAgenciasState extends State<VistaAnalisisAgencias> {
     final app = context.watch<AppState>();
     final a = AnalisisAgencias.calcular(
       app.guias,
-      _periodo,
+      widget.periodo,
       ahora: DateTime.now(),
       filtros: _filtros,
       sucursales: [for (final s in app.sucursales) s.nombre],
@@ -601,11 +608,11 @@ class _VistaAnalisisAgenciasState extends State<VistaAnalisisAgencias> {
         const sep = 16.0;
 
         final filtros = _BarraFiltros(
-          periodo: _periodo,
-          onPeriodo: (p) => setState(() {
-            _periodo = p;
-            _visibles = 20;
-          }),
+          periodo: widget.periodo,
+          onPeriodo: (p) {
+            setState(() => _visibles = 20);
+            widget.onPeriodo(p);
+          },
           analisis: a,
           onFiltros: _filtrar,
           onExportar: a.comprobantes.isEmpty ? null : () => _exportar(a),

@@ -232,4 +232,46 @@ void main() {
     expect(find.text('Guías del periodo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('General y Análisis muestran lo mismo y comparten el periodo', (
+    tester,
+  ) async {
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/sucursales')) {
+        return http.Response(jsonEncode([]), 200);
+      }
+      return http.Response(jsonEncode(_datos), 200);
+    });
+    tester.view.physicalSize = const Size(1400, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.cargarGuias();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: const MaterialApp(home: Scaffold(body: PestanaDashboard())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Hoy: SHALOM suma S/ 80 (el comprobante de ayer no entra).
+    expect(find.text('3 guías · 2 comprobantes'), findsOneWidget);
+    expect(find.text('S/ 80.00'), findsOneWidget);
+
+    await tester.tap(find.text('Ver análisis de agencias'));
+    await tester.pumpAndSettle();
+    expect(find.text('Gasto en agencias'), findsOneWidget);
+    expect(find.text('S/ 80.00'), findsWidgets);
+
+    // Cambiar a 7 días en el análisis también cambia el resumen General.
+    await tester.tap(find.text('7 días'));
+    await tester.pumpAndSettle();
+    expect(find.text('S/ 120.00'), findsWidgets);
+    await tester.tap(find.text('General'));
+    await tester.pumpAndSettle();
+    expect(find.text('4 guías · 3 comprobantes'), findsOneWidget);
+    expect(find.text('S/ 120.00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
