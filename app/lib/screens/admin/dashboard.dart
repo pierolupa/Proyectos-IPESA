@@ -93,6 +93,23 @@ class ContadorComprobantes {
         if (g.agenciaComprobante.isNotEmpty)
           _delDia(g): 'N|${g.agenciaComprobante}',
     };
+    // El monto de cada comprobante: el primero leído en cualquiera de sus
+    // guías (en algunas la IA no alcanza a leerlo).
+    for (final g in conComprobante) {
+      final clave = claveDe(g);
+      if (clave != null && g.agenciaMonto != null) {
+        _montos.putIfAbsent(clave, () => g.agenciaMonto!);
+      }
+    }
+  }
+
+  final _montos = <String, double>{};
+
+  /// Lo que costó el comprobante de la guía, aunque en esta guía no se haya
+  /// leído el monto.
+  double? montoDe(Guia g) {
+    final clave = claveDe(g);
+    return clave == null ? null : _montos[clave];
   }
 
   final _padre = <String, String>{};
@@ -220,7 +237,7 @@ class ContadorComprobantes {
     for (final g in guias) {
       if (!contador.esNuevo(g)) continue;
       comprobantes++;
-      costo += g.agenciaMonto ?? 0;
+      costo += contador.montoDe(g) ?? 0;
     }
     return (comprobantes: comprobantes, costo: costo);
   }
@@ -290,12 +307,12 @@ class IndicadoresOperacion {
         fila.guias.add(g);
         if (contador.esNuevo(g)) {
           r.comprobantes++;
-          if (g.agenciaMonto case final m?) {
+          if (contador.montoDe(g) case final m?) {
             fila.costo += m;
             r.costoAgencias += m;
           }
         }
-        if (g.agenciaMonto != null) r.pedidosConMonto++;
+        if (contador.montoDe(g) != null) r.pedidosConMonto++;
       }
       if (g.tipoEntrega == TipoEntrega.agencia) {
         r.agencia++;

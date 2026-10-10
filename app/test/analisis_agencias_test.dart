@@ -274,4 +274,31 @@ void main() {
     expect(find.text('S/ 120.00'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  test('El General y el Análisis suman igual aunque el monto se leyera solo '
+      'en una de las guías del comprobante', () {
+    // La IA leyó el monto en la última de las 4 guías, no en la primera.
+    final guias = _guias([
+      _envio('A1', agencia: 'AREQUIPA EXPRESO MARVISUR', comprobante: 'F1-9'),
+      _envio('A2', agencia: 'AREQUIPA EXPRESO MARVISUR', comprobante: 'F1-9'),
+      _envio('A3', agencia: 'AREQUIPA EXPRESO MARVISUR', comprobante: 'F1-9'),
+      _envio(
+        'A4',
+        agencia: 'AREQUIPA EXPRESO MARVISUR',
+        comprobante: 'F1-9',
+        monto: 1497,
+      ),
+      _envio('B1', comprobante: 'B001-1', monto: 25),
+    ]);
+    final general = IndicadoresOperacion.calcular(
+      guias,
+      _soloHoy,
+      ahora: _ahora,
+    );
+    final analisis = AnalisisAgencias.calcular(guias, _soloHoy, ahora: _ahora);
+    expect(general.costoAgencias, 1522);
+    expect(general.comprobantes, 2);
+    expect(analisis.gasto, general.costoAgencias);
+    expect(ContadorComprobantes.total(guias).costo, 1522);
+  });
 }
