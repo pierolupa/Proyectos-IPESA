@@ -553,6 +553,22 @@ PeriodoResumen _esteMes() {
 }
 
 class _VistaAnalisisAgenciasState extends State<VistaAnalisisAgencias> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _asegurarComparacion(widget.periodo);
+    });
+  }
+
+  /// La comparación con el periodo anterior necesita sus guías: si son más
+  /// antiguas que lo cargado, se piden.
+  void _asegurarComparacion(PeriodoResumen periodo) {
+    final ahora = DateTime.now();
+    final (desde, _) = periodoAnterior(periodo, ahora).dias(ahora);
+    context.read<AppState>().asegurarDesde(desde);
+  }
+
   FiltrosAgencias _filtros = const FiltrosAgencias();
   _Orden _orden = _Orden.gasto;
   bool _porSucursal = false;
@@ -612,6 +628,7 @@ class _VistaAnalisisAgenciasState extends State<VistaAnalisisAgencias> {
           onPeriodo: (p) {
             setState(() => _visibles = 20);
             widget.onPeriodo(p);
+            _asegurarComparacion(p);
           },
           analisis: a,
           onFiltros: _filtrar,

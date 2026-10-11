@@ -168,6 +168,8 @@ class SelectorPeriodo extends StatelessWidget {
     );
     if (elegido == null) return;
     onCambio(PeriodoResumen.fechas(elegido.start, elegido.end));
+    // Fechas anteriores a lo cargado: se piden al servidor.
+    if (context.mounted) context.read<AppState>().asegurarDesde(elegido.start);
   }
 
   @override

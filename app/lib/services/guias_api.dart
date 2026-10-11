@@ -263,15 +263,19 @@ class GuiasApi {
     return guias;
   }
 
+  /// [vigentes]: solo las abiertas más las registradas o modificadas desde
+  /// ese momento (ver GET /guias en el backend).
   Future<List<Guia>> listarGuias({
     EstadoGuia? estado,
     DateTime? desde,
     DateTime? hasta,
+    DateTime? vigentes,
   }) async {
     final consulta = {
       if (estado != null) 'estado': estado.valorApi,
       if (desde != null) 'desde': desde.toUtc().toIso8601String(),
       if (hasta != null) 'hasta': hasta.toUtc().toIso8601String(),
+      if (vigentes != null) 'vigentes': vigentes.toUtc().toIso8601String(),
     };
     final uri = Uri.parse(apiBaseUrl).replace(
       path: '${Uri.parse(apiBaseUrl).path}/guias',

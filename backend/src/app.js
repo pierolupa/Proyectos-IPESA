@@ -329,10 +329,31 @@ app.delete('/sucursales/:nombre', async (req, res, next) => {
 // Lista de guías, con filtros opcionales: estado, y desde/hasta (fechas
 // ISO) sobre la fecha de la tarea (fecha_creacion): desde <= f < hasta.
 // El equipo comercial pide solo el rango que está buscando.
+// Lista de guías. Filtros opcionales:
+// - estado; desde/hasta: fecha de registro en [desde, hasta).
+// - vigentes=<ISO>: las que siguen abiertas (en ruta, trasbordo...) más
+//   las registradas o modificadas desde ese momento. La app la usa para
+//   cargar lo reciente y, cada pocos segundos, para traer solo lo que
+//   cambió (las abiertas van siempre: son las que se siguen en el día, y
+//   así la app nota también las que se borraron).
 app.get('/guias', async (req, res, next) => {
   try {
-    const { estado, desde, hasta } = req.query;
+    const { estado, desde, hasta, vigentes } = req.query;
     let guias = await repo.listarGuias();
+    if (vigentes !== undefined) {
+      const desdeVigentes = Date.parse(vigentes);
+      if (Number.isNaN(desdeVigentes)) {
+        return res.status(400).json({ error: 'Fecha inválida en vigentes (usa formato ISO).' });
+      }
+      guias = guias.filter((g) => {
+        if (!ESTADOS_CERRADOS.has(g.estado)) return true;
+        const cambio = Math.max(
+          Date.parse(g.fecha_actualizacion) || 0,
+          Date.parse(g.fecha_creacion) || 0,
+        );
+        return cambio >= desdeVigentes;
+      });
+    }
     if (estado) {
       if (!ESTADOS_VALIDOS.has(estado)) {
         return res.status(400).json({ error: `Estado inválido: ${estado}` });

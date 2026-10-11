@@ -905,6 +905,42 @@ describe('GET /guias con rango de fechas', () => {
     const res = await request(app).get('/guias').query({ desde: 'ayer' });
     expect(res.status).toBe(400);
   });
+
+  it('vigentes: las abiertas siempre y las cerradas solo si cambiaron desde ese momento', async () => {
+    const viejo = '2026-08-01T15:00:00.000Z';
+    repo.listarGuias.mockResolvedValue([
+      // Abierta de hace dos meses: se sigue hasta cerrarla.
+      guia({ numero_guia: 'A', fecha_creacion: viejo, fecha_actualizacion: viejo }),
+      // Cerrada hace dos meses: ya no.
+      guia({
+        numero_guia: 'B',
+        estado: ESTADOS.ENTREGADO,
+        fecha_creacion: viejo,
+        fecha_actualizacion: viejo,
+      }),
+      // Registrada antes, entregada hoy: sí (cambió).
+      guia({
+        numero_guia: 'C',
+        estado: ESTADOS.ENTREGADO,
+        fecha_creacion: viejo,
+        fecha_actualizacion: '2026-10-11T14:00:00.000Z',
+      }),
+      guia({
+        numero_guia: 'D',
+        estado: ESTADOS.RECHAZADO,
+        fecha_creacion: '2026-10-11T13:00:00.000Z',
+        fecha_actualizacion: '2026-10-11T13:30:00.000Z',
+      }),
+    ]);
+    const res = await request(app)
+      .get('/guias')
+      .query({ vigentes: '2026-10-11T05:00:00.000Z' });
+    expect(res.status).toBe(200);
+    expect(res.body.map((g) => g.numero_guia)).toEqual(['A', 'C', 'D']);
+
+    const mala = await request(app).get('/guias').query({ vigentes: 'hoy' });
+    expect(mala.status).toBe(400);
+  });
 });
 
 describe('Tipo de entrega editable', () => {

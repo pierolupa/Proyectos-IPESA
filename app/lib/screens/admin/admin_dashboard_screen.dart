@@ -148,6 +148,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onRastrear: ancha ? null : _abrirRastreo,
                 onCerrarSesion: ancha ? null : _cerrarSesion,
               ),
+              // Trayendo guías de fechas más antiguas que las cargadas.
+              Selector<AppState, bool>(
+                selector: (_, a) => a.cargandoHistorial,
+                builder: (_, cargando, _) => cargando
+                    ? const LinearProgressIndicator(minHeight: 3)
+                    : const SizedBox(height: 3),
+              ),
               Expanded(
                 child: switch (_pestana) {
                   0 => _PestanaGuias(ancha: ancha),
@@ -595,6 +602,7 @@ class _PestanaGuiasState extends State<_PestanaGuias> {
       _fechas = elegido;
       _periodo = _Periodo.fechas;
     });
+    if (mounted) context.read<AppState>().asegurarDesde(elegido.start);
   }
 
   @override

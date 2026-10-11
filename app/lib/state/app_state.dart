@@ -59,6 +59,15 @@ const _prefCuentaPin = 'cuenta_pin';
 /// por defecto en los últimos días, hoy incluido.
 const diasRastreoPorDefecto = 10;
 
+/// Días que el administrador tiene cargados al abrir (más todas las guías
+/// abiertas): alcanza para Hoy, 7 días y Este mes con su comparación. Las
+/// fechas más antiguas se piden al elegirlas (ver [AppState.asegurarDesde]).
+const diasPanelPorDefecto = 35;
+
+/// Cada cuánto el refresco automático vuelve a traer todo lo cargado (y no
+/// solo lo que cambió), por si alguien editó la hoja a mano.
+const recargaCompletaCada = Duration(minutes: 10);
+
 /// Distancia en metros entre dos puntos (haversine).
 double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
   double rad(double g) => g * math.pi / 180;
@@ -101,12 +110,73 @@ class AppState extends ChangeNotifier {
 
   bool get _pideRango => _rolActual == RolUsuario.comercial;
 
+  /// Administrador y transportista: desde cuándo están cargadas las guías
+  /// (más todas las abiertas). null = la ventana por defecto.
+  DateTime? _desdeCargado;
+  DateTime? _ultimaCompleta;
+
+  /// Se están trayendo guías de fechas más antiguas.
+  bool cargandoHistorial = false;
+
+  /// El transportista solo necesita las suyas abiertas y lo de hoy; el
+  /// administrador, el último mes y algo más.
+  DateTime _ventanaPorDefecto() {
+    final hoy = _inicioDelDia(DateTime.now());
+    return _rolActual == RolUsuario.transportista
+        ? hoy
+        : hoy.subtract(const Duration(days: diasPanelPorDefecto - 1));
+  }
+
   Future<List<Guia>> _pedirGuias() {
-    if (!_pideRango) return _api.listarGuias();
+    if (!_pideRango) {
+      return _api.listarGuias(vigentes: _desdeCargado ?? _ventanaPorDefecto());
+    }
     return _api.listarGuias(
       desde: _desdeTareas,
       hasta: _hastaTareas.add(const Duration(days: 1)),
     );
+  }
+
+  /// El administrador eligió fechas desde [desde]: si son anteriores a lo
+  /// cargado, se piden esas guías (solo una vez) y se suman a la lista.
+  Future<void> asegurarDesde(DateTime desde) async {
+    if (_pideRango || _rolActual == null) return;
+    final inicio = _inicioDelDia(desde);
+    final cargado = _desdeCargado ?? _ventanaPorDefecto();
+    if (!inicio.isBefore(cargado)) return;
+    if (_cargaEnCurso case final carga?) await carga;
+    cargandoHistorial = true;
+    notifyListeners();
+    try {
+      final antiguas = await _api.listarGuias(desde: inicio, hasta: cargado);
+      _guias = _conEntregasEnviando(_unir(_guias, antiguas));
+      _desdeCargado = inicio;
+    } catch (_) {
+      // Sin conexión: se queda con lo que hay; se puede volver a elegir.
+    } finally {
+      cargandoHistorial = false;
+      notifyListeners();
+    }
+  }
+
+  /// [actuales] con [nuevas] encima (la versión nueva de cada guía).
+  static List<Guia> _unir(List<Guia> actuales, Iterable<Guia> nuevas) {
+    final porClave = {for (final g in actuales) g.clave: g};
+    for (final g in nuevas) {
+      porClave[g.clave] = g;
+    }
+    return porClave.values.toList();
+  }
+
+  /// Desde cuándo pedir lo que cambió: lo último modificado que se tiene
+  /// (hora del servidor), con un margen por las escrituras simultáneas.
+  DateTime _marcaDeCambios() {
+    var ultima = _desdeCargado ?? _ventanaPorDefecto();
+    for (final g in _guias) {
+      if (g.fechaActualizacion.isAfter(ultima)) ultima = g.fechaActualizacion;
+      if (g.fechaCreacion.isAfter(ultima)) ultima = g.fechaCreacion;
+    }
+    return ultima.subtract(const Duration(minutes: 2));
   }
 
   /// El comercial busca en otro rango de fechas: se piden al servidor solo
@@ -178,6 +248,8 @@ class AppState extends ChangeNotifier {
     _desdeTareas = _inicioPorDefecto();
     _hastaTareas = _inicioDelDia(DateTime.now());
     _rangoCargado = null;
+    _desdeCargado = null;
+    _ultimaCompleta = null;
   }
 
   Future<void> _establecerSesion(SesionUsuario sesion) async {
@@ -237,8 +309,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     try {
       final rango = (_desdeTareas, _hastaTareas);
+      _desdeCargado ??= _pideRango ? null : _ventanaPorDefecto();
       _guias = _conEntregasEnviando(await _pedirGuias());
       _rangoCargado = _pideRango ? rango : null;
+      _ultimaCompleta = DateTime.now();
     } catch (e) {
       error = e.toString();
     }
@@ -255,24 +329,51 @@ class AppState extends ChangeNotifier {
 
   /// Recarga las guías sin mostrar carga ni borrar la lista si falla (para
   /// el refresco automático) y devuelve lo que cambió desde la última vez.
+  ///
+  /// Administrador y transportista: cada vez solo se piden las guías
+  /// abiertas (las del día, que se siguen) y las que cambiaron desde la
+  /// última vez; cada [recargaCompletaCada], todo lo cargado.
   Future<List<CambioGuia>> actualizarEnSegundoPlano() async {
-    if (cargando) return const [];
-    final List<Guia> nuevas;
+    if (cargando || cargandoHistorial) return const [];
+    final soloCambios =
+        !_pideRango &&
+        _ultimaCompleta != null &&
+        DateTime.now().difference(_ultimaCompleta!) < recargaCompletaCada;
+    final List<Guia> recibidas;
     try {
-      nuevas = _conEntregasEnviando(await _pedirGuias());
+      recibidas = soloCambios
+          ? await _api.listarGuias(vigentes: _marcaDeCambios())
+          : await _pedirGuias();
     } catch (_) {
       return const [];
     }
+    if (!soloCambios) _ultimaCompleta = DateTime.now();
+    final List<Guia> nuevas;
+    if (soloCambios) {
+      // Las abiertas vienen siempre: una abierta que ya no viene se borró.
+      final llegaron = {for (final g in recibidas) g.clave};
+      nuevas = _conEntregasEnviando(
+        _unir([
+          for (final g in _guias)
+            if (g.estado.esCerrada || llegaron.contains(g.clave)) g,
+        ], recibidas),
+      );
+    } else {
+      nuevas = _conEntregasEnviando(recibidas);
+    }
+    // Las que se avisan: las que llegaron (las demás no cambiaron).
+    final avisables = soloCambios ? {for (final g in recibidas) g.clave} : null;
     final anteriores = {for (final g in _guias) g.clave: g};
     final cambios = <CambioGuia>[
       for (final g in nuevas)
-        if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
-          CambioGuia(
-            g,
-            mensaje,
-            anterior: anteriores[g.clave]?.estado,
-            transbordoAntes: anteriores[g.clave]?.transbordoEstado,
-          ),
+        if (avisables == null || avisables.contains(g.clave))
+          if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
+            CambioGuia(
+              g,
+              mensaje,
+              anterior: anteriores[g.clave]?.estado,
+              transbordoAntes: anteriores[g.clave]?.transbordoEstado,
+            ),
     ];
     _guias = nuevas;
     error = null;
