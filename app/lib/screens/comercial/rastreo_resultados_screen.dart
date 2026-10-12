@@ -624,7 +624,7 @@ class _FilaDespacho extends StatelessWidget {
           texto(1, d.cliente),
           texto(2, d.numeroPedido),
           texto(3, d.numeroEntrega),
-          texto(4, _fechaHora.format(d.fecha.toLocal())),
+          texto(4, _fecha.format(d.fecha.toLocal())),
           texto(5, '—'),
           celda(
             6,
@@ -688,7 +688,7 @@ class _TarjetaDespacho extends StatelessWidget {
                   style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
                 ),
               Text(
-                'Despachada ${_fechaHora.format(d.fecha.toLocal())} · sin '
+                'Despachada ${_fecha.format(d.fecha.toLocal())} · sin '
                 'seguimiento en la app',
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),

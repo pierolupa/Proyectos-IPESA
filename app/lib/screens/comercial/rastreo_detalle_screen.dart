@@ -170,8 +170,12 @@ class _NoEncontrada extends StatelessWidget {
   }
 }
 
-/// El color del sello DESPACHADO (guías de Despachos Ate).
-const colorDespachado = Color(0xFF3D5A80);
+/// El color del sello DESPACHADO (guías de Despachos Ate): el verde de
+/// las entregadas.
+const colorDespachado = Color(0xFF1D6B41);
+
+/// Las guías de Despachos Ate van solo con la fecha (sin hora).
+final _soloFecha = DateFormat('dd/MM/yyyy');
 
 /// Lo que dice el sello según el estado de la guía.
 (String, String) _textoSello(Guia guia) {
@@ -330,7 +334,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
               const Expanded(child: _Dato('Recogida en', 'Almacen Ate')),
               const SizedBox(width: 16),
               Expanded(
-                child: _Dato('Salió', _fechaHora.format(d.fecha.toLocal())),
+                child: _Dato('Salió', _soloFecha.format(d.fecha.toLocal())),
               ),
             ],
           ),
@@ -344,7 +348,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
         children: [
           _selloAnimado(
             'DESPACHADO',
-            _fechaSello.format(d.fecha.toLocal()),
+            _soloFecha.format(d.fecha.toLocal()),
             colorDespachado,
           ),
           const SizedBox(height: 10),
