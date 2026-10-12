@@ -168,66 +168,78 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         );
 
-        return CapaAvisos(
-          centro: _novedades,
-          onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
-          onVerTodas: _abrirNovedades,
-          child: Scaffold(
-            key: _scaffold,
-            // En computadora las secciones van en el menú ☰, para que el
-            // contenido use todo el ancho.
-            drawer: ancha
-                ? _MenuAdmin(
-                    seleccionado: _pestana,
-                    onSeleccion: (i) => setState(() => _pestana = i),
-                    onRastrear: _abrirRastreo,
-                    onArchivo: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ArchivoScreen()),
-                    ),
-                    onCerrarSesion: _cerrarSesion,
-                  )
-                : null,
-            floatingActionButton: _pestana == 3
-                ? FloatingActionButton.extended(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SucursalEditScreen(),
+        // "Atrás" nunca cierra la sesión: solo "Cerrar sesión".
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            if (_scaffold.currentState?.isDrawerOpen ?? false) {
+              _scaffold.currentState?.closeDrawer();
+            }
+          },
+          child: CapaAvisos(
+            centro: _novedades,
+            onAbrirGuia: (g) => abrirGuiaAdmin(context, g),
+            onVerTodas: _abrirNovedades,
+            child: Scaffold(
+              key: _scaffold,
+              // En computadora las secciones van en el menú ☰, para que el
+              // contenido use todo el ancho.
+              drawer: ancha
+                  ? _MenuAdmin(
+                      seleccionado: _pestana,
+                      onSeleccion: (i) => setState(() => _pestana = i),
+                      onRastrear: _abrirRastreo,
+                      onArchivo: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ArchivoScreen(),
+                        ),
                       ),
-                    ),
-                    icon: const Icon(Icons.add_location_alt_outlined),
-                    label: const Text('Nueva sucursal'),
-                  )
-                : null,
-            bottomNavigationBar: ancha
-                ? null
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const BandaMarcas(),
-                      NavigationBar(
-                        selectedIndex: _pestana,
-                        onDestinationSelected: (i) =>
-                            setState(() => _pestana = i),
-                        destinations: [
-                          for (final (icono, etiqueta) in _secciones)
-                            NavigationDestination(
-                              icon: Icon(icono),
-                              label: etiqueta,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-            body: SafeArea(
-              child: ancha
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: contenido),
-                        const BandaMarcas(),
-                      ],
+                      onCerrarSesion: _cerrarSesion,
                     )
-                  : contenido,
+                  : null,
+              floatingActionButton: _pestana == 3
+                  ? FloatingActionButton.extended(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SucursalEditScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_location_alt_outlined),
+                      label: const Text('Nueva sucursal'),
+                    )
+                  : null,
+              bottomNavigationBar: ancha
+                  ? null
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const BandaMarcas(),
+                        NavigationBar(
+                          selectedIndex: _pestana,
+                          onDestinationSelected: (i) =>
+                              setState(() => _pestana = i),
+                          destinations: [
+                            for (final (icono, etiqueta) in _secciones)
+                              NavigationDestination(
+                                icon: Icon(icono),
+                                label: etiqueta,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+              body: SafeArea(
+                child: ancha
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: contenido),
+                          const BandaMarcas(),
+                        ],
+                      )
+                    : contenido,
+              ),
             ),
           ),
         );

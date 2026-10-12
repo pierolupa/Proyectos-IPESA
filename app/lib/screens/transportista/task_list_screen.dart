@@ -125,57 +125,66 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .where((g) => _coincide(g, q))
         .toList();
 
-    return Scaffold(
-      key: _scaffold,
-      backgroundColor: Ipesa.fondo,
-      drawer: _MenuTransportista(
-        nombre: nombre,
-        onDespachoCorte: _despachoCorte,
-        onEntregaConIA: _entregaConIA,
-        onCerrarSesion: _cerrarSesion,
-      ),
-      bottomNavigationBar: const BandaMarcas(),
-      // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
-      floatingActionButton: !_verEntregadas && pendientes.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              backgroundColor: Ipesa.turquesa,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.photo_camera_outlined),
-              label: const Text('Nueva guía'),
-              onPressed: _nuevaGuia,
-            ),
-      body: ActualizacionAutomatica(
-        intervalo: const Duration(seconds: 60),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _Cabecera(
-              saludo: _saludo(),
-              nombre: nombre,
-              pendientes: pendientes.length,
-              entregadas: entregadasHoy.length,
-              avance: avance,
-              onMenu: () => _scaffold.currentState?.openDrawer(),
-              onCerrarSesion: _cerrarSesion,
-            ),
-            _Pestanas(
-              izquierda: 'Pendientes · ${pendientes.length}',
-              derecha: 'Entregadas hoy · ${entregadasHoy.length}',
-              derechaActiva: _verEntregadas,
-              onCambio: (v) => setState(() => _verEntregadas = v),
-            ),
-            Expanded(
-              child: _lista(
-                context,
-                appState,
-                guias,
-                sinPendientes: !_verEntregadas && pendientes.isEmpty,
-                entregadasHoy: entregadasHoy.length,
-                recibidos: _verEntregadas ? const [] : recibidos,
+    // "Atrás" nunca cierra la sesión: solo "Cerrar sesión" del menú.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_scaffold.currentState?.isDrawerOpen ?? false) {
+          _scaffold.currentState?.closeDrawer();
+        }
+      },
+      child: Scaffold(
+        key: _scaffold,
+        backgroundColor: Ipesa.fondo,
+        drawer: _MenuTransportista(
+          nombre: nombre,
+          onDespachoCorte: _despachoCorte,
+          onEntregaConIA: _entregaConIA,
+          onCerrarSesion: _cerrarSesion,
+        ),
+        bottomNavigationBar: const BandaMarcas(),
+        // Sin pendientes, "Nueva guía" ya está en la tarjeta de ruta completada.
+        floatingActionButton: !_verEntregadas && pendientes.isEmpty
+            ? null
+            : FloatingActionButton.extended(
+                backgroundColor: Ipesa.turquesa,
+                foregroundColor: Colors.white,
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('Nueva guía'),
+                onPressed: _nuevaGuia,
               ),
-            ),
-          ],
+        body: ActualizacionAutomatica(
+          intervalo: const Duration(seconds: 60),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Cabecera(
+                saludo: _saludo(),
+                nombre: nombre,
+                pendientes: pendientes.length,
+                entregadas: entregadasHoy.length,
+                avance: avance,
+                onMenu: () => _scaffold.currentState?.openDrawer(),
+              ),
+              _Pestanas(
+                izquierda: 'Pendientes · ${pendientes.length}',
+                derecha: 'Entregadas hoy · ${entregadasHoy.length}',
+                derechaActiva: _verEntregadas,
+                onCambio: (v) => setState(() => _verEntregadas = v),
+              ),
+              Expanded(
+                child: _lista(
+                  context,
+                  appState,
+                  guias,
+                  sinPendientes: !_verEntregadas && pendientes.isEmpty,
+                  entregadasHoy: entregadasHoy.length,
+                  recibidos: _verEntregadas ? const [] : recibidos,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -507,7 +516,6 @@ class _Cabecera extends StatelessWidget {
     required this.entregadas,
     required this.avance,
     required this.onMenu,
-    required this.onCerrarSesion,
   });
 
   final VoidCallback onMenu;
@@ -516,7 +524,6 @@ class _Cabecera extends StatelessWidget {
   final int pendientes;
   final int entregadas;
   final int avance;
-  final VoidCallback onCerrarSesion;
 
   @override
   Widget build(BuildContext context) {
@@ -613,25 +620,12 @@ class _Cabecera extends StatelessWidget {
                   // El logo de RPA; con espacio, también el nombre y el
                   // eslogan.
                   Padding(
-                    padding: const EdgeInsets.only(left: 8, right: 10),
+                    padding: const EdgeInsets.only(left: 8),
                     child: MarcaRpa(
                       tamano: 38,
                       claro: true,
                       conNombre: ancho >= 700,
                       conEslogan: ancho >= 900,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Cerrar sesión',
-                    onPressed: onCerrarSesion,
-                    style: IconButton.styleFrom(
-                      fixedSize: const Size(44, 44),
-                      side: const BorderSide(color: Color(0x59FFFFFF)),
-                    ),
-                    icon: const Icon(
-                      Icons.logout,
-                      color: Colors.white,
-                      size: 20,
                     ),
                   ),
                 ],

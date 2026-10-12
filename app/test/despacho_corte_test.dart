@@ -156,6 +156,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('"Atrás" no cierra la sesión; salir solo desde el menú', (
+    tester,
+  ) async {
+    final appState = await abrir(tester);
+    // Como en la app real: el inicio de sesión abajo y la lista encima.
+    final navegador = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: MaterialApp(
+          navigatorKey: navegador,
+          home: const Scaffold(body: Text('INICIO DE SESIÓN')),
+        ),
+      ),
+    );
+    navegador.currentState!.push(
+      MaterialPageRoute(builder: (_) => const TaskListScreen()),
+    );
+    await tester.pumpAndSettle();
+    // La cabecera ya no tiene botón de salir.
+    expect(find.byTooltip('Cerrar sesión'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(TaskListScreen), findsOneWidget);
+    expect(find.text('INICIO DE SESIÓN'), findsNothing);
+
+    // Con el menú abierto, "Atrás" solo lo cierra.
+    await tester.tap(find.byTooltip('Menú'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cerrar sesión'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Cerrar sesión'), findsNothing);
+    expect(find.byType(TaskListScreen), findsOneWidget);
+    expect(appState.rolActual, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Una guía se puede quitar del corte', (tester) async {
     await abrir(tester);
 

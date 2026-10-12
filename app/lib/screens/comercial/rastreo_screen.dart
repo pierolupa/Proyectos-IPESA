@@ -197,189 +197,195 @@ class _RastreoScreenState extends State<RastreoScreen> {
 
     // Siempre el mismo árbol de widgets (con o sin teclado): si cambiara de
     // estructura al abrirse el teclado, el campo perdería el foco.
-    return Scaffold(
-      backgroundColor: cieloEscena,
-      body: ActualizacionAutomatica(
-        intervalo: const Duration(seconds: 60),
-        // Abierta desde el panel del administrador, el panel de abajo ya
-        // actualiza.
-        activa: !widget.desdeAdmin,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Alto de la pantalla sin teclado: el paisaje se queda donde
-            // estaba y el formulario solo se desplaza.
-            final alto =
-                constraints.maxHeight + MediaQuery.viewInsetsOf(context).bottom;
-            if (constraints.maxWidth != _anchoMedido) {
-              _anchoMedido = constraints.maxWidth;
-              _altoSinTeclado = alto;
-            } else if (alto > _altoSinTeclado) {
-              _altoSinTeclado = alto;
-            }
-            // En celulares bajitos el paisaje se achica para que todo
-            // entre en una sola vista.
-            final altoEscena = ancho >= 600
-                ? 240.0
-                : _altoSinTeclado < 720
-                ? 164.0
-                : 190.0;
-            final suelo = math.max(altoEscena - 56, 112.0);
-            final centrar = ancho >= 600;
-            // En pantallas anchas la marca va grande en la esquina superior
-            // izquierda; en las demás, sobre el saludo.
-            final marcaEnEsquina = ancho >= 1000;
-            Widget cabecera({
-              bool conBarra = true,
-              bool conSaludo = true,
-              bool conMarca = true,
-            }) => _Cabecera(
-              saludo: saludo,
-              conBarra: conBarra,
-              conSaludo: conSaludo,
-              conMarca: conMarca,
-              onVolver: widget.desdeAdmin
-                  ? () => Navigator.of(context).pop()
-                  : null,
-              onActualizar: appState.cargarGuias,
-              onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
-            );
-            final tarjeta = _TarjetaBusqueda(
-              guia: _guia,
-              cliente: _cliente,
-              pedido: _pedido,
-              entrega: _entrega,
-              hayFiltros: _hayFiltros,
-              error: _error,
-              fechaInicio: _fecha.format(_desde),
-              fechaFin: _fecha.format(_hasta),
-              buscando: _buscando,
-              onFechaInicio: () => _elegirFecha(inicio: true),
-              onFechaFin: () => _elegirFecha(inicio: false),
-              onPorDefecto: _esPorDefecto
-                  ? null
-                  : () => _cambiarRango(_inicioPorDefecto(), _hoy()),
-              onTexto: () => setState(() => _error = null),
-              onLimpiar: _limpiar,
-              onBuscar: _buscar,
-            );
-            return SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: _altoSinTeclado),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: EscenaRuta(alto: altoEscena),
-                    ),
-                    Padding(
-                      // Solo se reserva el suelo del paisaje: la tarjeta puede
-                      // tapar un poco de cielo.
-                      padding: EdgeInsets.only(bottom: suelo),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SafeArea(
-                            bottom: false,
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 560,
-                                ),
-                                child: Padding(
-                                  padding: EdgeInsets.fromLTRB(
-                                    20,
-                                    8,
-                                    8,
-                                    centrar ? 0 : (ancho < 600 ? 14 : 28),
+    // Para el comercial es la pantalla de inicio: "Atrás" no cierra la
+    // sesión. Desde el panel del administrador sí vuelve al panel.
+    return PopScope(
+      canPop: widget.desdeAdmin,
+      child: Scaffold(
+        backgroundColor: cieloEscena,
+        body: ActualizacionAutomatica(
+          intervalo: const Duration(seconds: 60),
+          // Abierta desde el panel del administrador, el panel de abajo ya
+          // actualiza.
+          activa: !widget.desdeAdmin,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Alto de la pantalla sin teclado: el paisaje se queda donde
+              // estaba y el formulario solo se desplaza.
+              final alto =
+                  constraints.maxHeight +
+                  MediaQuery.viewInsetsOf(context).bottom;
+              if (constraints.maxWidth != _anchoMedido) {
+                _anchoMedido = constraints.maxWidth;
+                _altoSinTeclado = alto;
+              } else if (alto > _altoSinTeclado) {
+                _altoSinTeclado = alto;
+              }
+              // En celulares bajitos el paisaje se achica para que todo
+              // entre en una sola vista.
+              final altoEscena = ancho >= 600
+                  ? 240.0
+                  : _altoSinTeclado < 720
+                  ? 164.0
+                  : 190.0;
+              final suelo = math.max(altoEscena - 56, 112.0);
+              final centrar = ancho >= 600;
+              // En pantallas anchas la marca va grande en la esquina superior
+              // izquierda; en las demás, sobre el saludo.
+              final marcaEnEsquina = ancho >= 1000;
+              Widget cabecera({
+                bool conBarra = true,
+                bool conSaludo = true,
+                bool conMarca = true,
+              }) => _Cabecera(
+                saludo: saludo,
+                conBarra: conBarra,
+                conSaludo: conSaludo,
+                conMarca: conMarca,
+                onVolver: widget.desdeAdmin
+                    ? () => Navigator.of(context).pop()
+                    : null,
+                onActualizar: appState.cargarGuias,
+                onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
+              );
+              final tarjeta = _TarjetaBusqueda(
+                guia: _guia,
+                cliente: _cliente,
+                pedido: _pedido,
+                entrega: _entrega,
+                hayFiltros: _hayFiltros,
+                error: _error,
+                fechaInicio: _fecha.format(_desde),
+                fechaFin: _fecha.format(_hasta),
+                buscando: _buscando,
+                onFechaInicio: () => _elegirFecha(inicio: true),
+                onFechaFin: () => _elegirFecha(inicio: false),
+                onPorDefecto: _esPorDefecto
+                    ? null
+                    : () => _cambiarRango(_inicioPorDefecto(), _hoy()),
+                onTexto: () => setState(() => _error = null),
+                onLimpiar: _limpiar,
+                onBuscar: _buscar,
+              );
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: _altoSinTeclado),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: EscenaRuta(alto: altoEscena),
+                      ),
+                      Padding(
+                        // Solo se reserva el suelo del paisaje: la tarjeta puede
+                        // tapar un poco de cielo.
+                        padding: EdgeInsets.only(bottom: suelo),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SafeArea(
+                              bottom: false,
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 560,
                                   ),
-                                  child: cabecera(conSaludo: !centrar),
+                                  child: Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      20,
+                                      8,
+                                      8,
+                                      centrar ? 0 : (ancho < 600 ? 14 : 28),
+                                    ),
+                                    child: cabecera(conSaludo: !centrar),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          // En computadora, el saludo y la tarjeta quedan al
-                          // centro del cielo, entre la barra y el paisaje.
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minHeight: centrar
-                                  ? math.max(
-                                      0,
-                                      _altoSinTeclado -
-                                          suelo -
-                                          _altoBarra -
-                                          MediaQuery.paddingOf(context).top,
-                                    )
-                                  : 0,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (centrar)
+                            // En computadora, el saludo y la tarjeta quedan al
+                            // centro del cielo, entre la barra y el paisaje.
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: centrar
+                                    ? math.max(
+                                        0,
+                                        _altoSinTeclado -
+                                            suelo -
+                                            _altoBarra -
+                                            MediaQuery.paddingOf(context).top,
+                                      )
+                                    : 0,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (centrar)
+                                    Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 560,
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            20,
+                                            0,
+                                            20,
+                                            24,
+                                          ),
+                                          child: cabecera(
+                                            conBarra: false,
+                                            conMarca: !marcaEnEsquina,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   Center(
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
                                         maxWidth: 560,
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                          20,
-                                          0,
-                                          20,
-                                          24,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
                                         ),
-                                        child: cabecera(
-                                          conBarra: false,
-                                          conMarca: !marcaEnEsquina,
-                                        ),
+                                        child: tarjeta,
                                       ),
                                     ),
                                   ),
-                                Center(
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 560,
+                                  // Más arriba que el centro exacto.
+                                  if (centrar)
+                                    SizedBox(
+                                      height: _altoSinTeclado >= 900 ? 150 : 64,
                                     ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                      ),
-                                      child: tarjeta,
-                                    ),
-                                  ),
-                                ),
-                                // Más arriba que el centro exacto.
-                                if (centrar)
-                                  SizedBox(
-                                    height: _altoSinTeclado >= 900 ? 150 : 64,
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (marcaEnEsquina)
-                      Positioned(
-                        left: 48,
-                        top: MediaQuery.paddingOf(context).top + 64,
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            MarcaRpa(tamano: 76, conDescripcion: true),
-                            SizedBox(height: 14),
-                            EsloganRpa(tamano: 20),
                           ],
                         ),
                       ),
-                  ],
+                      if (marcaEnEsquina)
+                        Positioned(
+                          left: 48,
+                          top: MediaQuery.paddingOf(context).top + 64,
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MarcaRpa(tamano: 76, conDescripcion: true),
+                              SizedBox(height: 14),
+                              EsloganRpa(tamano: 20),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
