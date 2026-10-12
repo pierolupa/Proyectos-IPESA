@@ -1256,7 +1256,10 @@ describe('Transbordo entre transportistas', () => {
     expect(res.status).toBe(200);
     expect(res.body.map((g) => g.numero_guia)).toEqual(['VIEJA']);
     expect(res.body[0]._archivo).toBeUndefined();
-    expect(repo.listarGuiasArchivadas).toHaveBeenCalledWith(['Guías 2026']);
+    expect(repo.listarGuiasArchivadas).toHaveBeenCalledWith(['Guías 2026'], {
+      desde: Date.parse('2026-03-01T00:00:00.000Z'),
+      hasta: Date.parse('2026-04-01T00:00:00.000Z'),
+    });
     delete process.env.PESTANAS_ARCHIVO;
     delete process.env.ARCHIVO_HASTA;
   });

@@ -4,6 +4,9 @@ const {
   hacenFaltaArchivo,
   seleccionarParaArchivar,
   agruparPorAnio,
+  anioDePestana,
+  anioEnRango,
+  rangoDeFilas,
 } = require('./archivo');
 
 const g = (numero, estado, fecha, extra = {}) => ({
@@ -70,5 +73,33 @@ describe('archivo por año', () => {
     ]);
     expect(Object.keys(grupos).sort()).toEqual(['2025', '2026']);
     expect(grupos['2026'].map((x) => x.numero_guia)).toEqual(['b']);
+  });
+
+  it('toma el año de una pestaña de archivo', () => {
+    expect(anioDePestana('Guías 2026')).toBe(2026);
+    expect(anioDePestana('Guias')).toBeNull();
+  });
+
+  it('solo considera los años que tocan el rango pedido', () => {
+    const d = Date.parse('2026-03-01T00:00:00Z');
+    const h = Date.parse('2026-03-15T00:00:00Z');
+    expect(anioEnRango(2025, d, h)).toBe(false);
+    expect(anioEnRango(2026, d, h)).toBe(true);
+    expect(anioEnRango(2027, d, h)).toBe(false);
+    expect(anioEnRango(2026, NaN, NaN)).toBe(true);
+  });
+
+  it('elige solo el tramo de filas que cae en el rango', () => {
+    const fechas = [
+      '2026-02-28T10:00:00.000Z',
+      '2026-03-02T10:00:00.000Z',
+      '2026-03-10T10:00:00.000Z',
+      '2026-03-15T00:00:00.000Z', // justo en el hasta: no entra
+      '2026-04-01T10:00:00.000Z',
+    ];
+    const r = rangoDeFilas(fechas, Date.parse('2026-03-01T00:00:00Z'), Date.parse('2026-03-15T00:00:00Z'));
+    expect(r).toEqual({ primera: 1, ultima: 2 });
+    expect(rangoDeFilas(fechas, Date.parse('2025-01-01T00:00:00Z'), Date.parse('2025-02-01T00:00:00Z'))).toBeNull();
+    expect(rangoDeFilas(['', 'no es fecha'], NaN, NaN)).toBeNull();
   });
 });

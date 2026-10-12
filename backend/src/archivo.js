@@ -42,6 +42,41 @@ function hacenFaltaArchivo(desdeMs) {
   return desdeMs < corteArchivo();
 }
 
+/** El año de una pestaña de archivo: "Guías 2026" → 2026 (null si no tiene). */
+function anioDePestana(titulo) {
+  const m = /(\d{4})\s*$/.exec(String(titulo));
+  return m ? Number(m[1]) : null;
+}
+
+/** ¿La pestaña de ese año puede tener guías entre `desdeMs` y `hastaMs`? */
+function anioEnRango(anio, desdeMs, hastaMs) {
+  if (anio === null) return true;
+  const inicio = Date.UTC(anio, 0, 1);
+  const fin = Date.UTC(anio + 1, 0, 1);
+  if (Number.isFinite(desdeMs) && fin <= desdeMs) return false;
+  if (Number.isFinite(hastaMs) && inicio > hastaMs) return false;
+  return true;
+}
+
+/**
+ * De una lista de fechas (una por fila, en orden), las posiciones de la
+ * primera y la última que caen en [desdeMs, hastaMs). Las filas se leen
+ * de corrido entre ambas. null si ninguna cae en el rango.
+ */
+function rangoDeFilas(fechas, desdeMs, hastaMs) {
+  let primera = -1;
+  let ultima = -1;
+  fechas.forEach((f, i) => {
+    const t = Date.parse(f);
+    if (!Number.isFinite(t)) return;
+    if (Number.isFinite(desdeMs) && t < desdeMs) return;
+    if (Number.isFinite(hastaMs) && t >= hastaMs) return;
+    if (primera === -1) primera = i;
+    ultima = i;
+  });
+  return primera === -1 ? null : { primera, ultima };
+}
+
 /**
  * Las guías que se pueden archivar: cerradas (entregadas, finalizadas o
  * rechazadas), registradas antes de `hasta`, y sin nada pendiente (ni una
@@ -77,4 +112,7 @@ module.exports = {
   hacenFaltaArchivo,
   seleccionarParaArchivar,
   agruparPorAnio,
+  anioDePestana,
+  anioEnRango,
+  rangoDeFilas,
 };

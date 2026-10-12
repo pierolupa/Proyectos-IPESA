@@ -87,7 +87,11 @@ const {
   pestanaDeAnio,
   seleccionarParaArchivar,
   agruparPorAnio,
+  anioDePestana,
+  anioEnRango,
+  rangoDeFilas,
 } = require('./archivo');
+const LETRA_FECHA_CREACION = letraColumna(COLUMNS.indexOf('fecha_creacion') + 1);
 
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
 const vacia = (valor) => normalizar(valor) === '';
@@ -764,17 +768,30 @@ async function eliminarSucursal(rowNumber) {
  * misma estructura que "Guias"; las guías devueltas llevan `_archivo` para
  * que nunca se confundan con las de la hoja activa (no se escriben).
  */
-async function listarGuiasArchivadas(titulos) {
+async function listarGuiasArchivadas(titulos, { desde = null, hasta = null } = {}) {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
   const guias = [];
   for (const titulo of titulos) {
+    // Solo los años que tocan el rango pedido.
+    if (!anioEnRango(anioDePestana(titulo), desde, hasta)) continue;
+    // Primero una sola columna (la fecha) para saber qué filas hacen falta.
+    const fechas = (
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${titulo}'!${LETRA_FECHA_CREACION}2:${LETRA_FECHA_CREACION}`,
+      })
+    ).data.values || [];
+    const lista = fechas.map((f) => (f && f[0]) || '');
+    const span = rangoDeFilas(lista, desde, hasta);
+    if (span === null) continue;
+    // Después solo esas filas, de corrido.
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${titulo}'!A2:${ULTIMA_COLUMNA}`,
+      range: `'${titulo}'!A${span.primera + 2}:${ULTIMA_COLUMNA}${span.ultima + 2}`,
     });
     (res.data.values || []).forEach((fila, i) => {
-      const guia = rowToGuia(fila, i + 2);
+      const guia = rowToGuia(fila, span.primera + i + 2);
       if (guia.numero_guia !== '') guias.push({ ...guia, _archivo: titulo });
     });
   }

@@ -344,7 +344,13 @@ app.get('/guias', async (req, res, next) => {
     // Fechas anteriores a la hoja activa: también se mira el archivo por año.
     const pestanas = pestanasArchivo();
     if (desde && pestanas.length > 0 && hacenFaltaArchivo(Date.parse(desde))) {
-      guias = [...guias, ...(await repo.listarGuiasArchivadas(pestanas))];
+      guias = [
+        ...guias,
+        ...(await repo.listarGuiasArchivadas(pestanas, {
+          desde: Date.parse(desde),
+          hasta: hasta ? Date.parse(hasta) : null,
+        })),
+      ];
     }
     if (vigentes !== undefined) {
       const desdeVigentes = Date.parse(vigentes);
