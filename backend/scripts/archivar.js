@@ -28,7 +28,6 @@ async function main() {
     return;
   }
   console.log('Después, en Vercel (Environment Variables):');
-  console.log(`  ARCHIVO_HASTA=${hasta}`);
   console.log('  PESTANAS_ARCHIVO=' + Object.keys(res.porPestana).join(','));
   console.log('Hazlo recién después de archivar: si la pestaña no existe, las consultas antiguas fallan.');
 }

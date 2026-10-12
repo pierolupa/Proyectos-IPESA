@@ -557,9 +557,11 @@ async function actualizarGuia(rowNumber, guia) {
   const sheets = await getSheetsClient();
   const spreadsheetId = requireSheetId();
   const fila = guiaToRow(guia);
+  // Una guía archivada se corrige en su pestaña de año, no en la hoja activa.
+  const pestana = guia._archivo || SHEET_NAME;
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: `${SHEET_NAME}!A${rowNumber}:${letraColumna(fila.length)}${rowNumber}`,
+    range: `'${pestana}'!A${rowNumber}:${letraColumna(fila.length)}${rowNumber}`,
     valueInputOption: 'RAW',
     requestBody: { values: [fila] },
   }).finally(invalidarCacheGuias);

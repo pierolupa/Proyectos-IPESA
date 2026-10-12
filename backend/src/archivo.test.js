@@ -34,14 +34,12 @@ describe('archivo por año', () => {
     expect(pestanasArchivo()).toEqual(['Guías 2025', 'Guías 2026']);
   });
 
-  it('mira el archivo solo si la consulta empieza antes del corte', () => {
-    process.env.ARCHIVO_HASTA = '2026-09-01';
+  it('revisa el archivo en cualquier consulta con fecha de inicio, si hay pestañas', () => {
     expect(hacenFaltaArchivo(Date.parse('2026-10-01T00:00:00Z'))).toBe(false);
-    expect(hacenFaltaArchivo(Date.parse('2026-08-01T00:00:00Z'))).toBe(true);
-    expect(hacenFaltaArchivo(NaN)).toBe(false);
-    delete process.env.ARCHIVO_HASTA;
-    // Sin corte configurado, se mira el archivo siempre que hay fecha de inicio.
+    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
     expect(hacenFaltaArchivo(Date.parse('2026-10-01T00:00:00Z'))).toBe(true);
+    expect(hacenFaltaArchivo(NaN)).toBe(false);
+    delete process.env.PESTANAS_ARCHIVO;
   });
 
   it('archiva solo cerradas, anteriores al corte, sin nada pendiente', () => {

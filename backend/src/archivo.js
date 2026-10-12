@@ -26,20 +26,13 @@ function pestanasArchivo() {
 }
 
 /**
- * Fecha de corte del archivo (ARCHIVO_HASTA): todo lo registrado antes de
- * esa fecha está en las pestañas de año. Sin configurar, Infinity: se mira
- * el archivo en cualquier consulta con fecha de inicio (más lento, pero
- * nunca deja guías afuera).
+ * ¿Hace falta revisar el archivo para una consulta con fecha de inicio?
+ * Siempre que haya pestañas de archivo y la consulta tenga fecha de inicio:
+ * como solo se leen las filas del rango, no pesa, y así ninguna guía se
+ * queda fuera aunque cambie la fecha de corte.
  */
-function corteArchivo() {
-  const t = Date.parse(process.env.ARCHIVO_HASTA || '');
-  return Number.isFinite(t) ? t : Infinity;
-}
-
-/** ¿Hace falta mirar el archivo para una consulta que empieza en `desdeMs`? */
 function hacenFaltaArchivo(desdeMs) {
-  if (!Number.isFinite(desdeMs)) return false;
-  return desdeMs < corteArchivo();
+  return Number.isFinite(desdeMs) && pestanasArchivo().length > 0;
 }
 
 /** El año de una pestaña de archivo: "Guías 2026" → 2026 (null si no tiene). */
@@ -108,7 +101,6 @@ function agruparPorAnio(guias) {
 module.exports = {
   pestanaDeAnio,
   pestanasArchivo,
-  corteArchivo,
   hacenFaltaArchivo,
   seleccionarParaArchivar,
   agruparPorAnio,

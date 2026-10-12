@@ -332,7 +332,9 @@ escribe en ellas: solo se leen cuando una consulta pide fechas anteriores.
    Copia las filas a la pestaña del año, vuelve a leer la hoja activa y solo
    entonces borra. Si la hoja cambió en medio, no borra nada.
 3. **Configurar en Vercel** (solo después del paso 2):
-   - `ARCHIVO_HASTA` = la misma fecha de corte (`2027-01-01`)
-   - `PESTANAS_ARCHIVO` = las pestañas creadas (`Guías 2026`)
+   - `PESTANAS_ARCHIVO` = las pestañas creadas (`Guías 2026,Guías 2027`)
+   Con esa variable, cualquier consulta con fechas (Rastreo, Guías,
+   Dashboard) también busca en el archivo, leyendo solo las filas del rango.
+   Las guías archivadas se pueden corregir igual que las demás.
 
 Sin esas variables el backend funciona igual que antes.

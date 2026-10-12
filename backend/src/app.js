@@ -117,7 +117,20 @@ async function buscarRegistro(numeroGuia, fechaCreacion) {
     );
     if (exacta) return exacta;
   }
-  return repo.buscarPorNumero(numeroGuia, { fresco: true });
+  const activa = await repo.buscarPorNumero(numeroGuia, { fresco: true });
+  if (activa) return activa;
+  // No está en la hoja activa: puede estar archivada (para corregirla).
+  const pestanas = pestanasArchivo();
+  if (pestanas.length === 0) return null;
+  const archivadas = (await repo.listarGuiasArchivadas(pestanas)).filter(
+    (g) =>
+      g.numero_guia === numeroGuia &&
+      (!fechaCreacion || Date.parse(g.fecha_creacion) === Date.parse(fechaCreacion)),
+  );
+  if (archivadas.length === 0) return null;
+  return archivadas.reduce((a, b) =>
+    Date.parse(b.fecha_creacion) > Date.parse(a.fecha_creacion) ? b : a,
+  );
 }
 
 function motivoValido(motivo) {
@@ -949,12 +962,12 @@ app.get('/guias/:numeroGuia/foto', async (req, res, next) => {
 app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { numeroNuevo } = req.body || {};
+    const { numeroNuevo, fechaCreacion } = req.body || {};
     if (!numeroNuevo) {
       return res.status(400).json({ error: 'Falta numeroNuevo.' });
     }
 
-    const guia = await repo.buscarPorNumero(numeroGuia, { fresco: true });
+    const guia = await buscarRegistro(numeroGuia, fechaCreacion);
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
