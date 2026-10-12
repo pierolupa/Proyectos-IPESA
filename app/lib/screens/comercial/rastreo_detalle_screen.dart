@@ -335,11 +335,11 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
             children: [
               const Expanded(child: _Dato('Recogida en', 'Almacen Ate')),
               const SizedBox(width: 16),
-              Expanded(
-                child: _Dato('Salió', _soloFecha.format(d.fecha.toLocal())),
-              ),
+              Expanded(child: _Dato('Entregada a', d.transporte)),
             ],
           ),
+          const SizedBox(height: 10),
+          _Dato('Salió', _soloFecha.format(d.fecha.toLocal())),
         ],
       ),
     );

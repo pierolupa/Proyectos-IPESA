@@ -627,8 +627,8 @@ class _FilaDespacho extends StatelessWidget {
           ),
           texto(2, d.numeroPedido),
           texto(3, d.numeroEntrega),
-          texto(4, _fecha.format(d.fecha.toLocal())),
-          texto(5, '—'),
+          texto(4, '${_fecha.format(d.fecha.toLocal())}\nAlmacen Ate'),
+          texto(5, d.transporte.isEmpty ? '' : 'Entregada a ${d.transporte}'),
           celda(
             6,
             const FittedBox(
@@ -690,14 +690,18 @@ class _TarjetaDespacho extends StatelessWidget {
                   extra,
                   style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
                 ),
+              if (d.transporte.isNotEmpty)
+                Text(
+                  'Entregada a ${d.transporte}',
+                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
+                ),
               if (d.sucursal.isNotEmpty)
                 Text(
                   'Sucursal IPESA: ${d.sucursal}',
                   style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
                 ),
               Text(
-                'Despachada ${_fecha.format(d.fecha.toLocal())} · sin '
-                'seguimiento en la app',
+                'Salió de Almacen Ate el ${_fecha.format(d.fecha.toLocal())}',
                 style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
               ),
             ],
