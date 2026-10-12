@@ -222,6 +222,7 @@ void main() {
           'fecha': hoy.add(const Duration(hours: 12)).toUtc().toIso8601String(),
           'numero_pedido': '4900109327',
           'numero_entrega': '81115782',
+          'sucursal': 'CERRO COLORADO - AREQUIPA - AREQUIPA',
         },
       ],
     );
@@ -244,6 +245,7 @@ void main() {
     expect(find.text('81115782'), findsOneWidget);
     expect(find.text('DESPACHADO'), findsOneWidget);
     expect(find.text('Almacen Ate'), findsOneWidget);
+    expect(find.text('CERRO COLORADO - AREQUIPA - AREQUIPA'), findsOneWidget);
     expect(find.text('Ver foto'), findsNothing);
     expect(find.text('Ubicación'), findsNothing);
     expect(tester.takeException(), isNull);

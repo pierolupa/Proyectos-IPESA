@@ -364,4 +364,4 @@ cliente, fecha, pedido y entrega. La app las muestra en Rastrear como
 - El ID va por defecto en `src/despachos.js`; se puede cambiar con
   `DESPACHOS_SHEET_ID`.
 - Se leen las columnas por nombre (Fecha de Extraccion, Hora, Nro de guia,
-  Cliente, Pedido, Entrega) y solo las filas de las fechas pedidas.
+  Cliente, Pedido, Entrega y, como dato informativo, Surcusal ipesa) y solo las filas de las fechas pedidas.

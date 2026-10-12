@@ -11,13 +11,14 @@ const serial = (iso) => (Date.parse(`${iso}T00:00:00Z`) - Date.UTC(1899, 11, 30)
 
 const ENCABEZADO = [
   'Fecha de Extraccion', 'Hora', 'Nro de guia', 'Cliente', 'RUC', 'Punto de Partida',
-  'Punto de Llegada', 'Pedido', 'Entrega', 'Peso', 'Bulto', 'Transporte',
+  'Punto de Llegada', 'Pedido', 'Entrega', 'Peso', 'Bulto', 'Transporte', 'Usuario',
+  'Conductor', 'Tipo', 'Codigo', 'Surcusal ipesa',
 ];
 
 describe('hoja Despachos Ate', () => {
   it('encuentra las columnas por nombre', () => {
     expect(columnasDespachos(ENCABEZADO)).toEqual({
-      fecha: 0, hora: 1, guia: 2, cliente: 3, pedido: 7, entrega: 8,
+      fecha: 0, hora: 1, guia: 2, cliente: 3, pedido: 7, entrega: 8, sucursal: 16,
     });
     expect(() => columnasDespachos(['Cliente'])).toThrow();
   });
@@ -31,7 +32,7 @@ describe('hoja Despachos Ate', () => {
   it('toma solo guía, cliente, fecha, pedido y entrega', () => {
     const cols = columnasDespachos(ENCABEZADO);
     const filas = [
-      [serial('2026-10-10'), 0.5, 'T001-95643', 'IPESA S.A.C.', 20101639275, 'Ate', 'Arequipa', 4900109327, 81115782, 2.7, 1, 'Toscano'],
+      [serial('2026-10-10'), 0.5, 'T001-95643', 'IPESA S.A.C.', 20101639275, 'Ate', 'Arequipa', 4900109327, 81115782, 2.7, 1, 'Toscano', 'x', '', '', '', 'CERRO COLORADO - AREQUIPA - AREQUIPA'],
       [serial('2026-10-10'), 0.5, '', 'sin guía'],
       ['', '', 'T001-1', 'sin fecha'],
       [serial('2026-10-10'), 0.25, 'T001-95668', 'IPESA S.A.C.', 1, '', '', 4900109360],
@@ -43,6 +44,7 @@ describe('hoja Despachos Ate', () => {
         fecha: '2026-10-10T17:00:00.000Z',
         numero_pedido: '4900109327',
         numero_entrega: '81115782',
+        sucursal: 'CERRO COLORADO - AREQUIPA - AREQUIPA',
       },
       {
         numero_guia: 'T001-95668',
@@ -50,6 +52,7 @@ describe('hoja Despachos Ate', () => {
         fecha: '2026-10-10T11:00:00.000Z',
         numero_pedido: '4900109360',
         numero_entrega: '',
+        sucursal: '',
       },
     ]);
   });

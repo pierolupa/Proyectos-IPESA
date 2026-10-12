@@ -621,7 +621,10 @@ class _FilaDespacho extends StatelessWidget {
       child: Row(
         children: [
           texto(0, d.numeroGuia, e: Ipesa.titulo(14)),
-          texto(1, d.cliente),
+          texto(
+            1,
+            [d.cliente, if (d.sucursal.isNotEmpty) d.sucursal].join('\n'),
+          ),
           texto(2, d.numeroPedido),
           texto(3, d.numeroEntrega),
           texto(4, _fecha.format(d.fecha.toLocal())),
@@ -685,6 +688,11 @@ class _TarjetaDespacho extends StatelessWidget {
               if (extra.isNotEmpty)
                 Text(
                   extra,
+                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
+                ),
+              if (d.sucursal.isNotEmpty)
+                Text(
+                  'Sucursal IPESA: ${d.sucursal}',
                   style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
                 ),
               Text(

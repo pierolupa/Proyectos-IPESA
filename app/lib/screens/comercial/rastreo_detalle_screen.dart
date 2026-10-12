@@ -328,6 +328,8 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 10),
+          _Dato('Sucursal IPESA', d.sucursal),
+          const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

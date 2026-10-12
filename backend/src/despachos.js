@@ -33,6 +33,8 @@ function columnasDespachos(encabezado) {
     cliente: buscar('cliente'),
     pedido: buscar('pedido'),
     entrega: buscar('entrega'),
+    // En la hoja se llama "Surcusal ipesa" (informativo).
+    sucursal: buscar('surcusal', 'sucursal'),
   };
   if (cols.fecha < 0 || cols.guia < 0) {
     throw new Error('La hoja Despachos no tiene las columnas "Fecha de Extraccion" y "Nro de guia".');
@@ -61,7 +63,10 @@ function textoDe(valor) {
   return String(valor).trim();
 }
 
-/** Las filas leídas → despachos { numero_guia, cliente, fecha, numero_pedido, numero_entrega }. */
+/**
+ * Las filas leídas → despachos { numero_guia, cliente, fecha, numero_pedido,
+ * numero_entrega, sucursal }.
+ */
 function filasADespachos(filas, cols) {
   const lista = [];
   for (const f of filas) {
@@ -74,6 +79,7 @@ function filasADespachos(filas, cols) {
       fecha: new Date(t).toISOString(),
       numero_pedido: cols.pedido >= 0 ? textoDe(f[cols.pedido]) : '',
       numero_entrega: cols.entrega >= 0 ? textoDe(f[cols.entrega]) : '',
+      sucursal: cols.sucursal >= 0 ? textoDe(f[cols.sucursal]) : '',
     });
   }
   return lista;

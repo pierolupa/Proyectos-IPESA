@@ -7,6 +7,7 @@ class Despacho {
     required this.fecha,
     required this.numeroPedido,
     required this.numeroEntrega,
+    this.sucursal = '',
   });
 
   final String numeroGuia;
@@ -17,11 +18,15 @@ class Despacho {
   final String numeroPedido;
   final String numeroEntrega;
 
+  /// Columna "Surcusal ipesa" de la hoja (informativa).
+  final String sucursal;
+
   factory Despacho.fromJson(Map<String, dynamic> json) => Despacho(
     numeroGuia: json['numero_guia'] as String? ?? '',
     cliente: json['cliente'] as String? ?? '',
     fecha: DateTime.parse(json['fecha'] as String),
     numeroPedido: json['numero_pedido'] as String? ?? '',
     numeroEntrega: json['numero_entrega'] as String? ?? '',
+    sucursal: json['sucursal'] as String? ?? '',
   );
 }
