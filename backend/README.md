@@ -325,7 +325,14 @@ La hoja activa se mantiene chica pasando las guías cerradas de meses
 anteriores a pestañas por año (`Guías 2026`, `Guías 2027`...). Se hace por
 meses completos y nunca el mes en curso.
 
-**Desde la app** (lo normal): administrador › menú ☰ › *Archivo de guías*.
+**Automático** (lo normal): Vercel llama `GET /api/cron/archivo` cada
+madrugada (08:00 UTC = 3 a. m. en Perú, ver `crons` en `vercel.json`). Si
+hay guías cerradas de meses anteriores al mes en curso, las archiva; si no,
+no escribe nada. Con la variable `CRON_SECRET` en Vercel la ruta exige ese
+token (Vercel lo manda solo); sin ella, solo corre entre 0 y 5 a. m. de Perú.
+
+**Desde la app** (a mano, si hace falta): administrador › menú ☰ ›
+*Archivo de guías*.
 Se elige hasta qué mes, se simula (no mueve nada) y, si los números cuadran,
 se archiva confirmando con el PIN del administrador. Conviene hacerlo de
 noche, sin nadie usando la app.

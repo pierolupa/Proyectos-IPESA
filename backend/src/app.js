@@ -459,6 +459,32 @@ app.post('/archivo', async (req, res, next) => {
   }
 });
 
+// Archivo automático: Vercel lo llama cada madrugada (vercel.json, "crons").
+// Archiva lo cerrado antes del día 1 del mes en curso; si no hay nada, no
+// escribe. Con CRON_SECRET configurado exige ese token (Vercel lo envía
+// solo); sin él, solo corre de madrugada en hora de Perú (0 a 5 a. m.), y
+// lo que hace es lo mismo que haría el automático esa noche.
+app.get('/cron/archivo', async (req, res, next) => {
+  try {
+    const secreto = process.env.CRON_SECRET;
+    if (secreto) {
+      if (req.headers.authorization !== `Bearer ${secreto}`) {
+        return res.status(401).json({ error: 'No autorizado.' });
+      }
+    } else if (new Date(Date.now() - DESFASE_PERU_MS).getUTCHours() >= 5) {
+      return res.status(403).json({ error: 'El archivo automático solo corre de madrugada.' });
+    }
+    const corte = corteMaximo();
+    const plan = await repo.archivarGuias(corte, { ejecutar: false });
+    if (plan.total === 0) return res.json({ hasta: corte, ...plan });
+    const resultado = await repo.archivarGuias(corte, { ejecutar: true });
+    console.log(`Archivo automático: ${resultado.total} guías antes de ${corte}.`);
+    res.json({ hasta: corte, ...resultado });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Transportista: sus tareas asignadas.
 app.get('/guias/transportista/:nombre', async (req, res, next) => {
   try {

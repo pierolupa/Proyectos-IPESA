@@ -1363,3 +1363,43 @@ describe('archivo desde la app', () => {
     expect(repo.archivarGuias).toHaveBeenCalledWith('2026-10-01', { ejecutar: true });
   });
 });
+
+describe('archivo automático (cron)', () => {
+  const plan = { ejecutar: false, total: 80, porPestana: { 'Guías 2026': 80 } };
+
+  afterEach(() => {
+    jest.useRealTimers();
+    delete process.env.CRON_SECRET;
+  });
+
+  it('de madrugada archiva lo anterior al mes en curso', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-13T08:10:00Z'), doNotFake: ['nextTick', 'setImmediate'] });
+    repo.archivarGuias
+      .mockResolvedValueOnce(plan)
+      .mockResolvedValueOnce({ ...plan, ejecutar: true });
+    const res = await request(app).get('/cron/archivo');
+    expect(res.status).toBe(200);
+    expect(repo.archivarGuias).toHaveBeenNthCalledWith(1, '2026-10-01', { ejecutar: false });
+    expect(repo.archivarGuias).toHaveBeenNthCalledWith(2, '2026-10-01', { ejecutar: true });
+  });
+
+  it('si no hay nada que archivar, no escribe', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-14T08:10:00Z'), doNotFake: ['nextTick', 'setImmediate'] });
+    repo.archivarGuias.mockResolvedValue({ ejecutar: false, total: 0, porPestana: {} });
+    const res = await request(app).get('/cron/archivo');
+    expect(res.status).toBe(200);
+    expect(repo.archivarGuias).toHaveBeenCalledTimes(1);
+  });
+
+  it('de día no corre, y con CRON_SECRET exige el token', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-13T15:00:00Z'), doNotFake: ['nextTick', 'setImmediate'] });
+    expect((await request(app).get('/cron/archivo')).status).toBe(403);
+    process.env.CRON_SECRET = 'secreto-de-prueba';
+    expect((await request(app).get('/cron/archivo')).status).toBe(401);
+    repo.archivarGuias.mockResolvedValue({ ejecutar: false, total: 0, porPestana: {} });
+    const ok = await request(app)
+      .get('/cron/archivo')
+      .set('Authorization', 'Bearer secreto-de-prueba');
+    expect(ok.status).toBe(200);
+  });
+});
