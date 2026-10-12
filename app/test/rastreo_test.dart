@@ -235,12 +235,51 @@ void main() {
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Resultados'), findsOneWidget);
-    expect(find.text('1 guía encontrada'), findsOneWidget);
+    // Una sola: se abre de frente, como las demás, con el sello DESPACHADO
+    // y sin foto ni ubicación.
+    expect(find.text('Tu guía'), findsOneWidget);
     expect(find.text('T001-95643'), findsOneWidget);
     expect(find.text('Minera Arequipa S.A.'), findsOneWidget);
-    expect(find.text('Solo en Despachos Ate'), findsOneWidget);
-    expect(find.text('1 solo en Despachos Ate'), findsOneWidget);
+    expect(find.text('4900109327'), findsOneWidget);
+    expect(find.text('81115782'), findsOneWidget);
+    expect(find.text('DESPACHADO'), findsOneWidget);
+    expect(find.text('Almacen Ate'), findsOneWidget);
+    expect(find.text('Ver foto'), findsNothing);
+    expect(find.text('Ubicación'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Guías de la app y de Despachos Ate juntas: la lista', (
+    tester,
+  ) async {
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    await _abrirRastreo(
+      tester,
+      despachos: [
+        {
+          'numero_guia': 'T033-9999',
+          'cliente': 'Otro cliente',
+          'fecha': hoy.add(const Duration(hours: 12)).toUtc().toIso8601String(),
+          'numero_pedido': '',
+          'numero_entrega': '',
+        },
+      ],
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° de guía'),
+      'T033',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 guías encontradas'), findsOneWidget);
+    expect(find.text('1 despachada'), findsOneWidget);
+    expect(find.text('Despachado'), findsOneWidget);
+    await tester.tap(find.text('T033-9999'));
+    await tester.pumpAndSettle();
+    expect(find.text('DESPACHADO'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

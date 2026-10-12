@@ -201,7 +201,7 @@ class _Conteos extends StatelessWidget {
             ),
         if (despachos > 0)
           Text(
-            '$despachos solo en Despachos Ate',
+            despachos == 1 ? '1 despachada' : '$despachos despachadas',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -247,9 +247,16 @@ class _EstadoTexto extends StatelessWidget {
   }
 }
 
-/// Las guías que solo están en Despachos Ate: gris, sin seguimiento.
-const _colorDespacho = Ipesa.textoSuave;
-const _etiquetaDespacho = 'Solo en Despachos Ate';
+/// Las guías que solo están en Despachos Ate: "Despachado", sin
+/// seguimiento.
+const _colorDespacho = colorDespachado;
+const _etiquetaDespacho = 'Despachado';
+
+void _abrirDespacho(BuildContext context, Despacho d) {
+  Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => RastreoDetalleScreen.despacho(d)));
+}
 
 class _Resultados extends StatelessWidget {
   const _Resultados({
@@ -334,7 +341,11 @@ class _Resultados extends StatelessWidget {
                       guia: guias[i],
                       onTap: () => _abrir(context, guias[i]),
                     )
-                  : _TarjetaDespacho(despacho: despachos[i - guias.length]),
+                  : _TarjetaDespacho(
+                      despacho: despachos[i - guias.length],
+                      onTap: () =>
+                          _abrirDespacho(context, despachos[i - guias.length]),
+                    ),
             ),
           ),
         ],
@@ -376,6 +387,10 @@ class _Resultados extends StatelessWidget {
                             )
                           : _FilaDespacho(
                               despacho: despachos[i - guias.length],
+                              onTap: () => _abrirDespacho(
+                                context,
+                                despachos[i - guias.length],
+                              ),
                             ),
                     ),
                   ),
@@ -542,7 +557,7 @@ class _Tarjeta extends StatelessWidget {
   }
 }
 
-/// "Solo en Despachos Ate", en gris: salió de Ate pero no se registró en
+/// "Despachado": salió de Ate (hoja Despachos Ate) pero no se registró en
 /// la app, así que no hay seguimiento ni entrega.
 class _EtiquetaDespacho extends StatelessWidget {
   const _EtiquetaDespacho();
@@ -576,9 +591,10 @@ class _EtiquetaDespacho extends StatelessWidget {
 }
 
 class _FilaDespacho extends StatelessWidget {
-  const _FilaDespacho({required this.despacho});
+  const _FilaDespacho({required this.despacho, required this.onTap});
 
   final Despacho despacho;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +616,7 @@ class _FilaDespacho extends StatelessWidget {
       ),
     );
     final d = despacho;
-    return Padding(
+    final fila = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
       child: Row(
         children: [
@@ -621,13 +637,15 @@ class _FilaDespacho extends StatelessWidget {
         ],
       ),
     );
+    return InkWell(onTap: onTap, child: fila);
   }
 }
 
 class _TarjetaDespacho extends StatelessWidget {
-  const _TarjetaDespacho({required this.despacho});
+  const _TarjetaDespacho({required this.despacho, required this.onTap});
 
   final Despacho despacho;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -641,34 +659,41 @@ class _TarjetaDespacho extends StatelessWidget {
       elevation: 3,
       shadowColor: const Color(0x330F4C5C),
       borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(d.numeroGuia, style: Ipesa.titulo(15))),
-                const SizedBox(width: 12),
-                const _EtiquetaDespacho(),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              d.cliente,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            if (extra.isNotEmpty)
-              Text(
-                extra,
-                style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text(d.numeroGuia, style: Ipesa.titulo(15))),
+                  const SizedBox(width: 12),
+                  const _EtiquetaDespacho(),
+                ],
               ),
-            Text(
-              'Despachada ${_fechaHora.format(d.fecha.toLocal())} · sin '
-              'seguimiento en la app',
-              style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                d.cliente,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (extra.isNotEmpty)
+                Text(
+                  extra,
+                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
+                ),
+              Text(
+                'Despachada ${_fechaHora.format(d.fecha.toLocal())} · sin '
+                'seguimiento en la app',
+                style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+              ),
+            ],
+          ),
         ),
       ),
     );

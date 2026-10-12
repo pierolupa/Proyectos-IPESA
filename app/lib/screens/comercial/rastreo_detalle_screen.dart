@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/despacho.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
@@ -25,9 +26,16 @@ class RastreoDetalleScreen extends StatelessWidget {
     super.key,
     required this.numeroGuia,
     this.fechaCreacion,
-  });
+  }) : despacho = null;
+
+  /// Una guía que solo está en la hoja Despachos Ate: el mismo boleto, con
+  /// los datos que hay y el sello DESPACHADO (sin foto ni ubicación).
+  RastreoDetalleScreen.despacho(Despacho this.despacho, {super.key})
+    : numeroGuia = despacho.numeroGuia,
+      fechaCreacion = null;
 
   final String numeroGuia;
+  final Despacho? despacho;
 
   /// Cuál de las tareas con ese número (la misma guía puede registrarse de
   /// nuevo tras un rechazo).
@@ -35,10 +43,13 @@ class RastreoDetalleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final guia = context.watch<AppState>().buscarPorNumero(
-      numeroGuia,
-      fechaCreacion: fechaCreacion,
-    );
+    final despacho = this.despacho;
+    final guia = despacho != null
+        ? null
+        : context.watch<AppState>().buscarPorNumero(
+            numeroGuia,
+            fechaCreacion: fechaCreacion,
+          );
     final ancho = MediaQuery.sizeOf(context).width;
     final altoEscena = ancho < 600 ? 170.0 : 220.0;
 
@@ -83,7 +94,9 @@ class RastreoDetalleScreen extends StatelessWidget {
                             ),
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                              child: guia == null
+                              child: despacho != null
+                                  ? _Boleto.despacho(despacho)
+                                  : guia == null
                                   ? const _NoEncontrada()
                                   : _Boleto(guia: guia),
                             ),
@@ -157,6 +170,9 @@ class _NoEncontrada extends StatelessWidget {
   }
 }
 
+/// El color del sello DESPACHADO (guías de Despachos Ate).
+const colorDespachado = Color(0xFF3D5A80);
+
 /// Lo que dice el sello según el estado de la guía.
 (String, String) _textoSello(Guia guia) {
   String fecha(DateTime f) => _fechaSello.format(f.toLocal());
@@ -179,9 +195,11 @@ class _NoEncontrada extends StatelessWidget {
 /// boleto y el sello del estado. Entra "imprimiéndose" y luego cae el
 /// sello.
 class _Boleto extends StatefulWidget {
-  const _Boleto({required this.guia});
+  const _Boleto({required Guia this.guia}) : despacho = null;
+  const _Boleto.despacho(Despacho this.despacho) : guia = null;
 
-  final Guia guia;
+  final Guia? guia;
+  final Despacho? despacho;
 
   @override
   State<_Boleto> createState() => _BoletoState();
@@ -225,10 +243,10 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  void _verFoto() => _hoja(FotoEntrega(guia: widget.guia));
+  void _verFoto() => _hoja(FotoEntrega(guia: widget.guia!));
 
   void _verUbicacion() {
-    final guia = widget.guia;
+    final guia = widget.guia!;
     _hoja(
       SeccionUbicacion(
         guia: guia,
@@ -253,9 +271,99 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
     );
   }
 
+  /// El sello que cae sobre el talón, con su animación.
+  Widget _selloAnimado(String texto, String fecha, Color color) => Center(
+    child: FadeTransition(
+      opacity: _opacidadSello,
+      child: ScaleTransition(
+        scale: _escalaSello,
+        // Inclinado, sus esquinas salen de su caja: el margen vertical las
+        // deja libres; y si el texto es largo (EN TRASBORDO) se achica para
+        // caber.
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 14, 8, 14),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Transform.rotate(
+              angle: -9 * math.pi / 180,
+              child: _Sello(texto: texto, fecha: fecha, color: color),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /// Una guía de Despachos Ate: lo que se sabe (guía, cliente, pedido,
+  /// entrega, salida) y el sello DESPACHADO, sin foto ni ubicación.
+  Widget _boletoDespacho(Despacho d) {
+    final datos = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _Etiqueta('N° de guía'),
+          Text(d.numeroGuia, style: Ipesa.titulo(30, color: Ipesa.texto)),
+          const SizedBox(height: 10),
+          const _Etiqueta('Cliente'),
+          Text(
+            d.cliente.isEmpty ? '—' : d.cliente,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Ipesa.texto,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _Dato('N° pedido', d.numeroPedido)),
+              const SizedBox(width: 16),
+              Expanded(child: _Dato('N° entrega', d.numeroEntrega)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Expanded(child: _Dato('Recogida en', 'Almacen Ate')),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _Dato('Salió', _fechaHora.format(d.fecha.toLocal())),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final talon = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _selloAnimado(
+            'DESPACHADO',
+            _fechaSello.format(d.fecha.toLocal()),
+            colorDespachado,
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Registrada en Despachos Ate. Sin seguimiento de la entrega en '
+            'la app.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+          ),
+        ],
+      ),
+    );
+    return _armar(datos, talon);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final guia = widget.guia;
+    if (widget.despacho case final d?) return _boletoDespacho(d);
+    final guia = widget.guia!;
     final (sello, fechaSello) = _textoSello(guia);
     final recojo = sucursalDeRecojo(context, guia);
     // Con el comprobante a la vista, el nombre de la agencia no se repite.
@@ -351,31 +459,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: FadeTransition(
-              opacity: _opacidadSello,
-              child: ScaleTransition(
-                scale: _escalaSello,
-                // Inclinado, sus esquinas salen de su caja: el
-                // margen vertical las deja libres; y si el texto es
-                // largo (EN TRASBORDO) se achica para caber.
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 14, 8, 14),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Transform.rotate(
-                      angle: -9 * math.pi / 180,
-                      child: _Sello(
-                        texto: sello,
-                        fecha: fechaSello,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _selloAnimado(sello, fechaSello, color),
           if (guia.motivoRechazo.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
@@ -410,6 +494,11 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
       ),
     );
 
+    return _armar(datos, talon);
+  }
+
+  /// El boleto: cabecera, datos, corte y talón; entra "imprimiéndose".
+  Widget _armar(Widget datos, Widget talon) {
     final boleto = DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
