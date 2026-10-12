@@ -429,7 +429,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('En pantalla ancha muestra la tabla con todas las columnas', (
+  testWidgets('En pantalla ancha agrupa por día, con el día a la izquierda', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1400, 900);
@@ -444,18 +444,12 @@ void main() {
     await tester.tap(find.text('Buscar'));
     await tester.pumpAndSettle();
 
-    for (final columna in [
-      'N° de guía',
-      'Cliente',
-      'Pedido',
-      'Entrega',
-      'Salida',
-      'Entregada',
-      'Estado',
-    ]) {
-      expect(find.text(columna), findsWidgets);
-    }
-    expect(find.text('0188169522'), findsOneWidget);
+    // Las tres guías son de hoy: un solo día con sus 3 guías.
+    expect(find.textContaining('Hoy '), findsOneWidget);
+    expect(find.text('3 guías'), findsOneWidget);
+    expect(find.textContaining('Pedido 0188170001'), findsOneWidget);
+    // El estado va como texto, sin fondo ni ícono.
+    expect(find.text('En ruta'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

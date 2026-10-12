@@ -15,7 +15,6 @@ import '../../widgets/lugares_sucursal.dart';
 import 'rastreo_detalle_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
-final _fechaHora = DateFormat('dd/MM/yyyy HH:mm');
 
 /// Resultados de una búsqueda del comercial cuando coincide más de una
 /// guía: tarjetas flotantes sobre el mismo paisaje del buscador (con el
@@ -143,7 +142,7 @@ class RastreoResultadosScreen extends StatelessWidget {
                           total: n,
                           cargando: appState.cargando && appState.guias.isEmpty,
                           error: appState.error,
-                          tabla: ancho >= 1000,
+                          ancha: ancho >= 700,
                         ),
                       ),
                     ],
@@ -213,49 +212,97 @@ class _Conteos extends StatelessWidget {
   }
 }
 
-/// El estado como texto de color con un punto, sin fondo.
-class _EstadoTexto extends StatelessWidget {
-  const _EstadoTexto({required this.estado});
-
-  final EstadoGuia estado;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: estado.color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          estado.etiqueta,
-          style: TextStyle(
-            fontFamily: Ipesa.fuenteTitulos,
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: estado.color,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// Las guías que solo están en Despachos Ate: "Despachado", sin
 /// seguimiento.
 const _colorDespacho = colorDespachado;
-const _etiquetaDespacho = 'Despachado';
 
 void _abrirDespacho(BuildContext context, Despacho d) {
   Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => RastreoDetalleScreen.despacho(d)));
+}
+
+void _abrirGuia(BuildContext context, Guia guia) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => RastreoDetalleScreen(
+        numeroGuia: guia.numeroGuia,
+        fechaCreacion: guia.fechaCreacion,
+      ),
+    ),
+  );
+}
+
+final _hora = DateFormat('HH:mm');
+const _dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+/// Un resultado de la línea de tiempo: una guía de la app o un despacho de
+/// Despachos Ate, con lo que se muestra de cada uno.
+class _Evento {
+  _Evento.guia(BuildContext context, Guia g)
+    : fecha = g.fechaCreacion.toLocal(),
+      numero = g.numeroGuia,
+      cliente = g.destinatario,
+      estado = g.estado.etiqueta,
+      color = g.estado.color,
+      detalle = _detalleGuia(context, g),
+      numeros = _numeros(g.numeroPedido, g.numeroEntrega),
+      abrir = ((c) => _abrirGuia(c, g));
+
+  _Evento.despacho(Despacho d)
+    : fecha = d.fecha.toLocal(),
+      numero = d.numeroGuia,
+      cliente = d.cliente,
+      estado = 'Despachado',
+      color = _colorDespacho,
+      detalle = [
+        'Salió de Almacen Ate',
+        if (d.transporte.isNotEmpty) 'Entregada a ${d.transporte}',
+        if (d.sucursal.isNotEmpty) d.sucursal,
+      ].join(' · '),
+      numeros = _numeros(d.numeroPedido, d.numeroEntrega),
+      abrir = ((c) => _abrirDespacho(c, d));
+
+  final DateTime fecha;
+  final String numero;
+  final String cliente;
+  final String estado;
+  final Color color;
+  final String detalle;
+
+  /// "Pedido … · Entrega …" (lo que se tenga).
+  final String numeros;
+  final void Function(BuildContext) abrir;
+
+  static String _numeros(String pedido, String entrega) => [
+    if (pedido.isNotEmpty) 'Pedido $pedido',
+    if (entrega.isNotEmpty) 'Entrega $entrega',
+  ].join(' · ');
+
+  static String _detalleGuia(BuildContext context, Guia g) {
+    final recojo = sucursalDeRecojo(context, g);
+    final salida = [
+      'Salió ${_hora.format(g.fechaCreacion.toLocal())}',
+      if (recojo != null) 'de $recojo',
+    ].join(' ');
+    final String fin;
+    if (g.estado.esFinal) {
+      final lugar = lugarDeEntrega(context, g);
+      final cuando = fechaDeCierre(g);
+      fin = [
+        'Entregada',
+        if (cuando != null) _hora.format(cuando),
+        if (lugar != null) 'en $lugar',
+      ].join(' ');
+    } else if (g.estado == EstadoGuia.rechazado) {
+      fin = g.motivoRechazo.isEmpty
+          ? 'No se entregó'
+          : 'Rechazada: ${g.motivoRechazo}';
+    } else {
+      fin = g.transportista;
+    }
+    return [salida, if (fin.isNotEmpty) fin].join(' · ');
+  }
 }
 
 class _Resultados extends StatelessWidget {
@@ -265,7 +312,7 @@ class _Resultados extends StatelessWidget {
     required this.total,
     required this.cargando,
     required this.error,
-    required this.tabla,
+    required this.ancha,
   });
 
   final List<Guia> guias;
@@ -273,18 +320,9 @@ class _Resultados extends StatelessWidget {
   final int total;
   final bool cargando;
   final String? error;
-  final bool tabla;
 
-  void _abrir(BuildContext context, Guia guia) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RastreoDetalleScreen(
-          numeroGuia: guia.numeroGuia,
-          fechaCreacion: guia.fechaCreacion,
-        ),
-      ),
-    );
-  }
+  /// En la PC el día va a la izquierda; en el celular, arriba.
+  final bool ancha;
 
   @override
   Widget build(BuildContext context) {
@@ -300,414 +338,219 @@ class _Resultados extends StatelessWidget {
         ),
       );
     }
-
     if (guias.isEmpty && despachos.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Expanded(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.search_off, size: 40, color: Ipesa.textoSuave),
-                    SizedBox(height: 8),
-                    Text(
-                      'Ninguna guía coincide con los filtros.',
-                      style: TextStyle(color: Ipesa.textoSuave),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    if (!tabla) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: guias.length + despachos.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, i) => i < guias.length
-                  ? _Tarjeta(
-                      guia: guias[i],
-                      onTap: () => _abrir(context, guias[i]),
-                    )
-                  : _TarjetaDespacho(
-                      despacho: despachos[i - guias.length],
-                      onTap: () =>
-                          _abrirDespacho(context, despachos[i - guias.length]),
-                    ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(Ipesa.radio),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x1A0F4C5C),
-                    blurRadius: 24,
-                    offset: Offset(0, 10),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _FilaTabla.encabezado(),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: guias.length + despachos.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, i) => i < guias.length
-                          ? _FilaTabla(
-                              guia: guias[i],
-                              onTap: () => _abrir(context, guias[i]),
-                            )
-                          : _FilaDespacho(
-                              despacho: despachos[i - guias.length],
-                              onTap: () => _abrirDespacho(
-                                context,
-                                despachos[i - guias.length],
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _fechaEntrega(Guia g) {
-  final fecha =
-      g.fechaCierre ?? (g.estado.esFinal ? g.fechaActualizacion : null);
-  return fecha == null ? '—' : _fechaHora.format(fecha.toLocal());
-}
-
-class _FilaTabla extends StatelessWidget {
-  const _FilaTabla({required Guia this.guia, required VoidCallback this.onTap});
-  const _FilaTabla.encabezado() : guia = null, onTap = null;
-
-  final Guia? guia;
-  final VoidCallback? onTap;
-
-  static const _flex = [14, 22, 11, 11, 13, 13, 12];
-
-  @override
-  Widget build(BuildContext context) {
-    final g = guia;
-    const estiloEncabezado = TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-      color: Ipesa.etiqueta,
-    );
-    const estiloDato = TextStyle(fontSize: 14, color: Ipesa.texto);
-
-    Widget celda(int i, Widget hijo) => Expanded(
-      flex: _flex[i],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: hijo,
-      ),
-    );
-    Widget texto(int i, String valor, {TextStyle estilo = estiloDato}) => celda(
-      i,
-      Text(
-        valor.isEmpty ? '—' : valor,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: estilo,
-      ),
-    );
-
-    final fila = Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: g == null ? 12 : 14,
-      ),
-      child: Row(
-        children: g == null
-            ? [
-                texto(0, 'N° de guía', estilo: estiloEncabezado),
-                texto(1, 'Cliente', estilo: estiloEncabezado),
-                texto(2, 'Pedido', estilo: estiloEncabezado),
-                texto(3, 'Entrega', estilo: estiloEncabezado),
-                texto(4, 'Salida', estilo: estiloEncabezado),
-                texto(5, 'Entregada', estilo: estiloEncabezado),
-                texto(6, 'Estado', estilo: estiloEncabezado),
-              ]
-            : [
-                texto(0, g.numeroGuia, estilo: Ipesa.titulo(14)),
-                texto(1, g.destinatario),
-                texto(2, g.numeroPedido),
-                texto(3, g.numeroEntrega),
-                texto(
-                  4,
-                  [
-                    _fechaHora.format(g.fechaCreacion.toLocal()),
-                    ?sucursalDeRecojo(context, g),
-                  ].join('\n'),
-                ),
-                texto(
-                  5,
-                  [_fechaEntrega(g), ?sucursalDeEntrega(context, g)].join('\n'),
-                ),
-                celda(
-                  6,
-                  // "En proceso de trasbordo" es largo: se achica para caber.
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: _EstadoTexto(estado: g.estado),
-                  ),
-                ),
-              ],
-      ),
-    );
-
-    if (g == null) return ColoredBox(color: Ipesa.fondo, child: fila);
-    return InkWell(onTap: onTap, child: fila);
-  }
-}
-
-class _Tarjeta extends StatelessWidget {
-  const _Tarjeta({required this.guia, required this.onTap});
-
-  final Guia guia;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final extra = [
-      if (guia.numeroPedido.isNotEmpty) 'Pedido ${guia.numeroPedido}',
-      if (guia.numeroEntrega.isNotEmpty) 'Entrega ${guia.numeroEntrega}',
-    ].join(' · ');
-    return Material(
-      color: Colors.white,
-      elevation: 3,
-      shadowColor: const Color(0x330F4C5C),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.all(24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(guia.numeroGuia, style: Ipesa.titulo(15)),
-                  ),
-                  const SizedBox(width: 12),
-                  _EstadoTexto(estado: guia.estado),
-                ],
-              ),
-              const SizedBox(height: 4),
+              Icon(Icons.search_off, size: 40, color: Ipesa.textoSuave),
+              SizedBox(height: 8),
               Text(
-                guia.destinatario,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                'Ninguna guía coincide con los filtros.',
+                style: TextStyle(color: Ipesa.textoSuave),
               ),
-              if (extra.isNotEmpty)
-                Text(
-                  extra,
-                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
-                ),
-              Text(
-                'Salió ${_fechaHora.format(guia.fechaCreacion.toLocal())}'
-                '${guia.estado.esFinal ? ' · entregada ${_fechaEntrega(guia)}' : ''}',
-                style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
-              ),
-              LugaresSucursal(guia: guia),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
+      );
+    }
 
-/// "Despachado": salió de Ate (hoja Despachos Ate) pero no se registró en
-/// la app, así que no hay seguimiento ni entrega.
-class _EtiquetaDespacho extends StatelessWidget {
-  const _EtiquetaDespacho();
+    // Por día de salida, del más reciente al más antiguo.
+    final eventos = [
+      for (final g in guias) _Evento.guia(context, g),
+      for (final d in despachos) _Evento.despacho(d),
+    ]..sort((a, b) => b.fecha.compareTo(a.fecha));
+    final dias = <DateTime, List<_Evento>>{};
+    for (final e in eventos) {
+      dias.putIfAbsent(DateUtils.dateOnly(e.fecha), () => []).add(e);
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: _colorDespacho,
-            shape: BoxShape.circle,
+        for (final MapEntry(key: dia, value: lista) in dias.entries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _Dia(dia: dia, eventos: lista, ancha: ancha),
           ),
-        ),
-        const SizedBox(width: 6),
-        const Text(
-          _etiquetaDespacho,
-          style: TextStyle(
-            fontFamily: Ipesa.fuenteTitulos,
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: _colorDespacho,
-          ),
-        ),
       ],
     );
   }
 }
 
-class _FilaDespacho extends StatelessWidget {
-  const _FilaDespacho({required this.despacho, required this.onTap});
+/// Un día de la línea de tiempo: la fecha con su total y sus guías.
+class _Dia extends StatelessWidget {
+  const _Dia({required this.dia, required this.eventos, required this.ancha});
 
-  final Despacho despacho;
-  final VoidCallback onTap;
+  final DateTime dia;
+  final List<_Evento> eventos;
+  final bool ancha;
 
   @override
   Widget build(BuildContext context) {
-    const estilo = TextStyle(fontSize: 14, color: Ipesa.texto);
-    Widget celda(int i, Widget hijo) => Expanded(
-      flex: _FilaTabla._flex[i],
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    final titulo = DateUtils.isSameDay(dia, hoy)
+        ? 'Hoy ${DateFormat('dd/MM').format(dia)}'
+        : '${_dias[dia.weekday - 1]} ${DateFormat('dd/MM').format(dia)}'
+              '${dia.year != hoy.year ? '/${dia.year}' : ''}';
+    final cabecera = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(titulo, style: Ipesa.titulo(16)),
+        Text(
+          eventos.length == 1 ? '1 guía' : '${eventos.length} guías',
+          style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+        ),
+      ],
+    );
+    final lista = DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(left: BorderSide(color: Ipesa.mentaBorde, width: 2)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: hijo,
+        padding: const EdgeInsets.only(left: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, e) in eventos.indexed)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
+                child: _FilaEvento(evento: e),
+              ),
+          ],
+        ),
       ),
     );
-    Widget texto(int i, String valor, {TextStyle e = estilo}) => celda(
-      i,
-      Text(
-        valor.isEmpty ? '—' : valor,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: e,
-      ),
-    );
-    final d = despacho;
-    final fila = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-      child: Row(
+    if (ancha) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          texto(0, d.numeroGuia, e: Ipesa.titulo(14)),
-          texto(
-            1,
-            [d.cliente, if (d.sucursal.isNotEmpty) d.sucursal].join('\n'),
-          ),
-          texto(2, d.numeroPedido),
-          texto(3, d.numeroEntrega),
-          texto(4, '${_fecha.format(d.fecha.toLocal())}\nAlmacen Ate'),
-          texto(5, d.transporte.isEmpty ? '' : 'Entregada a ${d.transporte}'),
-          celda(
-            6,
-            const FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: _EtiquetaDespacho(),
+          SizedBox(
+            width: 128,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: cabecera,
             ),
           ),
+          Expanded(child: lista),
         ],
-      ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: cabecera,
+        ),
+        lista,
+      ],
     );
-    return InkWell(onTap: onTap, child: fila);
   }
 }
 
-class _TarjetaDespacho extends StatelessWidget {
-  const _TarjetaDespacho({required this.despacho, required this.onTap});
+/// Una guía en la línea de tiempo: número, cliente, el detalle de salida y
+/// entrega, y el estado como texto de color (sin fondo ni ícono).
+class _FilaEvento extends StatelessWidget {
+  const _FilaEvento({required this.evento});
 
-  final Despacho despacho;
-  final VoidCallback onTap;
+  final _Evento evento;
 
   @override
   Widget build(BuildContext context) {
-    final d = despacho;
-    final extra = [
-      if (d.numeroPedido.isNotEmpty) 'Pedido ${d.numeroPedido}',
-      if (d.numeroEntrega.isNotEmpty) 'Entrega ${d.numeroEntrega}',
-    ].join(' · ');
-    return Material(
-      color: Colors.white,
-      elevation: 3,
-      shadowColor: const Color(0x330F4C5C),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: Text(d.numeroGuia, style: Ipesa.titulo(15))),
-                  const SizedBox(width: 12),
-                  const _EtiquetaDespacho(),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                d.cliente,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (extra.isNotEmpty)
-                Text(
-                  extra,
-                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
-                ),
-              if (d.transporte.isNotEmpty)
-                Text(
-                  'Entregada a ${d.transporte}',
-                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
-                ),
-              if (d.sucursal.isNotEmpty)
-                Text(
-                  'Sucursal IPESA: ${d.sucursal}',
-                  style: const TextStyle(fontSize: 13, color: Ipesa.etiqueta),
-                ),
-              Text(
-                'Salió de Almacen Ate el ${_fecha.format(d.fecha.toLocal())}',
-                style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
-              ),
-            ],
+    final e = evento;
+    final estado = Text(
+      e.estado,
+      style: TextStyle(
+        fontFamily: Ipesa.fuenteTitulos,
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        color: e.color,
+      ),
+    );
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // El punto sobre la línea del día, del color del estado.
+        Positioned(
+          left: -21,
+          top: 17,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: e.color,
+              shape: BoxShape.circle,
+              border: Border.all(color: cieloEscena, width: 2),
+            ),
           ),
         ),
-      ),
+        Material(
+          color: Colors.white,
+          elevation: 1.5,
+          shadowColor: const Color(0x330F4C5C),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => e.abrir(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(e.numero, style: Ipesa.titulo(15)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                e.cliente,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Ipesa.texto,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          e.detalle,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Ipesa.textoSuave,
+                          ),
+                        ),
+                        if (e.numeros.isNotEmpty)
+                          Text(
+                            e.numeros,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: Ipesa.etiqueta,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  estado,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
