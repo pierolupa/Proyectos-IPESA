@@ -356,7 +356,8 @@ archivo el backend funciona igual que antes.
 `GET /despachos?desde=ISO&hasta=ISO` devuelve las guías de la hoja
 "Despachos Ate" (pestaña *Base de datos*) registradas en ese rango que **no**
 están en la base de la app (ni en la activa ni archivadas): número de guía,
-cliente, fecha, pedido y entrega. La app las muestra en Rastrear como
+cliente, fecha, pedido y entrega. Las de transporte Toscano, Log, Aval y
+Amazon salen siempre, aunque también estén en la base (aparecen dos veces). La app las muestra en Rastrear como
 "Solo en Despachos Ate". Solo lectura: nunca escribe en esa hoja.
 
 - La hoja debe estar compartida como **Lector** con la cuenta de servicio

@@ -18,7 +18,7 @@ const ENCABEZADO = [
 describe('hoja Despachos Ate', () => {
   it('encuentra las columnas por nombre', () => {
     expect(columnasDespachos(ENCABEZADO)).toEqual({
-      fecha: 0, hora: 1, guia: 2, cliente: 3, pedido: 7, entrega: 8, sucursal: 16,
+      fecha: 0, hora: 1, guia: 2, cliente: 3, pedido: 7, entrega: 8, sucursal: 16, transporte: 11,
     });
     expect(() => columnasDespachos(['Cliente'])).toThrow();
   });
@@ -45,6 +45,7 @@ describe('hoja Despachos Ate', () => {
         numero_pedido: '4900109327',
         numero_entrega: '81115782',
         sucursal: 'CERRO COLORADO - AREQUIPA - AREQUIPA',
+        transporte: 'Toscano',
       },
       {
         numero_guia: 'T001-95668',
@@ -53,6 +54,7 @@ describe('hoja Despachos Ate', () => {
         numero_pedido: '4900109360',
         numero_entrega: '',
         sucursal: '',
+        transporte: '',
       },
     ]);
   });
@@ -80,5 +82,19 @@ describe('hoja Despachos Ate', () => {
       Date.parse('2026-10-11T05:00:00Z'),
     );
     expect(lista.map((x) => x.numero_guia)).toEqual(['T001-2']);
+  });
+
+  it('las de Toscano, Log, Aval y Amazon salen aunque estén en la app', () => {
+    const d = (numero, transporte) => ({
+      numero_guia: numero, cliente: 'C', fecha: '2026-10-10T15:00:00.000Z',
+      numero_pedido: '', numero_entrega: '', transporte,
+    });
+    const lista = despachosNuevos(
+      [d('T1', 'Toscano'), d('T2', 'Aval '), d('T3', 'LOG'), d('T4', 'Amazon'), d('T5', 'Natale'), d('T6', '')],
+      ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'],
+      Date.parse('2026-10-10T05:00:00Z'),
+      Date.parse('2026-10-11T05:00:00Z'),
+    );
+    expect(lista.map((x) => x.numero_guia).sort()).toEqual(['T1', 'T2', 'T3', 'T4']);
   });
 });

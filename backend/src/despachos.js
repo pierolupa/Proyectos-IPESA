@@ -35,6 +35,7 @@ function columnasDespachos(encabezado) {
     entrega: buscar('entrega'),
     // En la hoja se llama "Surcusal ipesa" (informativo).
     sucursal: buscar('surcusal', 'sucursal'),
+    transporte: buscar('transporte'),
   };
   if (cols.fecha < 0 || cols.guia < 0) {
     throw new Error('La hoja Despachos no tiene las columnas "Fecha de Extraccion" y "Nro de guia".');
@@ -65,7 +66,7 @@ function textoDe(valor) {
 
 /**
  * Las filas leídas → despachos { numero_guia, cliente, fecha, numero_pedido,
- * numero_entrega, sucursal }.
+ * numero_entrega, sucursal, transporte }.
  */
 function filasADespachos(filas, cols) {
   const lista = [];
@@ -80,6 +81,7 @@ function filasADespachos(filas, cols) {
       numero_pedido: cols.pedido >= 0 ? textoDe(f[cols.pedido]) : '',
       numero_entrega: cols.entrega >= 0 ? textoDe(f[cols.entrega]) : '',
       sucursal: cols.sucursal >= 0 ? textoDe(f[cols.sucursal]) : '',
+      transporte: cols.transporte >= 0 ? textoDe(f[cols.transporte]) : '',
     });
   }
   return lista;
@@ -113,8 +115,17 @@ function filasDelRango(seriales, desdeMs, hastaMs) {
 const claveGuia = (numero) => String(numero).replace(/\s+/g, '').toUpperCase();
 
 /**
+ * Empresas de transporte cuyas guías salen siempre, aunque la guía también
+ * esté en la base de la app (entonces aparece dos veces).
+ */
+const TRANSPORTES_SIEMPRE = new Set(['toscano', 'log', 'aval', 'amazon']);
+
+const siempreSale = (d) => TRANSPORTES_SIEMPRE.has(normalizar(d.transporte));
+
+/**
  * Los despachos en [desde, hasta) que NO están en la base de la app
- * (`numerosEnApp`: los números de guía de la app).
+ * (`numerosEnApp`: los números de guía de la app), más los de Toscano, Log,
+ * Aval y Amazon aunque estén. Una guía repetida en la hoja sale una vez.
  */
 function despachosNuevos(despachos, numerosEnApp, desdeMs, hastaMs) {
   const enApp = new Set([...numerosEnApp].map(claveGuia));
@@ -125,7 +136,8 @@ function despachosNuevos(despachos, numerosEnApp, desdeMs, hastaMs) {
       if (Number.isFinite(desdeMs) && t < desdeMs) return false;
       if (Number.isFinite(hastaMs) && t >= hastaMs) return false;
       const clave = claveGuia(d.numero_guia);
-      if (enApp.has(clave) || vistos.has(clave)) return false;
+      if (vistos.has(clave)) return false;
+      if (enApp.has(clave) && !siempreSale(d)) return false;
       vistos.add(clave);
       return true;
     })
