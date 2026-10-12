@@ -83,6 +83,12 @@ const CONOCIDAS = new Set(COLUMNS);
 // Columnas que existieron un tiempo y ya no se usan: su lugar se reutiliza.
 const RETIRADAS = new Set(['salida_lat', 'salida_lng']);
 
+const {
+  pestanaDeAnio,
+  seleccionarParaArchivar,
+  agruparPorAnio,
+} = require('./archivo');
+
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
 const vacia = (valor) => normalizar(valor) === '';
 const celda = (fila, i) => (fila[i] === undefined || fila[i] === null ? '' : fila[i]);
@@ -753,7 +759,124 @@ async function eliminarSucursal(rowNumber) {
   });
 }
 
+/**
+ * Lee las guías de las pestañas de archivo (solo lectura). Cada una tiene la
+ * misma estructura que "Guias"; las guías devueltas llevan `_archivo` para
+ * que nunca se confundan con las de la hoja activa (no se escriben).
+ */
+async function listarGuiasArchivadas(titulos) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const guias = [];
+  for (const titulo of titulos) {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${titulo}'!A2:${ULTIMA_COLUMNA}`,
+    });
+    (res.data.values || []).forEach((fila, i) => {
+      const guia = rowToGuia(fila, i + 2);
+      if (guia.numero_guia !== '') guias.push({ ...guia, _archivo: titulo });
+    });
+  }
+  return guias;
+}
+
+async function asegurarPestana(sheets, spreadsheetId, titulo) {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties.title',
+  });
+  const existe = (res.data.sheets || []).some((s) => s.properties.title === titulo);
+  if (existe) return;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: { requests: [{ addSheet: { properties: { title: titulo } } }] },
+  });
+}
+
+/**
+ * Pasa a las pestañas de año las guías cerradas anteriores a `hasta`
+ * (AAAA-MM-DD). Sin `ejecutar` solo cuenta lo que movería.
+ *
+ * Con ejecutar: copia las filas a "Guías AAAA", vuelve a leer la hoja activa
+ * y solo entonces borra esas filas. Si entre medio la hoja cambió (alguien
+ * registró, editó o borró), no borra nada y avisa. Conviene correrlo de
+ * noche, sin nadie usando la app.
+ */
+async function archivarGuias(hasta, { ejecutar = false } = {}) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const seleccion = seleccionarParaArchivar(await listarGuias({ fresco: true }), hasta);
+  const grupos = agruparPorAnio(seleccion);
+  const plan = Object.fromEntries(
+    Object.entries(grupos).map(([anio, lista]) => [pestanaDeAnio(anio), lista.length]),
+  );
+  if (!ejecutar) return { ejecutar: false, total: seleccion.length, porPestana: plan };
+  if (seleccion.length === 0) return { ejecutar: true, total: 0, porPestana: plan };
+
+  const comprobar = async () => {
+    const actuales = new Map(
+      (await listarGuias({ fresco: true })).map((g) => [g._row, g]),
+    );
+    for (const g of seleccion) {
+      const ahora = actuales.get(g._row);
+      if (!ahora || ahora.numero_guia !== g.numero_guia || ahora.fecha_creacion !== g.fecha_creacion) {
+        throw Object.assign(
+          new Error('La hoja cambió mientras se archivaba; no se borró nada. Vuelve a intentarlo.'),
+          { status: 409 },
+        );
+      }
+    }
+  };
+
+  await comprobar();
+  const encabezado = (
+    await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SHEET_NAME}!A1:${ULTIMA_COLUMNA}1`,
+    })
+  ).data.values?.[0] || [];
+
+  for (const [anio, lista] of Object.entries(grupos)) {
+    const titulo = pestanaDeAnio(anio);
+    await asegurarPestana(sheets, spreadsheetId, titulo);
+    const usadas = (
+      await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${titulo}'!A:A` })
+    ).data.values || [];
+    const filas = lista.map((g) => guiaToRow(g));
+    const ancho = Math.max(encabezado.length, ...filas.map((f) => f.length));
+    const pad = (f) => [...f, ...Array(ancho - f.length).fill('')];
+    const datos = [];
+    if (usadas.length === 0) datos.push(pad(encabezado));
+    const primera = usadas.length === 0 ? 1 : usadas.length + 1;
+    datos.push(...filas.map(pad));
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${titulo}'!A${primera}:${letraColumna(ancho)}${primera + datos.length - 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: datos },
+    });
+  }
+
+  // Antes de borrar, la hoja activa tiene que seguir igual que al copiar.
+  await comprobar();
+  const idHoja = await idDePestana(sheets, spreadsheetId, SHEET_NAME);
+  const requests = seleccion
+    .map((g) => g._row)
+    .sort((a, b) => b - a)
+    .map((fila) => ({
+      deleteDimension: {
+        range: { sheetId: idHoja, dimension: 'ROWS', startIndex: fila - 1, endIndex: fila },
+      },
+    }));
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
+  invalidarCacheGuias();
+  return { ejecutar: true, total: seleccion.length, porPestana: plan };
+}
+
 module.exports = {
+  listarGuiasArchivadas,
+  archivarGuias,
   listarSucursales,
   guardarSucursal,
   eliminarSucursal,

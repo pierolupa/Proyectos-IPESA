@@ -18,6 +18,7 @@ const {
   hayComprobante,
 } = require('./ocrAgente');
 const fotos = require('./fotos');
+const { pestanasArchivo, hacenFaltaArchivo } = require('./archivo');
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -147,7 +148,7 @@ async function transportistasActivos() {
 }
 
 function sinCamposInternos(guia) {
-  const { _row, _fila, ...resto } = guia;
+  const { _row, _fila, _archivo, ...resto } = guia;
   return resto;
 }
 
@@ -340,6 +341,11 @@ app.get('/guias', async (req, res, next) => {
   try {
     const { estado, desde, hasta, vigentes } = req.query;
     let guias = await repo.listarGuias();
+    // Fechas anteriores a la hoja activa: también se mira el archivo por año.
+    const pestanas = pestanasArchivo();
+    if (desde && pestanas.length > 0 && hacenFaltaArchivo(Date.parse(desde))) {
+      guias = [...guias, ...(await repo.listarGuiasArchivadas(pestanas))];
+    }
     if (vigentes !== undefined) {
       const desdeVigentes = Date.parse(vigentes);
       if (Number.isNaN(desdeVigentes)) {

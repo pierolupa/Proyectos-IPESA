@@ -318,3 +318,21 @@ Las rutas que actúan sobre una guía aceptan `fechaCreacion` (en el body o en
 la query) para elegir el registro exacto cuando el mismo número se registró
 más de una vez; sin ella usan el más reciente.
 | `GET` | `/api/health` | Chequeo de salud. |
+
+## Archivo por año
+
+La hoja activa se mantiene chica pasando las guías cerradas de años
+anteriores a pestañas aparte (`Guías 2026`, `Guías 2027`...). La app no
+escribe en ellas: solo se leen cuando una consulta pide fechas anteriores.
+
+1. **Simular** (no mueve nada):
+   `node --env-file=.env scripts/archivar.js 2027-01-01`
+2. **Archivar de verdad** (corre de noche, sin nadie usando la app):
+   `node --env-file=.env scripts/archivar.js 2027-01-01 --ejecutar`
+   Copia las filas a la pestaña del año, vuelve a leer la hoja activa y solo
+   entonces borra. Si la hoja cambió en medio, no borra nada.
+3. **Configurar en Vercel** (solo después del paso 2):
+   - `ARCHIVO_HASTA` = la misma fecha de corte (`2027-01-01`)
+   - `PESTANAS_ARCHIVO` = las pestañas creadas (`Guías 2026`)
+
+Sin esas variables el backend funciona igual que antes.

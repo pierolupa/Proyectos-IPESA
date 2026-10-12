@@ -1240,5 +1240,39 @@ describe('Transbordo entre transportistas', () => {
     expect(res.body.transbordo_estado).toBe('');
     expect(res.body.transportista).toBe('Juan Pérez');
   });
-});
 
+  it('con fechas anteriores a la hoja activa, suma las guías del archivo', async () => {
+    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
+    process.env.ARCHIVO_HASTA = '2026-09-01';
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'NUEVA', fecha_creacion: '2026-10-05T10:00:00.000Z' }),
+    ]);
+    repo.listarGuiasArchivadas.mockResolvedValue([
+      { ...guia({ numero_guia: 'VIEJA', fecha_creacion: '2026-03-05T10:00:00.000Z' }), _archivo: 'Guías 2026' },
+    ]);
+    const res = await request(app)
+      .get('/guias')
+      .query({ desde: '2026-03-01T00:00:00.000Z', hasta: '2026-04-01T00:00:00.000Z' });
+    expect(res.status).toBe(200);
+    expect(res.body.map((g) => g.numero_guia)).toEqual(['VIEJA']);
+    expect(res.body[0]._archivo).toBeUndefined();
+    expect(repo.listarGuiasArchivadas).toHaveBeenCalledWith(['Guías 2026']);
+    delete process.env.PESTANAS_ARCHIVO;
+    delete process.env.ARCHIVO_HASTA;
+  });
+
+  it('sin archivo configurado o con fechas recientes no lee el archivo', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'NUEVA', fecha_creacion: '2026-10-05T10:00:00.000Z' }),
+    ]);
+    repo.listarGuiasArchivadas.mockClear();
+    await request(app).get('/guias').query({ desde: '2026-10-01T00:00:00.000Z' });
+    expect(repo.listarGuiasArchivadas).not.toHaveBeenCalled();
+    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
+    process.env.ARCHIVO_HASTA = '2026-09-01';
+    await request(app).get('/guias').query({ desde: '2026-10-01T00:00:00.000Z' });
+    expect(repo.listarGuiasArchivadas).not.toHaveBeenCalled();
+    delete process.env.PESTANAS_ARCHIVO;
+    delete process.env.ARCHIVO_HASTA;
+  });
+});
