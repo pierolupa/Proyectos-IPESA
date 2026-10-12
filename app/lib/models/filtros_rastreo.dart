@@ -1,3 +1,4 @@
+import 'despacho.dart';
 import 'estado_guia.dart';
 import 'guia.dart';
 
@@ -82,6 +83,28 @@ class FiltrosRastreo {
     }
     return true;
   }
+
+  /// Un despacho de "Despachos Ate" pasa los filtros de texto y la fecha de
+  /// salida (no tiene estado ni entrega: con un estado elegido no entra).
+  bool aceptaDespacho(Despacho d) {
+    if (!_contiene(d.numeroGuia, numeroGuia)) return false;
+    if (!_contiene(d.cliente, cliente)) return false;
+    if (!_contiene(d.numeroEntrega, numeroEntrega)) return false;
+    if (!_contiene(d.numeroPedido, numeroPedido)) return false;
+    if (grupo != null || campoFecha != CampoFecha.salida) return false;
+    if (tieneRango) {
+      final fecha = d.fecha.toLocal();
+      final inicio = DateTime(desde!.year, desde!.month, desde!.day);
+      final fin = DateTime(hasta!.year, hasta!.month, hasta!.day + 1);
+      if (fecha.isBefore(inicio) || !fecha.isBefore(fin)) return false;
+    }
+    return true;
+  }
+
+  /// Despachos que pasan los filtros, del más reciente al más antiguo.
+  List<Despacho> aplicarDespachos(Iterable<Despacho> despachos) =>
+      despachos.where(aceptaDespacho).toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha));
 
   /// Guías que pasan los filtros, de la más reciente a la más antigua.
   List<Guia> aplicar(Iterable<Guia> guias) {

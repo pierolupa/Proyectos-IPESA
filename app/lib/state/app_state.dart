@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/despacho.dart';
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
@@ -189,6 +190,39 @@ class AppState extends ChangeNotifier {
     if (_cargaEnCurso case final carga?) await carga;
     if (_rangoCargado == (_desdeTareas, _hastaTareas) && error == null) return;
     await cargarGuias();
+  }
+
+  /// Guías de la hoja "Despachos Ate" que no están en la base (ver
+  /// [asegurarDespachos]). Solo las usa Rastrear.
+  List<Despacho> _despachos = [];
+  (DateTime, DateTime)? _rangoDespachos;
+  DateTime? _despachosLeidos;
+  List<Despacho> get despachos => List.unmodifiable(_despachos);
+
+  /// Trae los despachos de esos días (de [desde] a [hasta], ambos
+  /// incluidos), si no son los que ya tiene o pasaron unos minutos. Si la
+  /// hoja no se puede leer no falla: Rastrear sigue con las guías de la app.
+  Future<void> asegurarDespachos(DateTime desde, DateTime hasta) async {
+    final rango = (_inicioDelDia(desde), _inicioDelDia(hasta));
+    final leidos = _despachosLeidos;
+    if (_rangoDespachos == rango &&
+        leidos != null &&
+        DateTime.now().difference(leidos) < const Duration(minutes: 2)) {
+      return;
+    }
+    try {
+      _despachos = await _api.listarDespachos(
+        desde: rango.$1,
+        hasta: rango.$2.add(const Duration(days: 1)),
+      );
+      _rangoDespachos = rango;
+      _despachosLeidos = DateTime.now();
+    } catch (e) {
+      debugPrint('Despachos Ate no disponible: $e');
+      _despachos = [];
+      _rangoDespachos = null;
+    }
+    notifyListeners();
   }
 
   List<Guia> get guias => List.unmodifiable(_guias);

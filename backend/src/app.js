@@ -19,6 +19,7 @@ const {
 } = require('./ocrAgente');
 const fotos = require('./fotos');
 const { hacenFaltaArchivo, corteMaximo } = require('./archivo');
+const { despachosNuevos } = require('./despachos');
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -480,6 +481,44 @@ app.get('/cron/archivo', async (req, res, next) => {
     const resultado = await repo.archivarGuias(corte, { ejecutar: true });
     console.log(`Archivo automático: ${resultado.total} guías antes de ${corte}.`);
     res.json({ hasta: corte, ...resultado });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Guías de la hoja externa "Despachos Ate" que NO están en la base de la
+// app (las repetidas se omiten): guía, cliente, fecha, pedido y entrega.
+// Solo lectura; requiere `desde` (ISO) y acepta `hasta` (exclusivo).
+app.get('/despachos', async (req, res, next) => {
+  try {
+    const desde = Date.parse(req.query.desde);
+    const hasta = req.query.hasta ? Date.parse(req.query.hasta) : null;
+    if (!Number.isFinite(desde) || Number.isNaN(hasta)) {
+      return res.status(400).json({ error: 'Fechas inválidas (usa formato ISO; desde es obligatorio).' });
+    }
+    let despachos;
+    try {
+      despachos = await repo.listarDespachos({ desde, hasta });
+    } catch (err) {
+      console.error(err);
+      return res.status(503).json({
+        error: 'No se pudo leer la hoja Despachos Ate (¿está compartida con la cuenta de la app?).',
+      });
+    }
+    if (despachos.length === 0) return res.json([]);
+    const numeros = (await repo.listarGuias()).map((g) => g.numero_guia);
+    // También las archivadas de esas fechas (con un margen de una semana:
+    // la guía pudo registrarse en la app unos días antes o después).
+    const info = await repo.infoArchivo();
+    const SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
+    if (hacenFaltaArchivo(desde - SEMANA_MS, info)) {
+      const archivadas = await repo.listarGuiasArchivadas(info.pestanas, {
+        desde: desde - SEMANA_MS,
+        hasta: hasta === null ? null : hasta + SEMANA_MS,
+      });
+      numeros.push(...archivadas.map((g) => g.numero_guia));
+    }
+    res.json(despachosNuevos(despachos, numeros, desde, hasta));
   } catch (err) {
     next(err);
   }

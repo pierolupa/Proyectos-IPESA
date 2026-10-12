@@ -1403,3 +1403,46 @@ describe('archivo automático (cron)', () => {
     expect(ok.status).toBe(200);
   });
 });
+
+describe('GET /despachos (hoja Despachos Ate)', () => {
+  const despacho = (numero, fecha) => ({
+    numero_guia: numero,
+    cliente: 'IPESA S.A.C.',
+    fecha,
+    numero_pedido: '4900109327',
+    numero_entrega: '81115782',
+  });
+
+  it('devuelve solo las que no están en la base de la app', async () => {
+    repo.listarDespachos.mockResolvedValue([
+      despacho('T001-1', '2026-10-10T15:00:00.000Z'),
+      despacho('T001-2', '2026-10-10T16:00:00.000Z'),
+    ]);
+    repo.listarGuias.mockResolvedValue([guia({ numero_guia: 'T001-1' })]);
+    const res = await request(app)
+      .get('/despachos')
+      .query({ desde: '2026-10-10T05:00:00.000Z', hasta: '2026-10-11T05:00:00.000Z' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([despacho('T001-2', '2026-10-10T16:00:00.000Z')]);
+    expect(repo.listarDespachos).toHaveBeenCalledWith({
+      desde: Date.parse('2026-10-10T05:00:00.000Z'),
+      hasta: Date.parse('2026-10-11T05:00:00.000Z'),
+    });
+  });
+
+  it('tampoco repite las que están archivadas', async () => {
+    repo.infoArchivo.mockResolvedValue({ pestanas: ['Guías 2026'], ultima: Date.parse('2026-09-30T23:00:00Z') });
+    repo.listarDespachos.mockResolvedValue([despacho('T001-9', '2026-09-29T15:00:00.000Z')]);
+    repo.listarGuiasArchivadas.mockResolvedValue([guia({ numero_guia: 'T001-9' })]);
+    const res = await request(app).get('/despachos').query({ desde: '2026-09-28T05:00:00.000Z' });
+    expect(res.body).toEqual([]);
+  });
+
+  it('sin fecha de inicio responde 400; si la hoja no se puede leer, 503', async () => {
+    expect((await request(app).get('/despachos')).status).toBe(400);
+    repo.listarDespachos.mockRejectedValue(new Error('The caller does not have permission'));
+    const res = await request(app).get('/despachos').query({ desde: '2026-10-10T05:00:00.000Z' });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/Despachos Ate/);
+  });
+});

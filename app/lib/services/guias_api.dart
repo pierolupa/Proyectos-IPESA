@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/despacho.dart';
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../models/rol_usuario.dart';
@@ -285,6 +286,33 @@ class GuiasApi {
     if (res.statusCode != 200) _lanzarError(res);
     final lista = jsonDecode(res.body) as List<dynamic>;
     return _guiasValidas(lista);
+  }
+
+  /// Las guías de la hoja "Despachos Ate" registradas en [desde, hasta)
+  /// que no están en la base de la app.
+  Future<List<Despacho>> listarDespachos({
+    required DateTime desde,
+    required DateTime hasta,
+  }) async {
+    final uri = Uri.parse(apiBaseUrl).replace(
+      path: '${Uri.parse(apiBaseUrl).path}/despachos',
+      queryParameters: {
+        'desde': desde.toUtc().toIso8601String(),
+        'hasta': hasta.toUtc().toIso8601String(),
+      },
+    );
+    final res = await _client.get(uri);
+    if (res.statusCode != 200) _lanzarError(res);
+    final lista = jsonDecode(res.body) as List<dynamic>;
+    final despachos = <Despacho>[];
+    for (final e in lista) {
+      try {
+        despachos.add(Despacho.fromJson(e as Map<String, dynamic>));
+      } catch (err) {
+        debugPrint('Despacho omitido por datos incompletos: $err · $e');
+      }
+    }
+    return despachos;
   }
 
   /// Simula el archivo por año: cuántas guías cerradas registradas antes de

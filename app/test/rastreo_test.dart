@@ -91,10 +91,13 @@ List<Map<String, dynamic>> get _datosDeHoy {
 Future<void> _abrirRastreo(
   WidgetTester tester, {
   List<Map<String, dynamic>>? datos,
+  List<Map<String, dynamic>> despachos = const [],
 }) async {
   final client = MockClient(
     (request) async => request.url.path.endsWith('/sucursales')
         ? http.Response('[]', 200)
+        : request.url.path.endsWith('/despachos')
+        ? http.Response(jsonEncode(despachos), 200)
         : http.Response(jsonEncode(datos ?? _datosDeHoy), 200),
   );
   final appState = AppState(api: GuiasApi(client: client));
@@ -204,6 +207,41 @@ void main() {
     await tester.tap(find.byTooltip('Nueva búsqueda'));
     await tester.pumpAndSettle();
     expect(find.text('Rastrea tus guías'), findsOneWidget);
+  });
+
+  testWidgets('Una guía que solo está en Despachos Ate también aparece', (
+    tester,
+  ) async {
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    await _abrirRastreo(
+      tester,
+      despachos: [
+        {
+          'numero_guia': 'T001-95643',
+          'cliente': 'Minera Arequipa S.A.',
+          'fecha': hoy.add(const Duration(hours: 12)).toUtc().toIso8601String(),
+          'numero_pedido': '4900109327',
+          'numero_entrega': '81115782',
+        },
+      ],
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'N° pedido'),
+      '4900109327',
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Resultados'), findsOneWidget);
+    expect(find.text('1 guía encontrada'), findsOneWidget);
+    expect(find.text('T001-95643'), findsOneWidget);
+    expect(find.text('Minera Arequipa S.A.'), findsOneWidget);
+    expect(find.text('Solo en Despachos Ate'), findsOneWidget);
+    expect(find.text('1 solo en Despachos Ate'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Una guía entregada lleva el sello ENTREGADO y su foto', (

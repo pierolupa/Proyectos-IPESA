@@ -350,3 +350,18 @@ Cualquier consulta cuyas fechas pueden estar archivadas (Rastreo, Guías,
 Dashboard) también busca en ellas, leyendo solo los años y filas del rango.
 Las guías archivadas se pueden corregir igual que las demás. Sin pestañas de
 archivo el backend funciona igual que antes.
+
+## Hoja externa "Despachos Ate"
+
+`GET /despachos?desde=ISO&hasta=ISO` devuelve las guías de la hoja
+"Despachos Ate" (pestaña *Base de datos*) registradas en ese rango que **no**
+están en la base de la app (ni en la activa ni archivadas): número de guía,
+cliente, fecha, pedido y entrega. La app las muestra en Rastrear como
+"Solo en Despachos Ate". Solo lectura: nunca escribe en esa hoja.
+
+- La hoja debe estar compartida como **Lector** con la cuenta de servicio
+  del backend (la misma que tiene "IPESA - Guías").
+- El ID va por defecto en `src/despachos.js`; se puede cambiar con
+  `DESPACHOS_SHEET_ID`.
+- Se leen las columnas por nombre (Fecha de Extraccion, Hora, Nro de guia,
+  Cliente, Pedido, Entrega) y solo las filas de las fechas pedidas.

@@ -148,14 +148,18 @@ class _RastreoScreenState extends State<RastreoScreen> {
     final appState = context.read<AppState>();
     setState(() => _buscando = true);
     try {
-      await appState.asegurarRangoTareas(_desde, _hasta);
+      await Future.wait([
+        appState.asegurarRangoTareas(_desde, _hasta),
+        appState.asegurarDespachos(_desde, _hasta),
+      ]);
     } finally {
       if (mounted) setState(() => _buscando = false);
     }
     if (!mounted) return;
     final sinDatos = appState.guias.isEmpty && appState.error != null;
     final encontradas = filtros.aplicar(appState.guias);
-    if (!sinDatos && encontradas.isEmpty) {
+    final despachos = filtros.aplicarDespachos(appState.despachos);
+    if (!sinDatos && encontradas.isEmpty && despachos.isEmpty) {
       setState(
         () => _error = _esPorDefecto
             ? 'No encontramos ninguna guía de los últimos $_diasPorDefecto '
@@ -166,7 +170,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
     }
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => !sinDatos && encontradas.length == 1
+        builder: (_) =>
+            !sinDatos && encontradas.length == 1 && despachos.isEmpty
             ? RastreoDetalleScreen(
                 numeroGuia: encontradas.single.numeroGuia,
                 fechaCreacion: encontradas.single.fechaCreacion,

@@ -92,6 +92,13 @@ const {
   anioEnRango,
   rangoDeFilas,
 } = require('./archivo');
+const {
+  DESPACHOS_PESTANA,
+  despachosSheetId,
+  columnasDespachos,
+  filasADespachos,
+  filasDelRango,
+} = require('./despachos');
 const LETRA_FECHA_CREACION = letraColumna(COLUMNS.indexOf('fecha_creacion') + 1);
 
 const normalizar = (texto) => String(texto ?? '').trim().toLowerCase();
@@ -961,7 +968,52 @@ async function archivarGuias(hasta, { ejecutar = false } = {}) {
   return { ejecutar: true, total: seleccion.length, porPestana: plan };
 }
 
+/**
+ * Despachos de la hoja externa "Despachos Ate" registrados entre `desde` y
+ * `hasta` (ms). Solo lectura. Primero la columna de fechas (guardada unos
+ * minutos) para saber qué filas hacen falta; luego solo esas filas.
+ */
+const TTL_DESPACHOS_MS = 5 * 60 * 1000;
+let cacheDespachos = null; // { encabezado, fechas, vence }
+
+async function listarDespachos({ desde = null, hasta = null } = {}) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = despachosSheetId();
+  const pestana = `'${DESPACHOS_PESTANA}'`;
+  const opciones = { valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' };
+  if (!cacheDespachos || cacheDespachos.vence <= Date.now()) {
+    const encabezado = (
+      await sheets.spreadsheets.values.get({ spreadsheetId, range: `${pestana}!1:1` })
+    ).data.values?.[0] || [];
+    const cols = columnasDespachos(encabezado);
+    const letra = letraColumna(cols.fecha + 1);
+    const fechas = (
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${pestana}!${letra}2:${letra}`,
+        ...opciones,
+      })
+    ).data.values || [];
+    cacheDespachos = {
+      cols,
+      fechas: fechas.map((f) => (f && f[0]) ?? ''),
+      vence: Date.now() + TTL_DESPACHOS_MS,
+    };
+  }
+  const { cols, fechas } = cacheDespachos;
+  const span = filasDelRango(fechas, desde, hasta);
+  if (span === null) return [];
+  const ultimaCol = letraColumna(Math.max(...Object.values(cols)) + 1);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${pestana}!A${span.primera + 2}:${ultimaCol}${span.ultima + 2}`,
+    ...opciones,
+  });
+  return filasADespachos(res.data.values || [], cols);
+}
+
 module.exports = {
+  listarDespachos,
   listarGuiasArchivadas,
   infoArchivo,
   archivarGuias,
