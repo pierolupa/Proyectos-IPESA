@@ -18,6 +18,7 @@ import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/mapa_ubicacion.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
+import 'archivo_screen.dart';
 import 'dashboard.dart';
 import 'sucursal_edit_screen.dart';
 import 'transportistas.dart';
@@ -180,6 +181,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     seleccionado: _pestana,
                     onSeleccion: (i) => setState(() => _pestana = i),
                     onRastrear: _abrirRastreo,
+                    onArchivo: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ArchivoScreen()),
+                    ),
                     onCerrarSesion: _cerrarSesion,
                   )
                 : null,
@@ -270,12 +274,14 @@ class _MenuAdmin extends StatelessWidget {
     required this.seleccionado,
     required this.onSeleccion,
     required this.onRastrear,
+    required this.onArchivo,
     required this.onCerrarSesion,
   });
 
   final int seleccionado;
   final ValueChanged<int> onSeleccion;
   final VoidCallback onRastrear;
+  final VoidCallback onArchivo;
   final VoidCallback onCerrarSesion;
 
   @override
@@ -362,6 +368,7 @@ class _MenuAdmin extends StatelessWidget {
             child: Divider(height: 1),
           ),
           opcion(Icons.manage_search_sharp, 'Rastrear', onRastrear),
+          opcion(Icons.inventory_2_outlined, 'Archivo de guías', onArchivo),
           const Spacer(),
           const Divider(height: 1),
           ListTile(

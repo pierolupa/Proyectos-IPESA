@@ -5,10 +5,10 @@
  * ("Guías 2026", "Guías 2027"...), con la misma estructura que "Guias". Así
  * la hoja activa queda chica y las lecturas siguen rápidas.
  *
- * - La app nunca escribe en las pestañas de archivo: solo se leen cuando una
- *   consulta pide fechas anteriores a lo que tiene la hoja activa.
- * - Las pestañas que existen se listan en PESTANAS_ARCHIVO (separadas por
- *   coma). Sin esa variable, todo funciona como antes.
+ * - Las pestañas se reconocen solas por el nombre ("Guías " + año): no hay
+ *   nada que configurar en Vercel. Sin pestañas, todo funciona como antes.
+ * - Solo se leen cuando una consulta pide fechas que pueden estar archivadas
+ *   (anteriores a la última guía archivada).
  */
 const { ESTADOS_CERRADOS } = require('./columns');
 
@@ -17,22 +17,30 @@ function pestanaDeAnio(anio) {
   return `Guías ${anio}`;
 }
 
-/** Las pestañas de archivo configuradas en PESTANAS_ARCHIVO. */
-function pestanasArchivo() {
-  return String(process.env.PESTANAS_ARCHIVO || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+/** ¿Es una pestaña de archivo? "Guías 2026" sí; "Guias", "Usuarios" no. */
+function esPestanaArchivo(titulo) {
+  return /^Guías \d{4}$/.test(String(titulo).trim());
 }
 
 /**
- * ¿Hace falta revisar el archivo para una consulta con fecha de inicio?
- * Siempre que haya pestañas de archivo y la consulta tenga fecha de inicio:
- * como solo se leen las filas del rango, no pesa, y así ninguna guía se
- * queda fuera aunque cambie la fecha de corte.
+ * ¿Hace falta revisar el archivo para una consulta desde `desdeMs`?
+ * `info` = { pestanas, ultima }: las pestañas de archivo y la fecha de la
+ * guía archivada más reciente. Si la consulta empieza después, nada del
+ * archivo puede entrar (así el refresco cada 15 s nunca lo lee).
  */
-function hacenFaltaArchivo(desdeMs) {
-  return Number.isFinite(desdeMs) && pestanasArchivo().length > 0;
+function hacenFaltaArchivo(desdeMs, info) {
+  if (!Number.isFinite(desdeMs) || !info || info.pestanas.length === 0) return false;
+  return !Number.isFinite(info.ultima) || desdeMs <= info.ultima;
+}
+
+/**
+ * El corte más reciente permitido: el día 1 del mes en curso (hora de
+ * Perú). Se archiva por meses completos y nunca el mes que está corriendo.
+ */
+function corteMaximo(ahoraMs = Date.now()) {
+  const peru = new Date(ahoraMs - 5 * 60 * 60 * 1000);
+  const mes = String(peru.getUTCMonth() + 1).padStart(2, '0');
+  return `${peru.getUTCFullYear()}-${mes}-01`;
 }
 
 /** El año de una pestaña de archivo: "Guías 2026" → 2026 (null si no tiene). */
@@ -100,8 +108,9 @@ function agruparPorAnio(guias) {
 
 module.exports = {
   pestanaDeAnio,
-  pestanasArchivo,
+  esPestanaArchivo,
   hacenFaltaArchivo,
+  corteMaximo,
   seleccionarParaArchivar,
   agruparPorAnio,
   anioDePestana,

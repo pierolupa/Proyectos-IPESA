@@ -1,7 +1,8 @@
 const {
   pestanaDeAnio,
-  pestanasArchivo,
+  esPestanaArchivo,
   hacenFaltaArchivo,
+  corteMaximo,
   seleccionarParaArchivar,
   agruparPorAnio,
   anioDePestana,
@@ -20,26 +21,30 @@ const g = (numero, estado, fecha, extra = {}) => ({
 });
 
 describe('archivo por año', () => {
-  afterEach(() => {
-    delete process.env.PESTANAS_ARCHIVO;
-  });
-
   it('nombra la pestaña de cada año', () => {
     expect(pestanaDeAnio(2026)).toBe('Guías 2026');
   });
 
-  it('lee la lista de pestañas de PESTANAS_ARCHIVO; vacía sin configurar', () => {
-    expect(pestanasArchivo()).toEqual([]);
-    process.env.PESTANAS_ARCHIVO = ' Guías 2025 , Guías 2026,';
-    expect(pestanasArchivo()).toEqual(['Guías 2025', 'Guías 2026']);
+  it('reconoce las pestañas de archivo por el nombre', () => {
+    expect(esPestanaArchivo('Guías 2026')).toBe(true);
+    expect(esPestanaArchivo('Guias')).toBe(false);
+    expect(esPestanaArchivo('Usuarios')).toBe(false);
+    expect(esPestanaArchivo('Copia de Guías 2026')).toBe(false);
   });
 
-  it('revisa el archivo en cualquier consulta con fecha de inicio, si hay pestañas', () => {
-    expect(hacenFaltaArchivo(Date.parse('2026-10-01T00:00:00Z'))).toBe(false);
-    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
-    expect(hacenFaltaArchivo(Date.parse('2026-10-01T00:00:00Z'))).toBe(true);
-    expect(hacenFaltaArchivo(NaN)).toBe(false);
-    delete process.env.PESTANAS_ARCHIVO;
+  it('lee el archivo solo si la consulta empieza antes de la última archivada', () => {
+    const info = { pestanas: ['Guías 2026'], ultima: Date.parse('2026-09-30T23:00:00Z') };
+    expect(hacenFaltaArchivo(Date.parse('2026-09-07T05:00:00Z'), info)).toBe(true);
+    // El refresco cada 15 s pide desde hace segundos: no lo lee.
+    expect(hacenFaltaArchivo(Date.parse('2026-10-12T01:00:00Z'), info)).toBe(false);
+    expect(hacenFaltaArchivo(Date.parse('2026-09-07T05:00:00Z'), { pestanas: [], ultima: null })).toBe(false);
+    expect(hacenFaltaArchivo(NaN, info)).toBe(false);
+  });
+
+  it('el corte más reciente es el día 1 del mes en curso, en hora de Perú', () => {
+    expect(corteMaximo(Date.parse('2026-10-12T01:00:00Z'))).toBe('2026-10-01');
+    // 1 de noviembre a las 3 a. m. en UTC sigue siendo 31 de octubre en Perú.
+    expect(corteMaximo(Date.parse('2026-11-01T03:00:00Z'))).toBe('2026-10-01');
   });
 
   it('archiva solo cerradas, anteriores al corte, sin nada pendiente', () => {

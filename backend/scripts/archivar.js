@@ -5,8 +5,8 @@
  *   node --env-file=.env scripts/archivar.js 2027-01-01
  *   node --env-file=.env scripts/archivar.js 2027-01-01 --ejecutar
  *
- * Después, agrega las pestañas en PESTANAS_ARCHIVO (Vercel) para que las
- * consultas con fechas antiguas las incluyan.
+ * Lo mismo se puede hacer desde la app (administrador › Archivo de guías).
+ * Las pestañas creadas se reconocen solas: no hay nada que configurar.
  */
 const { archivarGuias } = require('../src/sheetsRepository');
 
@@ -27,9 +27,6 @@ async function main() {
     console.log('Para moverlas de verdad, repite con --ejecutar.');
     return;
   }
-  console.log('Después, en Vercel (Environment Variables):');
-  console.log('  PESTANAS_ARCHIVO=' + Object.keys(res.porPestana).join(','));
-  console.log('Hazlo recién después de archivar: si la pestaña no existe, las consultas antiguas fallan.');
 }
 
 main().catch((err) => {

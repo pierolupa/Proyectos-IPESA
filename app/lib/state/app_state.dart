@@ -458,6 +458,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<PlanArchivo> simularArchivo({String? hasta}) =>
+      _api.simularArchivo(hasta: hasta);
+
+  /// Archiva con el PIN del administrador en sesión y recarga la lista (lo
+  /// archivado se sigue viendo: el backend lo trae del archivo).
+  Future<PlanArchivo> archivar({
+    required String pin,
+    required String hasta,
+  }) async {
+    final res = await _api.archivar(
+      nombre: _nombreUsuario ?? '',
+      pin: pin,
+      hasta: hasta,
+    );
+    await cargarGuias();
+    return res;
+  }
+
   List<Guia> guiasDelTransportista(String nombre) {
     return _guias.where((g) => g.transportista == nombre).toList()
       ..sort((a, b) => b.fechaActualizacion.compareTo(a.fechaActualizacion));

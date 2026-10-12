@@ -321,20 +321,25 @@ más de una vez; sin ella usan el más reciente.
 
 ## Archivo por año
 
-La hoja activa se mantiene chica pasando las guías cerradas de años
-anteriores a pestañas aparte (`Guías 2026`, `Guías 2027`...). La app no
-escribe en ellas: solo se leen cuando una consulta pide fechas anteriores.
+La hoja activa se mantiene chica pasando las guías cerradas de meses
+anteriores a pestañas por año (`Guías 2026`, `Guías 2027`...). Se hace por
+meses completos y nunca el mes en curso.
 
-1. **Simular** (no mueve nada):
-   `node --env-file=.env scripts/archivar.js 2027-01-01`
-2. **Archivar de verdad** (corre de noche, sin nadie usando la app):
-   `node --env-file=.env scripts/archivar.js 2027-01-01 --ejecutar`
-   Copia las filas a la pestaña del año, vuelve a leer la hoja activa y solo
-   entonces borra. Si la hoja cambió en medio, no borra nada.
-3. **Configurar en Vercel** (solo después del paso 2):
-   - `PESTANAS_ARCHIVO` = las pestañas creadas (`Guías 2026,Guías 2027`)
-   Con esa variable, cualquier consulta con fechas (Rastreo, Guías,
-   Dashboard) también busca en el archivo, leyendo solo las filas del rango.
-   Las guías archivadas se pueden corregir igual que las demás.
+**Desde la app** (lo normal): administrador › menú ☰ › *Archivo de guías*.
+Se elige hasta qué mes, se simula (no mueve nada) y, si los números cuadran,
+se archiva confirmando con el PIN del administrador. Conviene hacerlo de
+noche, sin nadie usando la app.
 
-Sin esas variables el backend funciona igual que antes.
+- `GET /archivo?hasta=AAAA-MM-01`: simulación (cuántas guías y a qué pestaña).
+- `POST /archivo` `{ nombre, pin, hasta }`: archiva. Copia las filas a la
+  pestaña del año, vuelve a leer la hoja activa y solo entonces borra. Si la
+  hoja cambió en medio, no borra nada; repetirlo no duplica filas.
+
+También por consola: `node --env-file=.env scripts/archivar.js 2026-10-01
+[--ejecutar]`.
+
+No hay nada que configurar: las pestañas `Guías AAAA` se reconocen solas.
+Cualquier consulta cuyas fechas pueden estar archivadas (Rastreo, Guías,
+Dashboard) también busca en ellas, leyendo solo los años y filas del rango.
+Las guías archivadas se pueden corregir igual que las demás. Sin pestañas de
+archivo el backend funciona igual que antes.

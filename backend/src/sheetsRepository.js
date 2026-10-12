@@ -85,6 +85,7 @@ const RETIRADAS = new Set(['salida_lat', 'salida_lng']);
 
 const {
   pestanaDeAnio,
+  esPestanaArchivo,
   seleccionarParaArchivar,
   agruparPorAnio,
   anioDePestana,
@@ -800,6 +801,50 @@ async function listarGuiasArchivadas(titulos, { desde = null, hasta = null } = {
   return guias;
 }
 
+/**
+ * Qué hay archivado: { pestanas, ultima }. Las pestañas se reconocen por el
+ * nombre ("Guías 2026"); `ultima` es la fecha de la guía archivada más
+ * reciente, para no leer el archivo en consultas que empiezan después.
+ * Se guarda unos minutos (solo cambia al archivar, y eso la invalida).
+ */
+const TTL_INFO_ARCHIVO_MS = 10 * 60 * 1000;
+let cacheInfoArchivo = null; // { info, vence }
+
+async function infoArchivo() {
+  if (cacheInfoArchivo && cacheInfoArchivo.vence > Date.now()) return cacheInfoArchivo.info;
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties.title',
+  });
+  const pestanas = (res.data.sheets || [])
+    .map((s) => s.properties.title)
+    .filter(esPestanaArchivo)
+    .sort();
+  let ultima = null;
+  if (pestanas.length > 0) {
+    // La del año más reciente tiene la última guía archivada.
+    const fechas = (
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${pestanas[pestanas.length - 1]}'!${LETRA_FECHA_CREACION}2:${LETRA_FECHA_CREACION}`,
+      })
+    ).data.values || [];
+    for (const f of fechas) {
+      const t = Date.parse((f && f[0]) || '');
+      if (Number.isFinite(t) && (ultima === null || t > ultima)) ultima = t;
+    }
+  }
+  const info = { pestanas, ultima };
+  cacheInfoArchivo = { info, vence: Date.now() + TTL_INFO_ARCHIVO_MS };
+  return info;
+}
+
+function invalidarInfoArchivo() {
+  cacheInfoArchivo = null;
+}
+
 async function asegurarPestana(sheets, spreadsheetId, titulo) {
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
@@ -813,14 +858,29 @@ async function asegurarPestana(sheets, spreadsheetId, titulo) {
   });
 }
 
+const claveGuia = (numero, fecha) => `${numero}|${fecha}`;
+
+/** Filas a borrar → rangos de filas seguidas, de abajo hacia arriba. */
+function rangosParaBorrar(filas) {
+  const orden = [...new Set(filas)].sort((a, b) => b - a);
+  const rangos = [];
+  for (const fila of orden) {
+    const ultimo = rangos[rangos.length - 1];
+    if (ultimo && ultimo.inicio === fila + 1) ultimo.inicio = fila;
+    else rangos.push({ inicio: fila, fin: fila });
+  }
+  return rangos;
+}
+
 /**
  * Pasa a las pestañas de año las guías cerradas anteriores a `hasta`
  * (AAAA-MM-DD). Sin `ejecutar` solo cuenta lo que movería.
  *
- * Con ejecutar: copia las filas a "Guías AAAA", vuelve a leer la hoja activa
- * y solo entonces borra esas filas. Si entre medio la hoja cambió (alguien
- * registró, editó o borró), no borra nada y avisa. Conviene correrlo de
- * noche, sin nadie usando la app.
+ * Con ejecutar: copia las filas a "Guías AAAA" (las que ya estaban copiadas
+ * de un intento anterior no se repiten), vuelve a leer la hoja activa y solo
+ * entonces borra esas filas. Si entre medio la hoja cambió (alguien
+ * registró, editó o borró), no borra nada y avisa: se puede repetir sin
+ * duplicar. Conviene hacerlo de noche, sin nadie usando la app.
  */
 async function archivarGuias(hasta, { ejecutar = false } = {}) {
   const sheets = await getSheetsClient();
@@ -860,42 +920,52 @@ async function archivarGuias(hasta, { ejecutar = false } = {}) {
     const titulo = pestanaDeAnio(anio);
     await asegurarPestana(sheets, spreadsheetId, titulo);
     const usadas = (
-      await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${titulo}'!A:A` })
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${titulo}'!A:${LETRA_FECHA_CREACION}`,
+      })
     ).data.values || [];
-    const filas = lista.map((g) => guiaToRow(g));
-    const ancho = Math.max(encabezado.length, ...filas.map((f) => f.length));
-    const pad = (f) => [...f, ...Array(ancho - f.length).fill('')];
+    // Las que ya se copiaron en un intento anterior no se repiten.
+    const yaCopiadas = new Set(
+      usadas.map((f) => claveGuia(f[0], f[COLUMNS.indexOf('fecha_creacion')])),
+    );
+    const filas = lista
+      .filter((g) => !yaCopiadas.has(claveGuia(g.numero_guia, g.fecha_creacion)))
+      .map((g) => guiaToRow(g));
     const datos = [];
-    if (usadas.length === 0) datos.push(pad(encabezado));
-    const primera = usadas.length === 0 ? 1 : usadas.length + 1;
-    datos.push(...filas.map(pad));
+    if (usadas.length === 0) datos.push(encabezado);
+    datos.push(...filas);
+    if (datos.length === 0) continue;
+    const ancho = Math.max(...datos.map((f) => f.length));
+    const pad = (f) => [...f, ...Array(ancho - f.length).fill('')];
+    const primera = usadas.length + 1;
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'${titulo}'!A${primera}:${letraColumna(ancho)}${primera + datos.length - 1}`,
       valueInputOption: 'RAW',
-      requestBody: { values: datos },
+      requestBody: { values: datos.map(pad) },
     });
   }
+  invalidarInfoArchivo();
 
   // Antes de borrar, la hoja activa tiene que seguir igual que al copiar.
   await comprobar();
   const idHoja = await idDePestana(sheets, spreadsheetId, SHEET_NAME);
-  const requests = seleccion
-    .map((g) => g._row)
-    .sort((a, b) => b - a)
-    .map((fila) => ({
-      deleteDimension: {
-        range: { sheetId: idHoja, dimension: 'ROWS', startIndex: fila - 1, endIndex: fila },
-      },
-    }));
-  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
-  invalidarCacheGuias();
+  const requests = rangosParaBorrar(seleccion.map((g) => g._row)).map(({ inicio, fin }) => ({
+    deleteDimension: {
+      range: { sheetId: idHoja, dimension: 'ROWS', startIndex: inicio - 1, endIndex: fin },
+    },
+  }));
+  await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } })
+    .finally(invalidarCacheGuias);
   return { ejecutar: true, total: seleccion.length, porPestana: plan };
 }
 
 module.exports = {
   listarGuiasArchivadas,
+  infoArchivo,
   archivarGuias,
+  rangosParaBorrar,
   listarSucursales,
   guardarSucursal,
   eliminarSucursal,

@@ -18,7 +18,7 @@ const {
   hayComprobante,
 } = require('./ocrAgente');
 const fotos = require('./fotos');
-const { pestanasArchivo, hacenFaltaArchivo } = require('./archivo');
+const { hacenFaltaArchivo, corteMaximo } = require('./archivo');
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -120,7 +120,7 @@ async function buscarRegistro(numeroGuia, fechaCreacion) {
   const activa = await repo.buscarPorNumero(numeroGuia, { fresco: true });
   if (activa) return activa;
   // No está en la hoja activa: puede estar archivada (para corregirla).
-  const pestanas = pestanasArchivo();
+  const { pestanas } = await repo.infoArchivo();
   if (pestanas.length === 0) return null;
   const archivadas = (await repo.listarGuiasArchivadas(pestanas)).filter(
     (g) =>
@@ -354,16 +354,21 @@ app.get('/guias', async (req, res, next) => {
   try {
     const { estado, desde, hasta, vigentes } = req.query;
     let guias = await repo.listarGuias();
-    // Fechas anteriores a la hoja activa: también se mira el archivo por año.
-    const pestanas = pestanasArchivo();
-    if (desde && pestanas.length > 0 && hacenFaltaArchivo(Date.parse(desde))) {
-      guias = [
-        ...guias,
-        ...(await repo.listarGuiasArchivadas(pestanas, {
-          desde: Date.parse(desde),
-          hasta: hasta ? Date.parse(hasta) : null,
-        })),
-      ];
+    // Fechas que pueden estar archivadas: también se mira el archivo por año
+    // (solo los años y filas del rango). El refresco cada 15 s pide desde
+    // hace segundos, así que nunca llega a leerlo.
+    const inicioConsulta = Date.parse(desde ?? vigentes);
+    if (Number.isFinite(inicioConsulta)) {
+      const info = await repo.infoArchivo();
+      if (hacenFaltaArchivo(inicioConsulta, info)) {
+        guias = [
+          ...guias,
+          ...(await repo.listarGuiasArchivadas(info.pestanas, {
+            desde: inicioConsulta,
+            hasta: hasta ? Date.parse(hasta) : null,
+          })),
+        ];
+      }
     }
     if (vigentes !== undefined) {
       const desdeVigentes = Date.parse(vigentes);
@@ -398,6 +403,57 @@ app.get('/guias', async (req, res, next) => {
       });
     }
     res.json(guias.map(sinCamposInternos));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Archivo por año (ver README, "Archivo por año"). `hasta` = AAAA-MM-01:
+// se archivan las guías cerradas registradas antes de ese día. Nunca el mes
+// en curso.
+function corteValido(hasta) {
+  const maximo = corteMaximo();
+  const corte = String(hasta ?? maximo);
+  if (!/^\d{4}-\d{2}-01$/.test(corte) || Number.isNaN(Date.parse(corte))) {
+    return { error: 'Fecha de corte inválida (usa el día 1 de un mes: AAAA-MM-01).' };
+  }
+  if (corte > maximo) return { error: 'No se puede archivar el mes en curso.' };
+  return { corte };
+}
+
+// Simulación: cuántas guías se moverían. Solo lee.
+app.get('/archivo', async (req, res, next) => {
+  try {
+    const { corte, error } = corteValido(req.query.hasta);
+    if (error) return res.status(400).json({ error });
+    const plan = await repo.archivarGuias(corte, { ejecutar: false });
+    res.json({ hasta: corte, maximo: corteMaximo(), ...plan });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Archiva de verdad. Pide el nombre y PIN de un administrador activo.
+app.post('/archivo', async (req, res, next) => {
+  try {
+    const { nombre, pin, hasta } = req.body || {};
+    if (!nombre || !pin) {
+      return res.status(400).json({ error: 'Faltan nombre y/o PIN del administrador.' });
+    }
+    const usuarios = await repo.listarUsuarios();
+    const admin = usuarios.find((u) => mismoNombre(u.nombre, nombre));
+    if (
+      !admin
+      || !admin.activo
+      || admin.rol !== ROLES.ADMINISTRADOR
+      || String(admin.pin) !== String(pin)
+    ) {
+      return res.status(403).json({ error: 'PIN incorrecto o el usuario no es administrador.' });
+    }
+    const { corte, error } = corteValido(hasta);
+    if (error) return res.status(400).json({ error });
+    const resultado = await repo.archivarGuias(corte, { ejecutar: true });
+    res.json({ hasta: corte, ...resultado });
   } catch (err) {
     next(err);
   }

@@ -44,6 +44,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   repo.listarGuias.mockResolvedValue([]);
   repo.listarSucursales.mockResolvedValue([]);
+  repo.infoArchivo.mockResolvedValue({ pestanas: [], ultima: null });
 });
 
 describe('POST /guias (asignación)', () => {
@@ -1241,8 +1242,10 @@ describe('Transbordo entre transportistas', () => {
     expect(res.body.transportista).toBe('Juan Pérez');
   });
 
-  it('con fechas anteriores a la hoja activa, suma las guías del archivo', async () => {
-    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
+  const archivo = { pestanas: ['Guías 2026'], ultima: Date.parse('2026-09-30T23:00:00.000Z') };
+
+  it('con fechas que pueden estar archivadas, suma las guías del archivo', async () => {
+    repo.infoArchivo.mockResolvedValue(archivo);
     repo.listarGuias.mockResolvedValue([
       guia({ numero_guia: 'NUEVA', fecha_creacion: '2026-10-05T10:00:00.000Z' }),
     ]);
@@ -1259,25 +1262,42 @@ describe('Transbordo entre transportistas', () => {
       desde: Date.parse('2026-03-01T00:00:00.000Z'),
       hasta: Date.parse('2026-04-01T00:00:00.000Z'),
     });
-    delete process.env.PESTANAS_ARCHIVO;
   });
 
-  it('sin archivo configurado no lee el archivo; con archivo lo revisa al pedir fechas', async () => {
+  it('sin archivo, o si la consulta empieza después de lo archivado, no lo lee', async () => {
     repo.listarGuias.mockResolvedValue([
       guia({ numero_guia: 'NUEVA', fecha_creacion: '2026-10-05T10:00:00.000Z' }),
     ]);
-    repo.listarGuiasArchivadas.mockClear();
-    await request(app).get('/guias').query({ desde: '2026-10-01T00:00:00.000Z' });
+    await request(app).get('/guias').query({ desde: '2026-09-01T00:00:00.000Z' });
     expect(repo.listarGuiasArchivadas).not.toHaveBeenCalled();
-    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
-    repo.listarGuiasArchivadas.mockResolvedValue([]);
+    repo.infoArchivo.mockResolvedValue(archivo);
     await request(app).get('/guias').query({ desde: '2026-10-01T00:00:00.000Z' });
-    expect(repo.listarGuiasArchivadas).toHaveBeenCalledTimes(1);
-    delete process.env.PESTANAS_ARCHIVO;
+    await request(app).get('/guias').query({ vigentes: '2026-10-12T01:00:00.000Z' });
+    expect(repo.listarGuiasArchivadas).not.toHaveBeenCalled();
+  });
+
+  it('la carga del panel (vigentes) incluye lo archivado del último mes', async () => {
+    repo.infoArchivo.mockResolvedValue(archivo);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'ABIERTA', estado: ESTADOS.EN_RUTA, fecha_creacion: '2026-10-11T10:00:00.000Z' }),
+    ]);
+    repo.listarGuiasArchivadas.mockResolvedValue([
+      {
+        ...guia({
+          numero_guia: 'SEPTIEMBRE',
+          estado: ESTADOS.ENTREGADO,
+          fecha_creacion: '2026-09-29T10:00:00.000Z',
+          fecha_actualizacion: '2026-09-29T15:00:00.000Z',
+        }),
+        _archivo: 'Guías 2026',
+      },
+    ]);
+    const res = await request(app).get('/guias').query({ vigentes: '2026-09-07T05:00:00.000Z' });
+    expect(res.body.map((g) => g.numero_guia).sort()).toEqual(['ABIERTA', 'SEPTIEMBRE']);
   });
 
   it('corregir una guía archivada la busca en el archivo y la escribe en su pestaña', async () => {
-    process.env.PESTANAS_ARCHIVO = 'Guías 2026';
+    repo.infoArchivo.mockResolvedValue(archivo);
     repo.listarGuias.mockResolvedValue([]);
     repo.buscarPorNumero.mockResolvedValue(null);
     repo.listarGuiasArchivadas.mockResolvedValue([
@@ -1299,6 +1319,47 @@ describe('Transbordo entre transportistas', () => {
       7,
       expect.objectContaining({ _archivo: 'Guías 2026' }),
     );
-    delete process.env.PESTANAS_ARCHIVO;
+  });
+});
+
+describe('archivo desde la app', () => {
+  const plan = { ejecutar: false, total: 80, porPestana: { 'Guías 2026': 80 } };
+  const admin = { nombre: 'Piero', rol: ROLES.ADMINISTRADOR, pin: '1234', activo: true };
+
+  it('simula sin mover nada; por defecto hasta el 1 del mes en curso', async () => {
+    repo.archivarGuias.mockResolvedValue(plan);
+    const res = await request(app).get('/archivo');
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(80);
+    expect(res.body.hasta).toMatch(/^\d{4}-\d{2}-01$/);
+    expect(repo.archivarGuias).toHaveBeenCalledWith(res.body.hasta, { ejecutar: false });
+  });
+
+  it('no deja archivar el mes en curso ni fechas que no son día 1', async () => {
+    expect((await request(app).get('/archivo').query({ hasta: '2999-01-01' })).status).toBe(400);
+    expect((await request(app).get('/archivo').query({ hasta: '2026-09-15' })).status).toBe(400);
+    expect(repo.archivarGuias).not.toHaveBeenCalled();
+  });
+
+  it('archivar de verdad pide el PIN de un administrador', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      admin,
+      { nombre: 'Oscar Aspur', rol: ROLES.TRANSPORTISTA, pin: '9999', activo: true },
+    ]);
+    const sinPin = await request(app).post('/archivo').send({ nombre: 'Piero' });
+    expect(sinPin.status).toBe(400);
+    const malo = await request(app).post('/archivo').send({ nombre: 'Piero', pin: '0000', hasta: '2026-10-01' });
+    expect(malo.status).toBe(403);
+    const transportista = await request(app)
+      .post('/archivo')
+      .send({ nombre: 'Oscar Aspur', pin: '9999', hasta: '2026-10-01' });
+    expect(transportista.status).toBe(403);
+    expect(repo.archivarGuias).not.toHaveBeenCalled();
+
+    repo.archivarGuias.mockResolvedValue({ ...plan, ejecutar: true });
+    const ok = await request(app).post('/archivo').send({ nombre: 'piero', pin: '1234', hasta: '2026-10-01' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.total).toBe(80);
+    expect(repo.archivarGuias).toHaveBeenCalledWith('2026-10-01', { ejecutar: true });
   });
 });

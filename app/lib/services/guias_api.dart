@@ -287,6 +287,33 @@ class GuiasApi {
     return _guiasValidas(lista);
   }
 
+  /// Simula el archivo por año: cuántas guías cerradas registradas antes de
+  /// [hasta] (día 1 de un mes, `AAAA-MM-01`) se moverían. No mueve nada.
+  Future<PlanArchivo> simularArchivo({String? hasta}) async {
+    final uri = Uri.parse(apiBaseUrl).replace(
+      path: '${Uri.parse(apiBaseUrl).path}/archivo',
+      queryParameters: hasta == null ? null : {'hasta': hasta},
+    );
+    final res = await _client.get(uri);
+    if (res.statusCode != 200) _lanzarError(res);
+    return PlanArchivo.fromJson(_decodeBody(res));
+  }
+
+  /// Archiva de verdad; el backend pide el PIN de un administrador.
+  Future<PlanArchivo> archivar({
+    required String nombre,
+    required String pin,
+    required String hasta,
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/archivo'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nombre': nombre, 'pin': pin, 'hasta': hasta}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return PlanArchivo.fromJson(_decodeBody(res));
+  }
+
   Future<List<Guia>> guiasDelTransportista(String nombre) async {
     final res = await _client.get(
       Uri.parse(
@@ -714,6 +741,39 @@ class GuiasApi {
 const maxGuiasPorCarga = 30;
 
 /// Una guía por registrar en una carga masiva (POST /guias/lote).
+/// Lo que movería (o movió) el archivo por año.
+class PlanArchivo {
+  const PlanArchivo({
+    required this.hasta,
+    required this.total,
+    required this.porPestana,
+    required this.ejecutado,
+    this.maximo,
+  });
+
+  /// Día 1 del mes de corte (`AAAA-MM-01`): se archiva lo registrado antes.
+  final String hasta;
+
+  /// El corte más reciente permitido (el día 1 del mes en curso).
+  final String? maximo;
+  final int total;
+  final Map<String, int> porPestana;
+  final bool ejecutado;
+
+  factory PlanArchivo.fromJson(Map<String, dynamic> json) => PlanArchivo(
+    hasta: json['hasta'] as String? ?? '',
+    maximo: json['maximo'] as String?,
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    porPestana: {
+      for (final e
+          in ((json['porPestana'] as Map<String, dynamic>?) ?? const {})
+              .entries)
+        e.key: (e.value as num).toInt(),
+    },
+    ejecutado: json['ejecutar'] == true,
+  );
+}
+
 class GuiaNueva {
   const GuiaNueva({
     required this.numeroGuia,
