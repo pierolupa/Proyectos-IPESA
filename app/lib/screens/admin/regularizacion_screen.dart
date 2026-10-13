@@ -12,6 +12,9 @@ import '../../theme.dart';
 /// registró. Dos pasos, en orden: la foto de la guía (la IA llena los datos)
 /// y la foto de la entrega. Sin GPS ni otras restricciones: la guía queda
 /// como entregada a nombre del transportista elegido.
+/// Opción fija para entregas hechas por un taxi externo (no es un usuario).
+const _taxiExterno = 'Taxi externo';
+
 class RegularizacionScreen extends StatefulWidget {
   const RegularizacionScreen({super.key});
 
@@ -61,7 +64,10 @@ class _RegularizacionScreenState extends State<RegularizacionScreen> {
   Future<void> _cargarTransportistas() async {
     try {
       final lista = await context.read<AppState>().listarTransportistas();
-      if (mounted) setState(() => _transportistas = lista);
+      // Un taxi que no es de la lista de transportistas.
+      if (mounted) {
+        setState(() => _transportistas = [...lista, _taxiExterno]);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = 'No se pudo cargar la lista: $e');
     }
