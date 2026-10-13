@@ -532,14 +532,38 @@ class _Cabecera extends StatelessWidget {
           else
             Padding(
               padding: const EdgeInsets.only(left: 8),
-              child: FilledButton.icon(
+              child: FilledButton(
                 onPressed: onRastrear,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.fromLTRB(6, 0, 18, 0),
                   backgroundColor: Ipesa.petroleo,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                icon: const Icon(Icons.manage_search, size: 20),
-                label: const Text('Rastrear guía'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.16),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.manage_search,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Rastrear guía'),
+                  ],
+                ),
               ),
             ),
           if (onCerrarSesion != null)
