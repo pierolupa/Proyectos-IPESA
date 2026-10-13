@@ -201,8 +201,7 @@ nombre | rol | pin | activo
 - `rol`: `transportista`, `administrador` o `comercial`. El equipo
   comercial entra a la vista **Rastreo de guías** (todas las guías, solo
   lectura, con filtros de fecha, número de guía, cliente, entrega y pedido).
-  Las cuentas `administrador` y `comercial` se crean a mano en la hoja; el
-  auto-registro siempre crea `transportista`.
+  Las cuentas se crean a mano en la hoja: la app no permite crear usuarios.
 - `pin`: cualquier texto/número que uses como clave simple (ver advertencia
   de seguridad arriba).
 - `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.
@@ -287,7 +286,6 @@ Al terminar, Vercel te da una URL pública (algo como
 | `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (y, si viene pegado, el comprobante de la agencia: `agencia_razon_social`, `agencia_ruc`, `agencia_monto`) (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
 | `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
 | `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
-| `POST` | `/api/auth/registro` | Auto-registro. Siempre crea el usuario como `transportista` (nunca `administrador`). |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número el mismo día (hora de Perú); otro transportista, sí. |
 | `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
 | `POST` | `/api/despachos-corte` | Despacho Corte: igual que `/api/guias/lote`, pero todas las guías creadas llevan el mismo código en `despacho_corte` (ej. `DC-261001-1542-K7`). Responde `{ despacho_corte, resultados }`. |

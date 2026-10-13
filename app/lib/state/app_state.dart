@@ -242,14 +242,6 @@ class AppState extends ChangeNotifier {
     await _establecerSesion(sesion);
   }
 
-  /// Auto-registro; siempre crea la cuenta como transportista (ver
-  /// backend/src/app.js).
-  Future<void> registrarUsuario(String nombre, String pin) async {
-    final sesion = await _api.registrar(nombre, pin);
-    await _recordarCuenta(sesion.nombre, pin);
-    await _establecerSesion(sesion);
-  }
-
   /// La última cuenta con la que se entró en este equipo (nombre y PIN),
   /// para dejarla escrita en el login; null si no hay ninguna.
   Future<(String, String)?> cuentaGuardada() async {

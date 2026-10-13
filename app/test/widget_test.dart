@@ -75,7 +75,7 @@ void main() {
     expect(find.text('La IA lo vio, el cliente lo firmó.'), findsOneWidget);
     expect(find.text('Ingresa a tu cuenta'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Ingresar'), findsOneWidget);
-    expect(find.text('Crea tu cuenta'), findsOneWidget);
+    expect(find.text('Crea tu cuenta'), findsNothing);
     expect(find.text('¿Eres cliente? Rastrea tu envío'), findsNothing);
   });
 
@@ -139,45 +139,6 @@ void main() {
     expect(find.text('Nombre o PIN incorrecto.'), findsOneWidget);
   });
 
-  testWidgets('Crear cuenta registra al usuario como transportista', (
-    WidgetTester tester,
-  ) async {
-    final client = MockClient((request) async {
-      if (request.method == 'POST' &&
-          request.url.path.endsWith('/auth/registro')) {
-        return _json({
-          'nombre': 'Chofer Nuevo',
-          'rol': 'transportista',
-        }, status: 201);
-      }
-      if (request.method == 'GET' && request.url.path.endsWith('/guias')) {
-        return _json([]);
-      }
-      return http.Response(
-        'No mockeado: ${request.method} ${request.url}',
-        404,
-      );
-    });
-    final appState = AppState(api: GuiasApi(client: client));
-
-    _pantallaCelular(tester);
-    await tester.pumpWidget(IpesaGuiasApp(appState: appState));
-    // La pantalla de carga es estática: se avanza el reloj hasta que termina.
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Crea tu cuenta'));
-    await tester.pumpAndSettle();
-    expect(find.text('Crear cuenta'), findsWidgets);
-
-    await tester.enterText(find.byType(TextField).first, 'Chofer Nuevo');
-    await tester.enterText(find.byType(TextField).at(1), '9999');
-    await tester.tap(find.widgetWithText(FilledButton, 'Crear cuenta'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('Pendientes'), findsOneWidget);
-  });
-
   for (final (ancho, alto) in [
     (390.0, 700.0),
     (360.0, 640.0),
@@ -196,25 +157,12 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(_desplazamientoVertical(tester), 0);
-        for (final texto in [
-          'Ingresa a tu cuenta',
-          'Ingresar',
-          'Crea tu cuenta',
-        ]) {
+        for (final texto in ['Ingresa a tu cuenta', 'Ingresar']) {
           expect(
             tester.getRect(find.text(texto)).bottom,
             lessThanOrEqualTo(alto),
           );
         }
-        expect(tester.takeException(), isNull);
-
-        // En modo "crear cuenta" (título más largo y ayuda del PIN) tampoco.
-        await tester.tap(find.text('Crea tu cuenta'));
-        await tester.pumpAndSettle();
-        expect(
-          tester.getRect(find.text('Ingresa')).bottom,
-          lessThanOrEqualTo(alto),
-        );
         expect(tester.takeException(), isNull);
       },
     );

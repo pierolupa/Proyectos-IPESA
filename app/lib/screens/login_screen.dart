@@ -16,13 +16,11 @@ import 'admin/admin_dashboard_screen.dart';
 import 'comercial/rastreo_screen.dart';
 import 'transportista/task_list_screen.dart';
 
-/// Pantalla de inicio de la app: login simple por nombre + PIN, con
-/// opción de auto-registro (ver backend/README.md — no es un mecanismo
-/// de autenticación real, es solo para pruebas del equipo). El
-/// auto-registro siempre crea la cuenta como Transportista; las cuentas
-/// de Administrador y de Equipo Comercial se dan de alta a mano en la hoja
-/// "Usuarios". El rol con el que se entra lo decide el backend, no un
-/// selector previo.
+/// Pantalla de inicio de la app: login simple por nombre + PIN (ver
+/// backend/README.md — no es un mecanismo de autenticación real, es solo
+/// para pruebas del equipo). Las cuentas se dan de alta a mano en la hoja
+/// "Usuarios"; la app no crea usuarios. El rol con el que se entra lo
+/// decide el backend, no un selector previo.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -33,7 +31,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _nombreController = TextEditingController();
   final _pinController = TextEditingController();
-  bool _modoRegistro = false;
   bool _verPin = false;
   bool _enviando = false;
   bool _verificandoSesion = true;
@@ -125,11 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       final appState = context.read<AppState>();
-      if (_modoRegistro) {
-        await appState.registrarUsuario(nombre, pin);
-      } else {
-        await appState.iniciarSesion(nombre, pin);
-      }
+      await appState.iniciarSesion(nombre, pin);
       // El navegador o el celular ofrecen guardar la cuenta.
       TextInput.finishAutofillContext();
       if (!mounted) return;
@@ -294,29 +287,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _cambiarModo() => setState(() {
-    _modoRegistro = !_modoRegistro;
-    _error = null;
-  });
-
   Widget _formulario(BuildContext context) {
-    final registro = _modoRegistro;
     final accion = _enviando ? null : _enviar;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          registro ? 'Crea tu cuenta' : 'Ingresa a tu cuenta',
+          'Ingresa a tu cuenta',
           style: Ipesa.titulo(26, color: Colors.black),
         ),
-        if (registro) ...[
-          const SizedBox(height: 6),
-          const Text(
-            'Tu cuenta se crea como transportista.',
-            style: TextStyle(fontSize: 15, color: Ipesa.textoSuave),
-          ),
-        ],
         const SizedBox(height: 20),
         const _EtiquetaLinea('NOMBRE'),
         TextField(
@@ -341,9 +321,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           decoration: _decoracionLinea(
             pista: '••••',
-            ayuda: registro
-                ? 'Elige un PIN: lo usarás para volver a entrar.'
-                : null,
             sufijo: IconButton(
               tooltip: _verPin ? 'Ocultar PIN' : 'Mostrar PIN',
               icon: Icon(
@@ -384,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : Text(registro ? 'Crear cuenta' : 'Ingresar'),
+                    : const Text('Ingresar'),
               ),
             ),
             const SizedBox(width: 10),
@@ -392,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 56,
               height: 56,
               child: IconButton.filled(
-                tooltip: registro ? 'Crear cuenta' : 'Ingresar',
+                tooltip: 'Ingresar',
                 onPressed: accion,
                 style: IconButton.styleFrom(
                   backgroundColor: _verdeIpesa,
@@ -403,31 +380,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 icon: const Icon(Icons.arrow_forward, color: Colors.white),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              registro ? '¿Ya tienes cuenta? ' : '¿Transportista nuevo? ',
-              style: const TextStyle(fontSize: 15, color: Ipesa.textoSuave),
-            ),
-            TextButton(
-              onPressed: _enviando ? null : _cambiarModo,
-              style: TextButton.styleFrom(
-                foregroundColor: _verdeIpesa,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: const Size(0, 44),
-                textStyle: const TextStyle(
-                  fontFamily: Ipesa.fuenteTexto,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-              child: Text(registro ? 'Ingresa' : 'Crea tu cuenta'),
             ),
           ],
         ),
