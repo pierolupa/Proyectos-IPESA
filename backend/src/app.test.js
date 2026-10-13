@@ -1410,3 +1410,61 @@ describe('GET /despachos (hoja Despachos Ate)', () => {
     expect(res.body.error).toMatch(/Despachos Ate/);
   });
 });
+
+describe('POST /guias/regularizar (administrador)', () => {
+  const datos = {
+    transportista: 'Juan Pérez',
+    numeroGuia: 'T001-99001',
+    origen: 'Almacén Callao',
+    destino: 'Av. Principal 123',
+    destinatario: 'Cliente X',
+    numeroPedido: '0188170001',
+    numeroEntrega: '0080210000',
+    foto: { base64: 'AAAA', mediaType: 'image/jpeg' },
+    comprobante: null,
+  };
+
+  it('pide la foto de la entrega', async () => {
+    const res = await request(app)
+      .post('/guias/regularizar')
+      .send({ ...datos, foto: undefined });
+    expect(res.status).toBe(400);
+    expect(repo.crearGuias).not.toHaveBeenCalled();
+  });
+
+  it('crea la guía ya entregada, a nombre del transportista, sin GPS', async () => {
+    const res = await request(app).post('/guias/regularizar').send(datos);
+    expect(res.status).toBe(201);
+    expect(res.body.numeroGuia).toBe('T001-99001');
+    expect(repo.crearGuias).toHaveBeenCalledWith([
+      expect.objectContaining({
+        numero_guia: 'T001-99001',
+        estado: ESTADOS.ENTREGADO,
+        transportista: 'Juan Pérez',
+        corregido_por_admin: true,
+        numero_pedido: '0188170001',
+      }),
+    ]);
+    const [guia] = repo.crearGuias.mock.calls[0][0];
+    expect(guia.geo_lat).toBeUndefined();
+    expect(guia.fecha_cierre).toBeTruthy();
+  });
+
+  it('no aplica la regla de un registro por día ni se bloquea por la guía ya registrada', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T001-99001', transportista: 'Juan Pérez', fecha_creacion: new Date().toISOString() }),
+    ]);
+    const res = await request(app).post('/guias/regularizar').send(datos);
+    expect(res.status).toBe(201);
+  });
+
+  it('con un comprobante de agencia queda finalizada en agencia', async () => {
+    const res = await request(app)
+      .post('/guias/regularizar')
+      .send({ ...datos, comprobante: { razonSocial: 'Olva', ruc: '20123456789', monto: 45 } });
+    expect(res.status).toBe(201);
+    const [guia] = repo.crearGuias.mock.calls[0][0];
+    expect(guia.estado).toBe(ESTADOS.FINALIZADO);
+    expect(guia.tipo_entrega).toBe(TIPOS_ENTREGA.AGENCIA);
+  });
+});

@@ -490,6 +490,62 @@ app.get('/despachos', async (req, res, next) => {
   }
 });
 
+// Regularización (solo la app del administrador): una entrega que el
+// transportista no registró. Se crea ya entregada, con la foto de la
+// entrega, sin GPS y sin la regla de un registro por día. Queda marcada
+// como corregida por el administrador.
+app.post('/guias/regularizar', async (req, res, next) => {
+  try {
+    const {
+      transportista,
+      numeroGuia,
+      origen,
+      destino,
+      destinatario,
+      numeroPedido,
+      numeroEntrega,
+      foto,
+    } = req.body || {};
+    if (!numeroGuia || !transportista || !origen || !destino || !destinatario) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+    }
+    if (!fotos.esFotoValida(foto)) {
+      return res.status(400).json({ error: 'Falta la foto de la entrega.' });
+    }
+
+    const [fotoEntrega, comprobante] = await Promise.all([
+      intentarGuardarFoto(String(numeroGuia).trim(), foto),
+      comprobanteDeEntrega(req.body, foto),
+    ]);
+    const ahora = new Date().toISOString();
+    const guia = {
+      numero_guia: String(numeroGuia).trim(),
+      estado: comprobante ? ESTADOS.FINALIZADO : ESTADOS.ENTREGADO,
+      tipo_entrega: comprobante ? TIPOS_ENTREGA.AGENCIA : TIPOS_ENTREGA.CLIENTE_FINAL,
+      origen,
+      destino,
+      transportista: String(transportista).trim(),
+      destinatario,
+      corregido_por_admin: true,
+      fecha_creacion: ahora,
+      fecha_actualizacion: ahora,
+      fecha_cierre: ahora,
+      numero_pedido: numeroPedido || '',
+      numero_entrega: numeroEntrega || '',
+      foto_entrega_url: fotoEntrega.url || '',
+      ...columnasComprobante(comprobante),
+    };
+    await repo.crearGuias([guia]);
+    res.status(201).json({
+      ...guia,
+      numeroGuia: guia.numero_guia,
+      aviso_foto: fotoEntrega.aviso,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Transportista: sus tareas asignadas.
 app.get('/guias/transportista/:nombre', async (req, res, next) => {
   try {

@@ -370,6 +370,37 @@ class GuiasApi {
   /// el comprobante de agencia, si viene pegado). La IA lo compara con
   /// [candidatos] (sus guías en ruta) y, si es una de ellas, devuelve ese
   /// número tal cual.
+  /// Regularización (administrador): una entrega que el transportista no
+  /// registró. Se crea ya entregada, con la foto de la entrega, sin GPS.
+  Future<(Guia, String?)> regularizarGuia({
+    required String transportista,
+    required String numeroGuia,
+    required String origen,
+    required String destino,
+    required String destinatario,
+    required Uint8List foto,
+    String numeroPedido = '',
+    String numeroEntrega = '',
+  }) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/guias/regularizar'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'transportista': transportista,
+        'numeroGuia': numeroGuia,
+        'origen': origen,
+        'destino': destino,
+        'destinatario': destinatario,
+        'numeroPedido': numeroPedido,
+        'numeroEntrega': numeroEntrega,
+        'foto': _fotoJson(foto),
+      }),
+    );
+    if (res.statusCode != 201) _lanzarError(res);
+    final json = _decodeBody(res);
+    return (Guia.fromJson(json), json['aviso_foto'] as String?);
+  }
+
   Future<LecturaEntrega> leerNumeroGuia(
     Uint8List fotoBytes, {
     List<String> candidatos = const [],

@@ -618,6 +618,27 @@ class AppState extends ChangeNotifier {
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) =>
       _api.leerGuiaConIA(fotoBytes);
 
+  /// Regularización (solo administrador). Ver GuiasApi.regularizarGuia.
+  Future<(Guia, String?)> regularizarGuia({
+    required String transportista,
+    required String numeroGuia,
+    required String origen,
+    required String destino,
+    required String destinatario,
+    required Uint8List foto,
+    String numeroPedido = '',
+    String numeroEntrega = '',
+  }) => _api.regularizarGuia(
+    transportista: transportista,
+    numeroGuia: numeroGuia,
+    origen: origen,
+    destino: destino,
+    destinatario: destinatario,
+    foto: foto,
+    numeroPedido: numeroPedido,
+    numeroEntrega: numeroEntrega,
+  );
+
   Future<LecturaEntrega> leerNumeroGuia(
     Uint8List fotoBytes, {
     List<String> candidatos = const [],
