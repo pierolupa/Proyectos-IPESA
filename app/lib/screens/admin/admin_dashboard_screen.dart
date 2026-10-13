@@ -147,7 +147,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onMenu: ancha
                     ? () => _scaffold.currentState?.openDrawer()
                     : null,
-                onRastrear: ancha ? null : _abrirRastreo,
+                onRastrear: _abrirRastreo,
                 onCerrarSesion: ancha ? null : _cerrarSesion,
               ),
               // Trayendo guías de fechas más antiguas que las cargadas.
@@ -190,7 +190,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ? _MenuAdmin(
                       seleccionado: _pestana,
                       onSeleccion: (i) => setState(() => _pestana = i),
-                      onRastrear: _abrirRastreo,
                       onArchivo: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const ArchivoScreen(),
@@ -291,7 +290,6 @@ class _MenuAdmin extends StatelessWidget {
   const _MenuAdmin({
     required this.seleccionado,
     required this.onSeleccion,
-    required this.onRastrear,
     required this.onArchivo,
     required this.onRegularizacion,
     required this.onCerrarSesion,
@@ -299,7 +297,6 @@ class _MenuAdmin extends StatelessWidget {
 
   final int seleccionado;
   final ValueChanged<int> onSeleccion;
-  final VoidCallback onRastrear;
   final VoidCallback onArchivo;
   final VoidCallback onRegularizacion;
   final VoidCallback onCerrarSesion;
@@ -387,7 +384,6 @@ class _MenuAdmin extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Divider(height: 1),
           ),
-          opcion(Icons.manage_search_sharp, 'Rastrear', onRastrear),
           opcion(Icons.inventory_2_outlined, 'Archivo de guías', onArchivo),
           opcion(Icons.fact_check_outlined, 'Regularización', onRegularizacion),
           const Spacer(),
@@ -422,7 +418,7 @@ class _Cabecera extends StatelessWidget {
   final CentroNovedades novedades;
   final VoidCallback onNovedades;
   final VoidCallback? onMenu;
-  final VoidCallback? onRastrear;
+  final VoidCallback onRastrear;
   final VoidCallback? onCerrarSesion;
 
   @override
@@ -529,8 +525,23 @@ class _Cabecera extends StatelessWidget {
                 ? null
                 : () => context.read<AppState>().cargarGuias(),
           ),
-          if (onRastrear != null)
-            boton('Rastrear guía', Icons.manage_search, onRastrear),
+          // En escritorio, con texto: es la búsqueda que más se usa. En
+          // celular y tablet, solo el ícono para que quepa el título.
+          if (MediaQuery.sizeOf(context).width < _anchoEscritorio)
+            boton('Rastrear guía', Icons.manage_search, onRastrear)
+          else
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: FilledButton.icon(
+                onPressed: onRastrear,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  backgroundColor: Ipesa.petroleo,
+                ),
+                icon: const Icon(Icons.manage_search, size: 20),
+                label: const Text('Rastrear guía'),
+              ),
+            ),
           if (onCerrarSesion != null)
             boton('Cerrar sesión', Icons.logout, onCerrarSesion),
         ],

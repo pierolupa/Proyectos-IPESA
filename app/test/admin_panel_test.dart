@@ -396,6 +396,8 @@ void main() {
 
     // Escondidas hasta abrir el menú: el contenido usa todo el ancho.
     expect(find.text('Transportistas'), findsNothing);
+    // Rastrear va fijo en la cabecera, no en el menú.
+    expect(find.text('Rastrear guía'), findsOneWidget);
     await tester.tap(find.byTooltip('Menú'));
     await tester.pumpAndSettle();
 
@@ -404,11 +406,11 @@ void main() {
       'Transportistas',
       'Dashboard',
       'Sucursales',
-      'Rastrear',
     ].map((t) => tester.getTopLeft(find.text(t).first).dy).toList();
     for (var i = 1; i < orden.length; i++) {
       expect(orden[i], greaterThan(orden[i - 1]));
     }
+    expect(find.text('Rastrear'), findsNothing);
     expect(find.text('Cerrar sesión'), findsOneWidget);
 
     await tester.tap(find.text('Transportistas'));
