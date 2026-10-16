@@ -178,7 +178,10 @@ class _RastreoScreenState extends State<RastreoScreen> {
                 numeroGuia: encontradas.single.numeroGuia,
                 fechaCreacion: encontradas.single.fechaCreacion,
               )
-            : RastreoResultadosScreen(filtros: filtros),
+            : DespachosEnVivo(
+                filtros: filtros,
+                child: RastreoResultadosScreen(filtros: filtros),
+              ),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,64 @@ import '../../widgets/lugares_sucursal.dart';
 import 'rastreo_detalle_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
+
+/// Mientras la lista está abierta, vuelve a leer la hoja "Despachos Ate"
+/// cada 2 minutos (lo mismo que su caché) para que aparezcan las salidas
+/// nuevas. Con la app oculta no lee nada; al volver a verse, lee de una vez.
+/// Las guías de la app ya se actualizan con la pantalla de búsqueda.
+class DespachosEnVivo extends StatefulWidget {
+  const DespachosEnVivo({
+    super.key,
+    required this.filtros,
+    required this.child,
+  });
+
+  final FiltrosRastreo filtros;
+  final Widget child;
+
+  @override
+  State<DespachosEnVivo> createState() => _DespachosEnVivoState();
+}
+
+class _DespachosEnVivoState extends State<DespachosEnVivo> {
+  static const _intervalo = Duration(minutes: 2);
+  Timer? _timer;
+  late final AppLifecycleListener _ciclo;
+
+  @override
+  void initState() {
+    super.initState();
+    _ciclo = AppLifecycleListener(onShow: _encender, onHide: _apagar);
+    _encender();
+  }
+
+  void _encender() {
+    _timer?.cancel();
+    _timer = Timer.periodic(_intervalo, (_) => _leer());
+    _leer();
+  }
+
+  void _apagar() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  Future<void> _leer() async {
+    final f = widget.filtros;
+    if (!mounted || !f.tieneRango) return;
+    await context.read<AppState>().asegurarDespachos(f.desde!, f.hasta!);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ciclo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 /// Resultados de una búsqueda del comercial cuando coincide más de una
 /// guía: tarjetas flotantes sobre el mismo paisaje del buscador (con el
