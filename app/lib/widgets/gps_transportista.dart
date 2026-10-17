@@ -104,6 +104,8 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
   Widget tarjetaGps({
     required String textoActivo,
     required String textoApagado,
+    // false: solo muestra la precisión, sin el aviso de ubicación imprecisa.
+    bool avisoAproximada = true,
   }) {
     final aproximado = gpsActivo && gpsAproximado;
     final tarjeta = Card(
@@ -147,7 +149,7 @@ mixin GpsTransportista<T extends StatefulWidget> on State<T> {
               ),
       ),
     );
-    if (!aproximado) return tarjeta;
+    if (!aproximado || !avisoAproximada) return tarjeta;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

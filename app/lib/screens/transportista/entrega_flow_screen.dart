@@ -490,6 +490,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
             textoActivo: 'Ubicación disponible.',
             textoApagado:
                 'Obligatorio para registrar cualquier evento de esta guía.',
+            // Se registra aunque la ubicación sea aproximada: sin aviso que
+            // frene al transportista.
+            avisoAproximada: false,
           ),
           // Entrega final dentro de una sucursal: queda entregada ahí.
           if (gpsActivo &&
