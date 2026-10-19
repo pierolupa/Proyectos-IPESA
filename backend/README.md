@@ -10,17 +10,31 @@ entorno secreta en Vercel — no requiere el plan Blaze de Google Cloud. La
 lectura de la foto de la guía usa la API de Gemini, que tiene un nivel
 gratis con cuota diaria — ver sección "Leer la guía con IA" más abajo.
 
-## ⚠️ Antes de desplegar en serio
+## Sesiones y permisos
 
-El login (`POST /auth/login`) es deliberadamente simple: compara nombre y
-PIN en texto plano contra la hoja "Usuarios", sin tokens, sin expiración de
-sesión, sin hashing. Sirve para que el equipo pruebe la app internamente —
-**no es un mecanismo de autenticación real**. El resto de la API tampoco
-valida quién llama cada endpoint (ver `src/app.js`, nota al inicio del
-archivo): cualquiera con la URL puede llamar cualquier endpoint sin pasar
-por el login. **No debe usarse en producción con transportistas reales sin
-migrar a un proveedor de autenticación de verdad** (por ejemplo, Firebase
-Auth) y verificar un token en cada endpoint sensible.
+`POST /api/auth/login` compara nombre y PIN contra la hoja "Usuarios" y
+devuelve `{ nombre, rol, token, expira }`. El token está firmado por el
+servidor (HMAC-SHA256, ver `src/auth.js`) y vence a las **12 horas**; la app
+lo renueva sola con la cuenta guardada en el equipo.
+
+- **Todas las rutas exigen** `Authorization: Bearer <token>`, salvo
+  `/api/health`, el login y `/api/cron/archivo` (que tiene su propia clave,
+  `CRON_SECRET`). Sin token o con uno vencido o alterado responden `401`.
+- **Comercial:** solo consulta (`GET`); cualquier cambio responde `403`.
+- **Solo administrador:** editar o borrar sucursales, el archivo de guías
+  (simular y archivar) y la regularización.
+- **Transportista:** `GET /api/guias/transportista/:nombre` solo con su
+  propio nombre.
+- **Intentos de PIN:** tras 5 PIN equivocados seguidos, ese nombre queda
+  bloqueado 15 minutos (`429`).
+- **Clave de firma:** `AUTH_SECRET` si está en Vercel (opcional, 32
+  caracteres o más). Si no está, se deriva de `GOOGLE_SERVICE_ACCOUNT_KEY`,
+  que ya está configurada; no hay que agregar nada. Cambiar cualquiera de
+  las dos cierra todas las sesiones (la app vuelve a entrar sola).
+
+Lo que sigue pendiente: el PIN está en texto plano en la hoja "Usuarios"
+(quien pueda abrir la hoja ve los PIN), y un usuario dado de baja conserva
+el acceso hasta que venza su token (máximo 12 horas).
 
 ## Qué necesitas antes de desplegar (una sola vez, todo gratis)
 
@@ -285,7 +299,7 @@ Al terminar, Vercel te da una URL pública (algo como
 |---|---|---|
 | `POST` | `/api/ocr/leer-guia` | Lee la foto de una guía con IA (y, si viene pegado, el comprobante de la agencia: `agencia_razon_social`, `agencia_ruc`, `agencia_monto`) (ver "Leer la guía con IA"). Requiere `GEMINI_API_KEY`. Si la IA llegó a su límite por minuto responde `429` y la app reintenta esa foto sola. |
 | `POST` | `/api/ocr/numero-guia` | Entrega inteligente: lee solo el número de guía de una foto de entrega. Body `{ imagenBase64, mediaType, candidatos }`, donde `candidatos` son las guías en ruta del transportista; si la foto es de una de ellas devuelve ese número tal cual (aunque la IA lea ceros a la izquierda u O por 0). Mismo `429` que la ruta anterior. |
-| `POST` | `/api/auth/login` | Login simple por nombre + PIN (ver advertencia de seguridad). |
+| `POST` | `/api/auth/login` | Ingreso por nombre + PIN; devuelve el token de la sesión (ver "Sesiones y permisos"). No pide token. |
 | `POST` | `/api/guias` | Asignación: crea guía en `en_ruta` y la devuelve completa. Requiere GPS. El mismo transportista no puede volver a registrar un número el mismo día (hora de Perú); otro transportista, sí. |
 | `POST` | `/api/guias/lote` | Carga masiva: `{ guias: [...] }` con hasta 30 guías (mismos campos que `/api/guias`). Una sola lectura y una sola escritura en la hoja. Responde `{ resultados: [{ guia } \| { error }] }` en el mismo orden: las que fallan no impiden registrar las demás. |
 | `POST` | `/api/despachos-corte` | Despacho Corte: igual que `/api/guias/lote`, pero todas las guías creadas llevan el mismo código en `despacho_corte` (ej. `DC-261001-1542-K7`). Responde `{ despacho_corte, resultados }`. |

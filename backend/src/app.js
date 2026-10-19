@@ -20,12 +20,39 @@ const {
 const fotos = require('./fotos');
 const { hacenFaltaArchivo, corteMaximo } = require('./archivo');
 const { despachosNuevos } = require('./despachos');
+const auth = require('./auth');
 
 const app = express();
 app.use(cors({ origin: true }));
 // Límite alto: el body incluye la foto en base64 (/ocr/leer-guia, y la foto
 // de la entrega al cliente que se guarda). Vercel corta en 4,5 MB.
 app.use(express.json({ limit: '8mb' }));
+
+// Rutas que no piden sesión: el login, el chequeo de salud y el archivo
+// automático (que tiene su propia clave, CRON_SECRET).
+const RUTAS_PUBLICAS = new Set(['/health', '/auth/login', '/cron/archivo']);
+
+// Toda otra ruta exige el token del login (ver auth.js). El equipo
+// comercial solo consulta: no puede cambiar nada.
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS' || RUTAS_PUBLICAS.has(req.path)) return next();
+  const [tipo, token] = String(req.headers.authorization || '').split(' ');
+  const usuario = tipo === 'Bearer' ? auth.leerToken(token) : null;
+  if (!usuario) {
+    return res.status(401).json({ error: 'Tu sesión venció. Ingresa de nuevo.' });
+  }
+  if (usuario.rol === ROLES.COMERCIAL && req.method !== 'GET') {
+    return res.status(403).json({ error: 'Tu cuenta solo puede consultar guías.' });
+  }
+  req.usuario = usuario;
+  next();
+});
+
+/** Para las rutas que solo puede usar el administrador. */
+function soloAdministrador(req, res, next) {
+  if (req.usuario?.rol === ROLES.ADMINISTRADOR) return next();
+  res.status(403).json({ error: 'Solo el administrador puede hacer esto.' });
+}
 
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 // "Entre sucursales" ya no se ofrece: la sucursal se detecta sola por GPS
@@ -63,15 +90,12 @@ function horaPeru(ms) {
 }
 
 /**
- * NOTA DE SEGURIDAD: el login de /auth/login es deliberadamente simple
- * (nombre + PIN comparados en texto plano contra la hoja "Usuarios") y
- * NO reemplaza un mecanismo de autenticación real — no hay tokens, no hay
- * expiración de sesión, no hay hashing del PIN. Sirve solo para que el
- * equipo pruebe internamente la app. El resto de la API tampoco valida
- * quién llama cada endpoint (ver ARCHITECTURE.md, sección 8 — decisión
- * pendiente): antes de un despliegue real con transportistas de verdad
- * hay que migrar a un proveedor de autenticación de verdad (Firebase Auth,
- * por ejemplo) y exigir/verificar un token en cada endpoint sensible.
+ * NOTA DE SEGURIDAD: /auth/login compara nombre + PIN contra la hoja
+ * "Usuarios" (el PIN está en texto plano en la hoja) y entrega un token
+ * firmado que vence en 12 horas (ver auth.js). Todas las demás rutas,
+ * salvo /health y el archivo automático, exigen ese token; algunas,
+ * además, el rol de administrador. Tras varios PIN equivocados seguidos,
+ * ese nombre queda bloqueado unos minutos.
  */
 
 function distanciaMetros(lat1, lng1, lat2, lng2) {
@@ -244,6 +268,11 @@ app.post('/auth/login', async (req, res, next) => {
     if (!nombre || !pin) {
       return res.status(400).json({ error: 'Faltan nombre y/o pin.' });
     }
+    if (auth.loginBloqueado(nombre)) {
+      return res.status(429).json({
+        error: 'Demasiados intentos con un PIN equivocado. Espera 15 minutos.',
+      });
+    }
 
     const usuarios = await repo.listarUsuarios();
     const usuario = usuarios.find(
@@ -251,13 +280,16 @@ app.post('/auth/login', async (req, res, next) => {
     );
 
     if (!usuario || !usuario.activo || String(usuario.pin) !== String(pin)) {
+      auth.registrarFallo(nombre);
       return res.status(401).json({ error: 'Nombre o PIN incorrecto.' });
     }
     if (!ROLES_VALIDOS.has(usuario.rol)) {
       return res.status(500).json({ error: `Rol inválido en la hoja de usuarios: ${usuario.rol}` });
     }
+    auth.limpiarFallos(nombre);
 
-    res.json({ nombre: usuario.nombre, rol: usuario.rol });
+    const sesion = { nombre: usuario.nombre, rol: usuario.rol };
+    res.json({ ...sesion, ...auth.crearToken(sesion) });
   } catch (err) {
     next(err);
   }
@@ -273,7 +305,7 @@ app.get('/sucursales', async (_req, res, next) => {
   }
 });
 
-app.put('/sucursales/:nombre', async (req, res, next) => {
+app.put('/sucursales/:nombre', soloAdministrador, async (req, res, next) => {
   try {
     const nombre = String(req.params.nombre).trim();
     const { lat, lng, radioM } = req.body || {};
@@ -294,7 +326,7 @@ app.put('/sucursales/:nombre', async (req, res, next) => {
   }
 });
 
-app.delete('/sucursales/:nombre', async (req, res, next) => {
+app.delete('/sucursales/:nombre', soloAdministrador, async (req, res, next) => {
   try {
     const sucursal = buscarSucursal(await repo.listarSucursales(), req.params.nombre);
     if (!sucursal) {
@@ -389,7 +421,7 @@ function corteValido(hasta) {
 }
 
 // Simulación: cuántas guías se moverían. Solo lee.
-app.get('/archivo', async (req, res, next) => {
+app.get('/archivo', soloAdministrador, async (req, res, next) => {
   try {
     const { corte, error } = corteValido(req.query.hasta);
     if (error) return res.status(400).json({ error });
@@ -401,7 +433,7 @@ app.get('/archivo', async (req, res, next) => {
 });
 
 // Archiva de verdad. Pide el nombre y PIN de un administrador activo.
-app.post('/archivo', async (req, res, next) => {
+app.post('/archivo', soloAdministrador, async (req, res, next) => {
   try {
     const { nombre, pin, hasta } = req.body || {};
     if (!nombre || !pin) {
@@ -494,7 +526,7 @@ app.get('/despachos', async (req, res, next) => {
 // transportista no registró. Se crea ya entregada, con la foto de la
 // entrega, sin GPS y sin la regla de un registro por día. Queda marcada
 // como corregida por el administrador.
-app.post('/guias/regularizar', async (req, res, next) => {
+app.post('/guias/regularizar', soloAdministrador, async (req, res, next) => {
   try {
     const {
       transportista,
@@ -549,8 +581,15 @@ app.post('/guias/regularizar', async (req, res, next) => {
 // Transportista: sus tareas asignadas.
 app.get('/guias/transportista/:nombre', async (req, res, next) => {
   try {
-    const guias = await repo.listarGuias();
     const { nombre } = req.params;
+    // Un transportista solo ve sus propias tareas.
+    if (
+      req.usuario.rol === ROLES.TRANSPORTISTA
+      && !mismoNombre(nombre, req.usuario.nombre)
+    ) {
+      return res.status(403).json({ error: 'Solo puedes ver tus propias tareas.' });
+    }
+    const guias = await repo.listarGuias();
     // Sus tareas y las que otro transportista le quiere pasar (transbordo
     // pendiente de su respuesta).
     const propias = guias.filter(

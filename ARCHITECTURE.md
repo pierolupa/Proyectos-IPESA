@@ -178,17 +178,15 @@ stateDiagram-v2
 - Backend intermedio: **Vercel** (Node/Express), no Cloud Functions —
   decisión tomada para evitar el plan de pago de Firebase (Blaze) mientras
   el volumen de IPESA es bajo. Ver `backend/README.md`.
-- Login: implementado un **login simple** (nombre + PIN comparados en
-  texto plano contra una hoja "Usuarios") solo para que el equipo pruebe
-  la app internamente. **No es un mecanismo de autenticación real** — no
-  hay tokens, ni expiración de sesión, ni hashing del PIN, y el resto de
-  la API tampoco verifica quién llama cada endpoint. Antes de operar con
-  transportistas reales hay que migrar a un proveedor de autenticación de
-  verdad (por ejemplo, Firebase Auth) y proteger cada endpoint sensible.
+- Login: nombre + PIN contra la hoja "Usuarios". El backend entrega un
+  token firmado que vence a las 12 horas y lo exige en todas las rutas
+  (salvo salud, login y archivo automático), con permisos por rol. Sin
+  proveedor externo (gratis). Ver "Sesiones y permisos" en
+  `backend/README.md`.
 
 **Pendientes:**
-- [ ] Migrar el login simple a un proveedor de autenticación real
-      (Firebase Auth u otro) antes de un uso en producción.
+- [x] Sesiones con token y permisos por rol en la API.
+- [ ] Guardar el PIN cifrado (hoy está en texto plano en la hoja "Usuarios").
 - [ ] Definir radios de geocerca por sucursal (Callao, Ate, otras).
 - [ ] Definir política de reintentos/offline para zonas sin señal GPS o de
       datos.

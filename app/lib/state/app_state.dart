@@ -50,6 +50,7 @@ class CambioGuia {
 }
 
 const _prefRol = 'sesion_rol';
+const _prefToken = 'sesion_token';
 
 // La última cuenta usada en este equipo: queda guardada aunque se cierre
 // sesión, para no tener que escribir nombre y PIN cada vez.
@@ -88,9 +89,15 @@ DateTime _inicioDelDia(DateTime f) => DateTime(f.year, f.month, f.day);
 /// Mantiene una copia en memoria de las guías para que las pantallas no
 /// tengan que repetir la llamada de red en cada rebuild.
 class AppState extends ChangeNotifier {
-  AppState({GuiasApi? api}) : _api = api ?? GuiasApi();
+  AppState({GuiasApi? api}) : _api = api ?? GuiasApi() {
+    _api.alVencerSesion = _renovarSesion;
+  }
 
   final GuiasApi _api;
+
+  /// Por qué se cerró la sesión sin que el usuario lo pidiera (la pantalla
+  /// de ingreso lo muestra una vez y lo borra).
+  String? avisoSesion;
 
   List<Guia> _guias = [];
   List<Sucursal> _sucursales = [];
@@ -281,12 +288,66 @@ class AppState extends ChangeNotifier {
   Future<void> _establecerSesion(SesionUsuario sesion) async {
     _nombreUsuario = sesion.nombre;
     _rolActual = sesion.rol;
+    _api.token = sesion.token;
+    avisoSesion = null;
     _rangoPorDefecto();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefNombre, sesion.nombre);
     await prefs.setString(_prefRol, sesion.rol.name);
+    await _guardarToken(sesion.token);
     await cargarGuias();
+  }
+
+  Future<void> _guardarToken(String? token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (token == null) {
+        await prefs.remove(_prefToken);
+      } else {
+        await prefs.setString(_prefToken, token);
+      }
+    } catch (_) {
+      // Sin almacenamiento, al recargar se renueva con la cuenta guardada.
+    }
+  }
+
+  Future<String?>? _renovando;
+
+  /// El servidor dijo que la sesión venció (401): entra de nuevo con la
+  /// cuenta guardada en este equipo, sin que el usuario lo note. Si el PIN
+  /// ya no sirve (lo cambiaron o el usuario fue dado de baja), cierra la
+  /// sesión. Varios pedidos vencidos a la vez esperan una sola renovación.
+  Future<String?> _renovarSesion() =>
+      _renovando ??= _renovar().whenComplete(() => _renovando = null);
+
+  Future<String?> _renovar() async {
+    final nombre = _nombreUsuario;
+    if (nombre == null) return null;
+    final cuenta = await cuentaGuardada();
+    final esLaMisma =
+        cuenta != null &&
+        cuenta.$1.trim().toLowerCase() == nombre.trim().toLowerCase();
+    if (esLaMisma) {
+      try {
+        final sesion = await _api.login(cuenta.$1, cuenta.$2);
+        if (sesion.token != null) {
+          _api.token = sesion.token;
+          await _guardarToken(sesion.token);
+          return sesion.token;
+        }
+      } on ApiException catch (e) {
+        // Un fallo del servidor no cierra la sesión: se reintenta en el
+        // próximo pedido. Solo un PIN rechazado o bloqueado la cierra.
+        if (e.codigo != 401 && e.codigo != 429) return null;
+      } catch (_) {
+        // Sin conexión: igual, se reintenta después.
+        return null;
+      }
+    }
+    avisoSesion = 'Tu sesión venció. Ingresa de nuevo.';
+    await cerrarSesion();
+    return null;
   }
 
   /// Restaura la sesión guardada (si hay una) al abrir la app — sin esto,
@@ -304,6 +365,9 @@ class AppState extends ChangeNotifier {
 
     _nombreUsuario = nombre;
     _rolActual = rol;
+    // Una sesión guardada antes de que hubiera tokens no trae ninguno: el
+    // primer pedido recibe 401 y se renueva solo (ver _renovarSesion).
+    _api.token = prefs.getString(_prefToken);
     _rangoPorDefecto();
     notifyListeners();
     await cargarGuias();
@@ -312,6 +376,7 @@ class AppState extends ChangeNotifier {
   Future<void> cerrarSesion() async {
     _rolActual = null;
     _nombreUsuario = null;
+    _api.token = null;
     _guias = [];
     _sucursales = [];
     error = null;
@@ -319,6 +384,7 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefNombre);
     await prefs.remove(_prefRol);
+    await prefs.remove(_prefToken);
   }
 
   Future<void> cargarGuias() {

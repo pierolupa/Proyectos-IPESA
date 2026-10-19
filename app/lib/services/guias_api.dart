@@ -58,15 +58,19 @@ class ApiException implements Exception {
 /// Resultado de POST /auth/login. Login simple, sin token — ver la nota de
 /// seguridad en backend/src/app.js y backend/README.md.
 class SesionUsuario {
-  const SesionUsuario({required this.nombre, required this.rol});
+  const SesionUsuario({required this.nombre, required this.rol, this.token});
 
   final String nombre;
   final RolUsuario rol;
+
+  /// Lo que el backend pide en cada pedido (vence a las 12 horas).
+  final String? token;
 
   factory SesionUsuario.fromJson(Map<String, dynamic> json) {
     return SesionUsuario(
       nombre: json['nombre'] as String,
       rol: rolUsuarioDesdeApi(json['rol'] as String),
+      token: json['token'] as String?,
     );
   }
 }
@@ -168,9 +172,18 @@ class DatosGuiaLeida {
 }
 
 class GuiasApi {
-  GuiasApi({http.Client? client}) : _client = client ?? http.Client();
+  GuiasApi({http.Client? client}) {
+    _client = _ClienteConSesion(client ?? http.Client(), this);
+  }
 
-  final http.Client _client;
+  late final http.Client _client;
+
+  /// El token de la sesión abierta; va en cada pedido.
+  String? token;
+
+  /// Se llama cuando el servidor dice que la sesión venció: debe conseguir
+  /// un token nuevo (o null si no se puede). Ver [_ClienteConSesion].
+  Future<String?> Function()? alVencerSesion;
 
   Map<String, dynamic> _decodeBody(http.Response res) {
     if (res.body.isEmpty) return const {};
@@ -885,4 +898,49 @@ class ResultadoRegistro {
 
   final Guia? guia;
   final String? error;
+}
+
+/// Agrega el token de la sesión a cada pedido. Si el servidor responde 401
+/// (la sesión venció), pide un token nuevo con [GuiasApi.alVencerSesion] y
+/// repite el pedido una sola vez; así el usuario no nota el vencimiento.
+class _ClienteConSesion extends http.BaseClient {
+  _ClienteConSesion(this._interno, this._api);
+
+  final http.Client _interno;
+  final GuiasApi _api;
+
+  void _ponerToken(http.BaseRequest request) {
+    final token = _api.token;
+    if (token != null) request.headers['Authorization'] = 'Bearer $token';
+  }
+
+  /// Copia de un pedido para repetirlo (uno ya enviado no se puede reusar).
+  static http.Request? _copia(http.BaseRequest original) {
+    if (original is! http.Request) return null;
+    return http.Request(original.method, original.url)
+      ..headers.addAll(original.headers)
+      ..followRedirects = original.followRedirects
+      ..bodyBytes = original.bodyBytes;
+  }
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final esLogin = request.url.path.endsWith('/auth/login');
+    if (esLogin) return _interno.send(request);
+    final repetir = _copia(request);
+    _ponerToken(request);
+    final res = await _interno.send(request);
+    final renovar = _api.alVencerSesion;
+    if (res.statusCode != 401 || repetir == null || renovar == null) {
+      return res;
+    }
+    final nuevo = await renovar();
+    if (nuevo == null) return res;
+    await res.stream.drain<void>();
+    _ponerToken(repetir);
+    return _interno.send(repetir);
+  }
+
+  @override
+  void close() => _interno.close();
 }

@@ -16,10 +16,10 @@ import 'admin/admin_dashboard_screen.dart';
 import 'comercial/rastreo_screen.dart';
 import 'transportista/task_list_screen.dart';
 
-/// Pantalla de inicio de la app: login simple por nombre + PIN (ver
-/// backend/README.md — no es un mecanismo de autenticación real, es solo
-/// para pruebas del equipo). Las cuentas se dan de alta a mano en la hoja
-/// "Usuarios"; la app no crea usuarios. El rol con el que se entra lo
+/// Pantalla de inicio de la app: ingreso por nombre + PIN. El backend
+/// devuelve una sesión (token) que vence a las 12 horas y la app renueva
+/// sola con la cuenta guardada. Las cuentas se dan de alta a mano en la
+/// hoja "Usuarios"; la app no crea usuarios. El rol con el que se entra lo
 /// decide el backend, no un selector previo.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,10 +35,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _enviando = false;
   bool _verificandoSesion = true;
   String? _error;
+  late final AppState _appState;
+  bool _conSesion = false;
 
   @override
   void initState() {
     super.initState();
+    _appState = context.read<AppState>()..addListener(_alCambiarSesion);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _verificarSesionGuardada(),
     );
@@ -46,9 +49,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _appState.removeListener(_alCambiarSesion);
     _nombreController.dispose();
     _pinController.dispose();
     super.dispose();
+  }
+
+  /// Si la sesión se cierra sola (venció y la cuenta guardada ya no sirve)
+  /// mientras se usa la app, se vuelve aquí y se explica por qué.
+  void _alCambiarSesion() {
+    final conSesion = _appState.rolActual != null;
+    if (_conSesion && !conSesion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        final aviso = _appState.avisoSesion;
+        if (aviso != null) {
+          _appState.avisoSesion = null;
+          setState(() => _error = aviso);
+        }
+      });
+    }
+    _conSesion = conSesion;
   }
 
   /// Si ya había una sesión iniciada (ver AppState.restaurarSesion), entra

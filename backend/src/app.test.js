@@ -13,13 +13,33 @@ jest.mock('./fotos', () => ({
   eliminarFoto: jest.fn(),
 }));
 
-const request = require('supertest');
+// Las rutas exigen sesión (ver auth.js). Por defecto las pruebas llaman
+// como administrador; `sinSesion()` y `como(sesion)` prueban lo demás.
+process.env.AUTH_SECRET = 'clave-solo-para-pruebas-0123456789abcdef';
+const supertest = require('supertest');
+const auth = require('./auth');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA, leerNumeroGuia, leerComprobante } = require('./ocrAgente');
 const fotos = require('./fotos');
 const { ESTADOS, TIPOS_ENTREGA, ROLES, TRANSBORDO } = require('./columns');
 
 const app = require('./app');
+
+function conToken(token) {
+  const agente = supertest(app);
+  const metodos = {};
+  for (const m of ['get', 'post', 'put', 'patch', 'delete']) {
+    metodos[m] = (...args) => {
+      const pedido = agente[m](...args);
+      return token ? pedido.set('Authorization', `Bearer ${token}`) : pedido;
+    };
+  }
+  return metodos;
+}
+const como = (sesion) => conToken(auth.crearToken(sesion).token);
+const sinSesion = () => conToken(null);
+const TOKEN_ADMIN = auth.crearToken({ nombre: 'Admin Pruebas', rol: ROLES.ADMINISTRADOR }).token;
+const request = () => conToken(TOKEN_ADMIN);
 
 function guia(overrides = {}) {
   return {
@@ -42,6 +62,7 @@ function guia(overrides = {}) {
 
 beforeEach(() => {
   jest.resetAllMocks();
+  auth.olvidarFallos();
   repo.listarGuias.mockResolvedValue([]);
   repo.listarSucursales.mockResolvedValue([]);
   repo.infoArchivo.mockResolvedValue({ pestanas: [], ultima: null });
@@ -445,7 +466,12 @@ describe('POST /auth/login', () => {
       .post('/auth/login')
       .send({ nombre: '  juan pérez  ', pin: '1234' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
+    expect(res.body).toMatchObject({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
+    expect(auth.leerToken(res.body.token)).toEqual({
+      nombre: 'Juan Pérez',
+      rol: ROLES.TRANSPORTISTA,
+    });
+    expect(Date.parse(res.body.expira)).toBeGreaterThan(Date.now());
   });
 
   it('acepta cuentas del equipo comercial', async () => {
@@ -456,7 +482,105 @@ describe('POST /auth/login', () => {
       .post('/auth/login')
       .send({ nombre: 'Lucía Ramos', pin: '5678' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ nombre: 'Lucía Ramos', rol: 'comercial' });
+    expect(res.body).toMatchObject({ nombre: 'Lucía Ramos', rol: 'comercial' });
+  });
+
+  it('tras 5 PIN equivocados bloquea ese nombre, aunque luego acierte', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario()]);
+    for (let i = 0; i < auth.MAX_FALLOS; i++) {
+      const res = await sinSesion()
+        .post('/auth/login')
+        .send({ nombre: 'Juan Pérez', pin: '0000' });
+      expect(res.status).toBe(401);
+    }
+    const bloqueado = await sinSesion()
+      .post('/auth/login')
+      .send({ nombre: 'juan pérez', pin: '1234' });
+    expect(bloqueado.status).toBe(429);
+  });
+
+  it('un acierto borra los fallos anteriores', async () => {
+    repo.listarUsuarios.mockResolvedValue([usuario()]);
+    for (let i = 0; i < auth.MAX_FALLOS - 1; i++) {
+      await sinSesion().post('/auth/login').send({ nombre: 'Juan Pérez', pin: '0000' });
+    }
+    await sinSesion().post('/auth/login').send({ nombre: 'Juan Pérez', pin: '1234' });
+    const res = await sinSesion()
+      .post('/auth/login')
+      .send({ nombre: 'Juan Pérez', pin: '0000' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('Sesiones y permisos', () => {
+  const transportista = { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA };
+  const comercial = { nombre: 'Lucía Ramos', rol: ROLES.COMERCIAL };
+
+  it('sin token no deja consultar ni cambiar nada', async () => {
+    expect((await sinSesion().get('/guias')).status).toBe(401);
+    expect((await sinSesion().get('/sucursales')).status).toBe(401);
+    expect((await sinSesion().post('/ocr/leer-guia').send({})).status).toBe(401);
+    expect((await sinSesion().delete('/guias/IPE-1')).status).toBe(401);
+    expect(repo.listarGuias).not.toHaveBeenCalled();
+  });
+
+  it('/health no pide sesión', async () => {
+    expect((await sinSesion().get('/health')).status).toBe(200);
+  });
+
+  it('rechaza un token alterado o vencido', async () => {
+    const { token } = auth.crearToken(transportista);
+    const [cuerpo] = token.split('.');
+    const otroCuerpo = Buffer.from(
+      JSON.stringify({ n: 'Juan Pérez', r: ROLES.ADMINISTRADOR, exp: Date.now() + 60000 }),
+    ).toString('base64url');
+    const alterado = `${otroCuerpo}.${token.split('.')[1]}`;
+    expect(cuerpo).not.toBe(otroCuerpo);
+    expect((await conToken(alterado).get('/guias')).status).toBe(401);
+
+    const vencido = auth.crearToken(
+      transportista,
+      Date.now() - auth.DURACION_SESION_MS - 1000,
+    ).token;
+    const res = await conToken(vencido).get('/guias');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/sesión venció/);
+  });
+
+  it('el token del login sirve para las demás rutas', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA, pin: '1234', activo: true },
+    ]);
+    const login = await sinSesion()
+      .post('/auth/login')
+      .send({ nombre: 'Juan Pérez', pin: '1234' });
+    const res = await conToken(login.body.token).get('/guias');
+    expect(res.status).toBe(200);
+  });
+
+  it('el comercial consulta pero no cambia nada', async () => {
+    expect((await como(comercial).get('/guias')).status).toBe(200);
+    const res = await como(comercial).post('/guias').send({});
+    expect(res.status).toBe(403);
+    expect(repo.crearGuia).not.toHaveBeenCalled();
+  });
+
+  it('sucursales, archivo y regularización son solo del administrador', async () => {
+    const t = () => como(transportista);
+    expect((await t().put('/sucursales/Ate').send({ lat: 1, lng: 1, radioM: 100 })).status).toBe(403);
+    expect((await t().delete('/sucursales/Ate')).status).toBe(403);
+    expect((await t().get('/archivo')).status).toBe(403);
+    expect((await t().post('/archivo').send({})).status).toBe(403);
+    expect((await t().post('/guias/regularizar').send({})).status).toBe(403);
+    expect(repo.guardarSucursal).not.toHaveBeenCalled();
+    expect(repo.archivarGuias).not.toHaveBeenCalled();
+  });
+
+  it('un transportista solo ve sus propias tareas', async () => {
+    const ajena = await como(transportista).get('/guias/transportista/Pedro%20Soto');
+    expect(ajena.status).toBe(403);
+    const propia = await como(transportista).get('/guias/transportista/juan%20p%C3%A9rez');
+    expect(propia.status).toBe(200);
   });
 });
 

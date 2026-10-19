@@ -28,13 +28,13 @@ ver la sección "Desplegar en Vercel" más abajo.
   guía, consultando la API directo (nunca baja la lista completa al
   dispositivo).
 
-## ⚠️ Advertencia de seguridad (login)
+## Sesión
 
-El login es **deliberadamente simple** (nombre + PIN en texto plano,
-comparado en el backend contra una hoja de cálculo) — no hay tokens, ni
-expiración de sesión, ni cifrado del PIN. Sirve para que el equipo pruebe
-la app internamente, **no para producción con datos sensibles**. Ver
-`../backend/README.md`.
+Se ingresa con nombre + PIN. El backend devuelve un token que vence a las
+12 horas; la app lo manda en cada pedido (`GuiasApi`) y, si vence, vuelve a
+entrar sola con la cuenta guardada en el equipo. Si esa cuenta ya no sirve
+(PIN cambiado o usuario dado de baja), vuelve a la pantalla de ingreso y lo
+explica. Ver "Sesiones y permisos" en `../backend/README.md`.
 
 ## Qué falta (ver sección 8 de `ARCHITECTURE.md`)
 
@@ -45,7 +45,6 @@ la app internamente, **no para producción con datos sensibles**. Ver
   IA"). Cualquier campo que la IA no lea con confianza queda
   vacío/editable — nunca se confirma nada sin revisión.
 - Geofencing real para traslados entre sucursales (hoy es un switch manual).
-- Autenticación real (Firebase Auth u otro, en vez del login simple).
 
 ## Cómo correrlo en desarrollo
 
