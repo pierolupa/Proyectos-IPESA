@@ -95,7 +95,8 @@ void main() {
     // 3 días de Victor + 1 de Oscar: 6 / 4.
     expect(a.promedioPorTransportista, 1.5);
     expect(a.eficiencia, 0.75);
-    expect(a.tiempoPromedio, const Duration(minutes: 90));
+    // Todas las guías de prueba son del mismo cliente.
+    expect(a.clientesAtendidos, 1);
     expect(a.entregadasAnterior, 1);
 
     final victor = a.filas.firstWhere((f) => f.nombre == 'Victor Torres');

@@ -1,9 +1,10 @@
 part of 'dashboard.dart';
 
 // Análisis por transporte: cada transportista en el periodo (también los que
-// no tuvieron guías), cuántas entregó, su promedio por día trabajado,
-// rechazos y tiempos. Con filtros de fechas, transportista, tipo de entrega
-// y sucursal de salida.
+// no tuvieron guías), cuántas entregó, su promedio por día trabajado y
+// rechazos. Con filtros de fechas, transportista, tipo de entrega y sucursal
+// de salida. Sin tiempos de entrega: no reflejan la realidad (la entrega se
+// registra cuando el transportista puede, no cuando ocurre).
 
 /// Un transportista en el análisis por transporte.
 class FilaTransporte {
@@ -22,7 +23,6 @@ class FilaTransporte {
 
   /// Días del periodo en que registró o cerró alguna guía.
   final Set<DateTime> dias = {};
-  final List<Duration> _tiempos = [];
   DateTime? ultimaActividad;
 
   int get total => guias.length;
@@ -32,11 +32,6 @@ class FilaTransporte {
 
   /// Entregas por día trabajado; null si no trabajó en el periodo.
   double? get promedioDiario => dias.isEmpty ? null : entregadas / dias.length;
-
-  /// Desde que se registró la guía hasta que se entregó.
-  Duration? get tiempoPromedio => _tiempos.isEmpty
-      ? null
-      : _tiempos.fold(Duration.zero, (a, b) => a + b) ~/ _tiempos.length;
 }
 
 /// Filtros de la vista; un conjunto vacío es "todos".
@@ -69,7 +64,7 @@ class FiltrosTransporte {
   );
 }
 
-enum OrdenTransporte { entregas, promedio, eficiencia, tiempo, nombre }
+enum OrdenTransporte { entregas, promedio, eficiencia, nombre }
 
 const _diasSemana = [
   'Lunes',
@@ -128,7 +123,7 @@ class AnalisisTransporte {
       transportistas.add(limpio);
       if (pasa(limpio)) fila(limpio);
     }
-    final tiempos = <Duration>[];
+    final clientes = <String>{};
 
     for (final g in todas) {
       if (!periodo.incluye(g, ahora)) continue;
@@ -151,11 +146,7 @@ class AnalisisTransporte {
       switch (g.estado.grupo) {
         case GrupoEstado.entregado:
           f.entregadas++;
-          final demora = cierre.difference(g.fechaCreacion);
-          if (!demora.isNegative) {
-            f._tiempos.add(demora);
-            tiempos.add(demora);
-          }
+          clientes.add(clienteDe(g).toLowerCase());
         case GrupoEstado.rechazado:
           f.rechazadas++;
         case GrupoEstado.enRuta:
@@ -200,10 +191,7 @@ class AnalisisTransporte {
       r.atrasadas += f.atrasadas;
       r.diasTransportista += f.dias.length;
     }
-    if (tiempos.isNotEmpty) {
-      r.tiempoPromedio =
-          tiempos.fold(Duration.zero, (a, b) => a + b) ~/ tiempos.length;
-    }
+    r.clientesAtendidos = clientes.length;
     r.filas = filas.values.toList();
     r.ordenar(OrdenTransporte.entregas);
     int alfabetico(String a, String b) =>
@@ -246,7 +234,9 @@ class AnalisisTransporte {
   int rechazadas = 0;
   int enRuta = 0;
   int atrasadas = 0;
-  Duration? tiempoPromedio;
+
+  /// Clientes distintos que recibieron alguna entrega.
+  int clientesAtendidos = 0;
 
   /// Días del periodo en que algún transportista trabajó.
   final Set<DateTime> diasConActividad = {};
@@ -305,11 +295,6 @@ class AnalisisTransporte {
           a.promedioDiario ?? -1,
         ),
         OrdenTransporte.eficiencia => b.eficiencia.compareTo(a.eficiencia),
-        // El más rápido primero; sin tiempo, al final.
-        OrdenTransporte.tiempo =>
-          (a.tiempoPromedio ?? const Duration(days: 9999)).compareTo(
-            b.tiempoPromedio ?? const Duration(days: 9999),
-          ),
         OrdenTransporte.nombre => 0,
       };
       return c != 0 ? c : porNombre(a, b);
@@ -332,7 +317,6 @@ Uint8List hojaTransporte(AnalisisTransporte a) {
       '% entregadas',
       'Días trabajados',
       'Entregas por día trabajado',
-      'Tiempo promedio hasta la entrega (min)',
       'Última actividad',
     ],
     for (final f in a.filas)
@@ -345,7 +329,6 @@ Uint8List hojaTransporte(AnalisisTransporte a) {
         f.total == 0 ? '' : (f.eficiencia * 100).round(),
         f.dias.length,
         f.promedioDiario == null ? '' : _decimal.format(f.promedioDiario),
-        f.tiempoPromedio?.inMinutes ?? '',
         f.ultimaActividad == null
             ? ''
             : fecha.format(f.ultimaActividad!.toLocal()),
@@ -579,13 +562,9 @@ class _VistaAnalisisTransporteState extends State<VistaAnalisisTransporte> {
       ),
       _Cifra(
         onTap: () => ver('Entregadas', entregadas),
-        etiqueta: 'Tiempo promedio',
-        valor: a.tiempoPromedio == null
-            ? '—'
-            : formatoDuracion(a.tiempoPromedio!),
-        detalle: a.atrasadas == 0
-            ? 'hasta la entrega'
-            : '${a.atrasadas} en ruta hace +24 h',
+        etiqueta: 'Clientes atendidos',
+        valor: '${a.clientesAtendidos}',
+        detalle: 'con alguna entrega',
       ),
     ];
   }
@@ -842,7 +821,6 @@ class _TablaTransporte extends StatelessWidget {
     ('% entrega', 90, OrdenTransporte.eficiencia),
     ('Prom./día', 90, OrdenTransporte.promedio),
     ('Días', 56, null),
-    ('Tiempo prom.', 112, OrdenTransporte.tiempo),
     ('Última act.', 112, null),
   ];
   static const _anchoNombre = 220.0;
@@ -904,7 +882,6 @@ class _TablaTransporte extends StatelessWidget {
       OrdenTransporte.entregas: 'Entregadas',
       OrdenTransporte.promedio: 'Promedio por día',
       OrdenTransporte.eficiencia: '% entregadas',
-      OrdenTransporte.tiempo: 'Tiempo promedio',
       OrdenTransporte.nombre: 'Nombre',
     };
     final fecha = DateFormat('dd/MM HH:mm');
@@ -1031,14 +1008,9 @@ class _TablaTransporte extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (f.total > 0)
+                  if (f.ultimaActividad case final u?)
                     Text(
-                      [
-                        if (f.tiempoPromedio case final t?)
-                          'Tiempo prom. ${formatoDuracion(t)}',
-                        if (f.ultimaActividad case final u?)
-                          'última ${fecha.format(u.toLocal())}',
-                      ].join(' · '),
+                      'Última actividad ${fecha.format(u.toLocal())}',
                       style: const TextStyle(
                         fontSize: 12.5,
                         color: Ipesa.textoSuave,
@@ -1188,16 +1160,10 @@ class _TablaTransporte extends StatelessWidget {
             ),
             numero('${f.dias.length}', anchos[6]),
             numero(
-              f.tiempoPromedio == null
-                  ? '—'
-                  : formatoDuracion(f.tiempoPromedio!),
-              anchos[7],
-            ),
-            numero(
               f.ultimaActividad == null
                   ? '—'
                   : fecha.format(f.ultimaActividad!.toLocal()),
-              anchos[8],
+              anchos[7],
             ),
           ],
         ),

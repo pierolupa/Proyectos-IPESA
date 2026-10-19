@@ -265,7 +265,7 @@ class IndicadoresOperacion {
     final contador = ContadorComprobantes(
       todas.where((g) => periodo.incluye(g, ahora)),
     );
-    final tiempos = <Duration>[];
+    final clientes = <String>{};
     final sucursalesMin = {for (final s in sucursales) s.toLowerCase()};
 
     for (final g in todas) {
@@ -282,9 +282,7 @@ class IndicadoresOperacion {
         case GrupoEstado.entregado:
           r.entregadas++;
           fila.entregadas++;
-          final cierre = g.fechaCierre ?? g.fechaActualizacion;
-          final demora = cierre.difference(g.fechaCreacion);
-          if (!demora.isNegative) tiempos.add(demora);
+          clientes.add(clienteDe(g).toLowerCase());
           if (sucursalesMin.contains(g.destino.trim().toLowerCase())) {
             r.enSucursal++;
             r.entregadasEnSucursal.add(g);
@@ -322,10 +320,7 @@ class IndicadoresOperacion {
       }
     }
 
-    if (tiempos.isNotEmpty) {
-      final suma = tiempos.fold(Duration.zero, (a, b) => a + b);
-      r.tiempoPromedio = suma ~/ tiempos.length;
-    }
+    r.clientesAtendidos = clientes.length;
     r.transportistasActivos = ranking.keys
         .where((n) => n != 'Sin transportista')
         .length;
@@ -354,7 +349,9 @@ class IndicadoresOperacion {
   int enSucursal = 0;
   final List<Guia> entregadasEnSucursal = [];
   int transportistasActivos = 0;
-  Duration? tiempoPromedio;
+
+  /// Clientes distintos que recibieron alguna entrega.
+  int clientesAtendidos = 0;
   final List<Guia> atrasadas = [];
   final List<Guia> pidenEliminar = [];
   List<FilaRanking> ranking = [];
@@ -515,17 +512,6 @@ List<PuntoSerie> _serie(
   return puntos;
 }
 
-String formatoDuracion(Duration d) {
-  if (d.inMinutes < 1) return 'menos de 1 min';
-  if (d.inMinutes < 60) return '${d.inMinutes} min';
-  if (d.inHours < 24) {
-    final m = d.inMinutes % 60;
-    return m == 0 ? '${d.inHours} h' : '${d.inHours} h $m min';
-  }
-  final h = d.inHours % 24;
-  return h == 0 ? '${d.inDays} d' : '${d.inDays} d $h h';
-}
-
 String _porcentaje(double v) => '${(v * 100).round()}%';
 
 /// Pestaña "Dashboard" del administrador: los indicadores principales de la
@@ -642,13 +628,13 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               detalle: '${_porcentaje(datos.tasaRechazo)} del total',
               marca: _colorRechazado,
             ),
+            // Sin tiempos de entrega: no reflejan la realidad (la entrega
+            // se registra cuando el transportista puede, no cuando ocurre).
             _Cifra(
               onTap: () => ver('Entregadas', entregadas),
-              etiqueta: 'Tiempo promedio',
-              valor: datos.tiempoPromedio == null
-                  ? '—'
-                  : formatoDuracion(datos.tiempoPromedio!),
-              detalle: 'hasta la entrega',
+              etiqueta: 'Clientes atendidos',
+              valor: '${datos.clientesAtendidos}',
+              detalle: 'con alguna entrega',
             ),
             _Cifra(
               onTap: () => ver('Guías de los transportistas', datos.guias),
