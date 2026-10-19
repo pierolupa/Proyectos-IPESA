@@ -15,6 +15,7 @@ import 'admin_dashboard_screen.dart';
 import 'transportistas.dart';
 
 part 'analisis_agencias.dart';
+part 'analisis_transporte.dart';
 
 const _colorEnRuta = Color(0xFF2459A8);
 const _colorEntregado = Color(0xFF1D6B41);
@@ -539,24 +540,43 @@ class PestanaDashboard extends StatefulWidget {
 class _PestanaDashboardState extends State<PestanaDashboard> {
   PeriodoResumen _periodo = PeriodoResumen.hoy;
 
-  /// Viendo "Análisis de agencias" en vez del resumen general.
-  bool _agencias = false;
+  /// 0 = General, 1 = Análisis de agencias, 2 = Análisis por transporte.
+  int _vista = 0;
 
   @override
   Widget build(BuildContext context) {
-    final vista = _Segmentos(
-      opciones: const ['General', 'Análisis de agencias'],
-      iconos: const {
-        0: Icons.bar_chart_rounded,
-        1: Icons.local_shipping_outlined,
-      },
-      elegido: _agencias ? 1 : 0,
-      onCambio: (i) => setState(() => _agencias = i == 1),
+    // En celular las tres opciones no caben: se desplazan de lado.
+    final vista = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: _Segmentos(
+        opciones: const [
+          'General',
+          'Análisis de agencias',
+          'Análisis por transporte',
+        ],
+        iconos: const {
+          0: Icons.bar_chart_rounded,
+          1: Icons.local_shipping_outlined,
+          2: Icons.badge_outlined,
+        },
+        elegido: _vista,
+        onCambio: (i) => setState(() => _vista = i),
+      ),
     );
-    if (_agencias) {
+    if (_vista == 1) {
       return RefreshIndicator(
         onRefresh: () => context.read<AppState>().cargarGuias(),
         child: VistaAnalisisAgencias(
+          cabecera: Align(alignment: Alignment.centerLeft, child: vista),
+          periodo: _periodo,
+          onPeriodo: (p) => setState(() => _periodo = p),
+        ),
+      );
+    }
+    if (_vista == 2) {
+      return RefreshIndicator(
+        onRefresh: () => context.read<AppState>().cargarGuias(),
+        child: VistaAnalisisTransporte(
           cabecera: Align(alignment: Alignment.centerLeft, child: vista),
           periodo: _periodo,
           onPeriodo: (p) => setState(() => _periodo = p),
@@ -687,7 +707,7 @@ class _PestanaDashboardState extends State<PestanaDashboard> {
               sucursales: [for (final s in appState.sucursales) s.nombre],
               conAnterior: false,
             ),
-            onAnalisis: () => setState(() => _agencias = true),
+            onAnalisis: () => setState(() => _vista = 1),
           );
 
           Widget fila(List<Widget> hijos, List<int> flex) => IntrinsicHeight(

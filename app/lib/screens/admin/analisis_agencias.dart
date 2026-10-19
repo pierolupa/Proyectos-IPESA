@@ -472,10 +472,8 @@ List<PuntoGasto> _serieGasto(
 /// la configuración regional. Una fila por comprobante (sumar la columna
 /// del monto da lo pagado).
 Uint8List hojaComprobantes(AnalisisAgencias a) {
-  String celda(Object? v) =>
-      '${v ?? ''}'.replaceAll(RegExp(r'[\t\r\n]+'), ' ').trim();
   final fecha = DateFormat('dd/MM/yyyy');
-  final filas = [
+  return hojaDeCalculo([
     [
       'Fecha',
       'Agencia',
@@ -501,7 +499,15 @@ Uint8List hojaComprobantes(AnalisisAgencias a) {
         {for (final g in c.todas) transportistaDe(g)}.join(', '),
         {for (final g in c.todas) a.salidaDe(g)}.join(', '),
       ],
-  ];
+  ]);
+}
+
+/// Filas como hoja de cálculo: texto separado por tabulaciones en UTF-16
+/// con BOM, que Excel abre en columnas y con tildes sin importar la
+/// configuración regional.
+Uint8List hojaDeCalculo(List<List<Object?>> filas) {
+  String celda(Object? v) =>
+      '${v ?? ''}'.replaceAll(RegExp(r'[\t\r\n]+'), ' ').trim();
   final texto = filas.map((f) => f.map(celda).join('\t')).join('\r\n');
   final unidades = texto.codeUnits;
   final bytes = ByteData(2 + unidades.length * 2)
