@@ -1442,6 +1442,13 @@ app.delete('/guias/:numeroGuia/foto', async (req, res, next) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error(err);
+  // Un error de Google (trae `response`) sale como 502 con su mensaje, que
+  // sirve para diagnosticar. Nunca con su propio código: un 401 de Google
+  // (credencial inválida) haría creer a la app que venció la sesión y
+  // sacaría a todos al ingreso.
+  if (err.response) {
+    return res.status(502).json({ error: `Google respondió con un error: ${err.message}` });
+  }
   if (err.status) return res.status(err.status).json({ error: err.message });
   res.status(500).json({ error: 'Error interno del servidor.' });
 });

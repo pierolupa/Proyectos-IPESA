@@ -1592,3 +1592,25 @@ describe('POST /guias/regularizar (administrador)', () => {
     expect(guia.tipo_entrega).toBe(TIPOS_ENTREGA.AGENCIA);
   });
 });
+
+describe('errores de Google', () => {
+  it('un 401 de Google no se confunde con una sesión vencida', async () => {
+    repo.listarGuias.mockRejectedValue(
+      Object.assign(new Error('Request had invalid authentication credentials.'), {
+        status: 401,
+        response: { status: 401 },
+      }),
+    );
+    const res = await request(app).get('/guias');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/Google respondió con un error: Request had invalid/);
+  });
+
+  it('los errores propios conservan su código', async () => {
+    repo.listarGuias.mockRejectedValue(
+      Object.assign(new Error('La hoja cambió; inténtalo de nuevo.'), { status: 409 }),
+    );
+    const res = await request(app).get('/guias');
+    expect(res.status).toBe(409);
+  });
+});
