@@ -157,6 +157,29 @@ void main() {
     expect(ate.opcionesSucursal, ['Almacen Ate', 'Fuera de sucursal']);
   });
 
+  test('El promedio por día se redondea siempre hacia arriba', () {
+    // 3 entregas en 2 días = 1,5 → 2 (no hay medias guías).
+    final a = AnalisisTransporte.calcular(
+      [
+        for (final j in [
+          _guia('L1', _lunes, transportista: 'Lucho Paz'),
+          _guia('L2', _lunes, transportista: 'Lucho Paz'),
+          _guia('L3', _martes, transportista: 'Lucho Paz'),
+        ])
+          Guia.fromJson(j),
+      ],
+      _semana,
+      ahora: _ahora,
+    );
+    expect(a.filas.single.promedioDiario, 1.5);
+    final bytes = hojaTransporte(a);
+    final texto = String.fromCharCodes(
+      bytes.buffer.asUint16List(bytes.offsetInBytes + 2),
+    );
+    final fila = texto.split('\r\n')[1].split('\t');
+    expect(fila[7], '2');
+  });
+
   test('Exporta una fila por transportista, legible en Excel', () {
     final bytes = hojaTransporte(_calcular());
     expect(bytes.take(2), [0xFF, 0xFE]);
