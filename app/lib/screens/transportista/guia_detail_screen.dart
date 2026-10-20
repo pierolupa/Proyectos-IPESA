@@ -6,6 +6,7 @@ import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/aviso_rechazo.dart';
+import '../../widgets/custodia.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/transbordo.dart';
 import 'entrega_flow_screen.dart';
@@ -57,7 +58,7 @@ class GuiaDetailScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              EstadoBadge(estado: guia.estado),
+              EstadoBadge(estado: guia.estado, custodia: guia.enCustodia),
               const SizedBox(width: 8),
               if (guia.corregidoPorAdmin)
                 const Chip(
@@ -98,6 +99,10 @@ class GuiaDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
           if (siguientePaso != null) ...[
+            if (guia.enCustodia) ...[
+              AccionCustodia(guia: guia),
+              const SizedBox(height: 12),
+            ],
             FilledButton.icon(
               icon: const Icon(Icons.arrow_forward),
               label: Text(siguientePaso),
@@ -110,6 +115,10 @@ class GuiaDetailScreen extends StatelessWidget {
               },
             ),
             const SizedBox(height: 12),
+            if (AccionCustodia.aplica(guia) && !guia.enCustodia) ...[
+              AccionCustodia(guia: guia),
+              const SizedBox(height: 12),
+            ],
             OutlinedButton.icon(
               icon: const Icon(Icons.block),
               label: const Text('Rechazar tarea'),

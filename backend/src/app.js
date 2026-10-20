@@ -1229,6 +1229,62 @@ app.post('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) => {
   }
 });
 
+/**
+ * La guía en custodia: el transportista se queda con la mercadería y la
+ * entrega directo al día siguiente. Solo una guía en ruta, y solo su
+ * transportista (o el administrador). La guía sigue en ruta: se entrega con
+ * el flujo de siempre.
+ */
+async function guiaParaCustodia(req, res) {
+  const { numeroGuia } = req.params;
+  const fechaCreacion = req.body?.fechaCreacion || req.query.fechaCreacion;
+  const guia = await buscarRegistro(numeroGuia, fechaCreacion);
+  if (!guia) {
+    res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
+    return null;
+  }
+  if (
+    req.usuario.rol === ROLES.TRANSPORTISTA
+    && !mismoNombre(guia.transportista, req.usuario.nombre)
+  ) {
+    res.status(403).json({ error: 'Solo su transportista puede dejarla en custodia.' });
+    return null;
+  }
+  if (guia.estado !== ESTADOS.EN_RUTA) {
+    res.status(409).json({ error: 'Solo una guía en ruta puede quedar en custodia.' });
+    return null;
+  }
+  return guia;
+}
+
+app.post('/guias/:numeroGuia/custodia', async (req, res, next) => {
+  try {
+    const guia = await guiaParaCustodia(req, res);
+    if (!guia) return;
+    const ahora = new Date().toISOString();
+    guia.custodia_desde = ahora;
+    guia.fecha_actualizacion = ahora;
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Se marcó por error: la guía vuelve a estar en ruta normal.
+app.delete('/guias/:numeroGuia/custodia', async (req, res, next) => {
+  try {
+    const guia = await guiaParaCustodia(req, res);
+    if (!guia) return;
+    guia.custodia_desde = '';
+    guia.fecha_actualizacion = new Date().toISOString();
+    await repo.actualizarGuia(guia._row, guia);
+    res.json(sinCamposInternos(guia));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // El transportista retira su pedido de eliminación.
 app.delete('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) => {
   try {
@@ -1375,6 +1431,8 @@ app.post('/guias/:numeroGuia/transbordo/respuesta', async (req, res, next) => {
       guia.motivo_eliminacion = '';
       // Ya no viaja en el Despacho Corte de quien la envió.
       guia.despacho_corte = '';
+      // La custodia era de quien la envió; quien la recibe la lleva hoy.
+      guia.custodia_desde = '';
       guia.fecha_actualizacion = new Date().toISOString();
     } else {
       guia.transbordo_estado = TRANSBORDO.RECHAZADO;

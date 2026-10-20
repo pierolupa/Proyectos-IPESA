@@ -1025,7 +1025,10 @@ class _TransportistaDetalleScreenState
                             FittedBox(
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
-                              child: EstadoBadge(estado: g.estado),
+                              child: EstadoBadge(
+                                estado: g.estado,
+                                custodia: g.enCustodia,
+                              ),
                             ),
                             Text(
                               haceCuanto(g.fechaActualizacion),

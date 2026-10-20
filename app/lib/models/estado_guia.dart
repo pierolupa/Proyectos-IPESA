@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Una guía en custodia (sigue en ruta, ver Guia.enCustodia).
+const colorCustodia = Color(0xFF6B4FA0);
+
 /// Estados del ciclo de vida de una guía, según ARCHITECTURE.md.
 enum EstadoGuia {
   enRuta,

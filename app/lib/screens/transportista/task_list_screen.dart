@@ -1000,7 +1000,7 @@ class _TarjetaTarea extends StatelessWidget {
               Row(
                 children: [
                   Expanded(child: Text(g.numeroGuia, style: Ipesa.titulo(16))),
-                  EstadoBadge(estado: g.estado),
+                  EstadoBadge(estado: g.estado, custodia: g.enCustodia),
                 ],
               ),
               const SizedBox(height: 8),

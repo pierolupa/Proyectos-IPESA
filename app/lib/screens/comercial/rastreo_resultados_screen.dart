@@ -243,8 +243,8 @@ class _Evento {
     : fecha = g.fechaCreacion.toLocal(),
       numero = g.numeroGuia,
       cliente = g.destinatario,
-      estado = g.estado.etiqueta,
-      color = g.estado.color,
+      estado = g.enCustodia ? 'En custodia' : g.estado.etiqueta,
+      color = g.enCustodia ? colorCustodia : g.estado.color,
       detalle = _detalleGuia(context, g),
       numeros = _numeros(g.numeroPedido, g.numeroEntrega),
       abrir = ((c) => _abrirGuia(c, g));
@@ -298,6 +298,8 @@ class _Evento {
       fin = g.motivoRechazo.isEmpty
           ? 'No se entregó'
           : 'Rechazada: ${g.motivoRechazo}';
+    } else if (g.enCustodia) {
+      fin = 'En custodia de ${g.transportista}';
     } else {
       fin = g.transportista;
     }

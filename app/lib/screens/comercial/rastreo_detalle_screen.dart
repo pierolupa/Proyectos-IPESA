@@ -180,6 +180,9 @@ final _soloFecha = DateFormat('dd/MM/yyyy');
 /// Lo que dice el sello según el estado de la guía.
 (String, String) _textoSello(Guia guia) {
   String fecha(DateTime f) => _fechaSello.format(f.toLocal());
+  if (guia.enCustodia) {
+    return ('EN CUSTODIA', 'Desde ${fecha(guia.custodiaDesde!)}');
+  }
   switch (guia.estado) {
     case EstadoGuia.enRuta:
       return ('EN RUTA', 'Desde ${fecha(guia.fechaActualizacion)}');
@@ -380,7 +383,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
             guia.estado.esFinal
         ? 'Agencia'
         : lugarDeEntrega(context, guia);
-    final color = guia.estado.color;
+    final color = guia.enCustodia ? colorCustodia : guia.estado.color;
 
     final datos = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -466,6 +469,15 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _selloAnimado(sello, fechaSello, color),
+          if (guia.enCustodia) ...[
+            const SizedBox(height: 14),
+            Text(
+              'La mercadería está en custodia de ${guia.transportista}. '
+              'Se entrega al día siguiente.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: colorCustodia),
+            ),
+          ],
           if (guia.motivoRechazo.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(

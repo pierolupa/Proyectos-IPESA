@@ -992,6 +992,18 @@ class AppState extends ChangeNotifier {
     return nueva;
   }
 
+  Future<Guia> ponerEnCustodia(Guia guia) async {
+    final nueva = await _api.ponerEnCustodia(guia);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
+  Future<Guia> quitarCustodia(Guia guia) async {
+    final nueva = await _api.quitarCustodia(guia);
+    _reemplazar(guia, nueva);
+    return nueva;
+  }
+
   Future<Guia> retirarPedidoEliminacion(Guia guia) async {
     final nueva = await _api.retirarPedidoEliminacion(guia);
     _reemplazar(guia, nueva);

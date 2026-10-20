@@ -65,6 +65,10 @@ class Guia {
   /// comprobante está en varias guías, su monto se cuenta una vez.
   final String agenciaComprobante;
 
+  /// Cuándo el transportista dejó la guía en custodia: se quedó con la
+  /// mercadería y la entrega directo al día siguiente (null si no).
+  final DateTime? custodiaDesde;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -95,7 +99,12 @@ class Guia {
     this.agenciaRuc = '',
     this.agenciaMonto,
     this.agenciaComprobante = '',
+    this.custodiaDesde,
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
+
+  /// En custodia mientras sigue en ruta: al entregarla, el dato queda solo
+  /// como historia.
+  bool get enCustodia => custodiaDesde != null && estado == EstadoGuia.enRuta;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
 
@@ -188,6 +197,7 @@ class Guia {
       agenciaRuc: '${json['agencia_ruc'] ?? ''}'.trim(),
       agenciaMonto: _coordenada(json['agencia_monto']),
       agenciaComprobante: '${json['agencia_comprobante'] ?? ''}'.trim(),
+      custodiaDesde: DateTime.tryParse('${json['custodia_desde'] ?? ''}'),
     );
   }
 
@@ -242,6 +252,7 @@ class Guia {
       agenciaRuc: agenciaRuc,
       agenciaMonto: agenciaMonto,
       agenciaComprobante: agenciaComprobante,
+      custodiaDesde: custodiaDesde,
     );
   }
 }

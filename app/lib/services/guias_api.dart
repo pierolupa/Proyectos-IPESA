@@ -696,6 +696,28 @@ class GuiasApi {
     return Guia.fromJson(_decodeBody(res));
   }
 
+  /// La guía queda en custodia: el transportista se queda con la mercadería
+  /// y la entrega directo al día siguiente (sigue en ruta).
+  Future<Guia> ponerEnCustodia(Guia guia) async {
+    final res = await _client.post(
+      Uri.parse(_rutaGuia(guia, '/custodia')),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
+  /// Quita la custodia (se marcó por error).
+  Future<Guia> quitarCustodia(Guia guia) async {
+    final res = await _client.delete(
+      Uri.parse(_rutaGuia(guia, '/custodia'))
+          .replace(queryParameters: {'fechaCreacion': _fechaCreacion(guia)}),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return Guia.fromJson(_decodeBody(res));
+  }
+
   /// El transportista retira su pedido de eliminación.
   Future<Guia> retirarPedidoEliminacion(Guia guia) async {
     final res = await _client.delete(

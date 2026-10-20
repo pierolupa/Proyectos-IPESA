@@ -13,6 +13,7 @@ import '../../widgets/marca_rpa.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/avisos_novedades.dart';
 import '../../widgets/carrusel_marcas.dart';
+import '../../widgets/custodia.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/mapa_ubicacion.dart';
@@ -944,7 +945,7 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                   Expanded(
                     child: Text(guia.numeroGuia, style: Ipesa.titulo(15)),
                   ),
-                  EstadoBadge(estado: guia.estado),
+                  EstadoBadge(estado: guia.estado, custodia: guia.enCustodia),
                 ],
               ),
               const SizedBox(height: 4),
@@ -979,6 +980,28 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: Ipesa.petroleo,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (guia.enCustodia)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 15,
+                        color: colorCustodia,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'En custodia · ${desdeCustodia(guia)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: colorCustodia,
                         ),
                       ),
                     ],

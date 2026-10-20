@@ -1272,6 +1272,7 @@ describe('Transbordo entre transportistas', () => {
         transbordo_estado: TRANSBORDO.PENDIENTE,
         transbordo_a: 'Ana Díaz',
         despacho_corte: 'DC-1',
+        custodia_desde: '2026-10-19T23:00:00.000Z',
       }),
     );
     const res = await request(app)
@@ -1279,8 +1280,9 @@ describe('Transbordo entre transportistas', () => {
       .send({ quien: 'Ana Díaz', acepta: true });
     expect(res.status).toBe(200);
     expect(res.body.transportista).toBe('Ana Díaz');
-    // Sale del Despacho Corte de quien la envió.
+    // Sale del Despacho Corte y de la custodia de quien la envió.
     expect(res.body.despacho_corte).toBe('');
+    expect(res.body.custodia_desde).toBe('');
     expect(res.body.transbordo_de).toBe('Juan Pérez');
     expect(res.body.transbordo_estado).toBe(TRANSBORDO.ACEPTADO);
     expect(res.body.origen).toBe('Almacén Callao');
@@ -1612,5 +1614,66 @@ describe('errores de Google', () => {
     );
     const res = await request(app).get('/guias');
     expect(res.status).toBe(409);
+  });
+});
+
+describe('Custodia', () => {
+  const transportista = { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA };
+
+  beforeEach(() => {
+    repo.actualizarGuia.mockResolvedValue();
+  });
+
+  it('el transportista deja su guía en custodia (sigue en ruta)', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await como(transportista).post('/guias/IPE-2026-000123/custodia').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe(ESTADOS.EN_RUTA);
+    expect(Date.parse(res.body.custodia_desde)).not.toBeNaN();
+    const [fila, guardada] = repo.actualizarGuia.mock.calls[0];
+    expect(fila).toBe(2);
+    expect(guardada.custodia_desde).toBe(res.body.custodia_desde);
+  });
+
+  it('se puede quitar si se marcó por error', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ custodia_desde: '2026-10-19T23:00:00.000Z' }));
+    const res = await como(transportista).delete('/guias/IPE-2026-000123/custodia');
+    expect(res.status).toBe(200);
+    expect(res.body.custodia_desde).toBe('');
+  });
+
+  it('otro transportista no puede tocar la guía', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await como({ nombre: 'Pedro Soto', rol: ROLES.TRANSPORTISTA })
+      .post('/guias/IPE-2026-000123/custodia')
+      .send({});
+    expect(res.status).toBe(403);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('el administrador sí puede', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app).post('/guias/IPE-2026-000123/custodia').send({});
+    expect(res.status).toBe(200);
+  });
+
+  it('solo una guía en ruta', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
+    const res = await como(transportista).post('/guias/IPE-2026-000123/custodia').send({});
+    expect(res.status).toBe(409);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('el comercial solo consulta', async () => {
+    const res = await como({ nombre: 'Lucía Ramos', rol: ROLES.COMERCIAL })
+      .post('/guias/IPE-2026-000123/custodia')
+      .send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('guía que no existe: 404', async () => {
+    repo.buscarPorNumero.mockResolvedValue(null);
+    const res = await como(transportista).post('/guias/NO-EXISTE/custodia').send({});
+    expect(res.status).toBe(404);
   });
 });

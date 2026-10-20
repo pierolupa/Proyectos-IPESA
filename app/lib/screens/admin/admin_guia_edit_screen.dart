@@ -125,7 +125,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             ),
             const SizedBox(height: 20),
           ],
-          EstadoBadge(estado: guia.estado),
+          EstadoBadge(estado: guia.estado, custodia: guia.enCustodia),
           const SizedBox(height: 24),
           Text('Número de guía', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
