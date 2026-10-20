@@ -70,6 +70,10 @@ const diasPanelPorDefecto = 35;
 /// solo lo que cambió), por si alguien editó la hoja a mano.
 const recargaCompletaCada = Duration(minutes: 10);
 
+/// El mismo transportista puede volver a registrar una guía suya pasado
+/// este tiempo desde su último registro de ella (igual que el backend).
+const esperaRegistro = Duration(minutes: 20);
+
 /// Distancia en metros entre dos puntos (haversine).
 double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
   double rad(double g) => g * math.pi / 180;
@@ -633,10 +637,10 @@ class AppState extends ChangeNotifier {
     return i == -1 ? null : _guias[i];
   }
 
-  /// Si el usuario actual ya registró ese número hoy, desde cuándo podrá
-  /// registrarlo otra vez (mañana a las 00:00); si no, null. Un
-  /// transportista se asigna una guía una sola vez al día; lo que registró
-  /// otro transportista y un registro rechazado no bloquean. Validación local rápida contra la última lista cargada; la
+  /// Si el usuario actual registró ese número hace menos de
+  /// [esperaRegistro], desde cuándo podrá registrarlo otra vez; si no,
+  /// null. Lo que registró otro transportista y un registro rechazado no
+  /// bloquean. Validación local rápida contra la última lista cargada; la
   /// definitiva la hace el backend al confirmar (409).
   DateTime? registroBloqueadoHasta(String numeroGuia, {DateTime? ahora}) {
     final yo = transportistaActual.trim().toLowerCase();
@@ -652,12 +656,7 @@ class AppState extends ChangeNotifier {
       }
     }
     if (ultima == null) return null;
-    final registrada = ultima.fechaCreacion.toLocal();
-    final libre = DateTime(
-      registrada.year,
-      registrada.month,
-      registrada.day + 1,
-    );
+    final libre = ultima.fechaCreacion.toLocal().add(esperaRegistro);
     return (ahora ?? DateTime.now()).isBefore(libre) ? libre : null;
   }
 

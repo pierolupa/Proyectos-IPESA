@@ -14,6 +14,62 @@ final _fechaCustodia = DateFormat('dd/MM HH:mm');
 String desdeCustodia(Guia g) =>
     'Desde ${_fechaCustodia.format(g.custodiaDesde!.toLocal())}';
 
+/// Pone (con confirmación) o quita la custodia de [g] y avisa el resultado.
+/// La usan el detalle de la tarea y el menú "⋯" de su tarjeta.
+Future<void> cambiarCustodia(
+  BuildContext context,
+  Guia g, {
+  required bool poner,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final app = context.read<AppState>();
+  if (poner) {
+    final seguir = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Dejar en custodia?'),
+        content: Text(
+          'Te quedas con la mercadería de la guía ${g.numeroGuia} y la '
+          'entregas mañana temprano, directo al cliente. El comercial verá '
+          'que está en custodia.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Dejar en custodia'),
+          ),
+        ],
+      ),
+    );
+    if (seguir != true) return;
+  }
+  try {
+    if (poner) {
+      await app.ponerEnCustodia(g);
+    } else {
+      await app.quitarCustodia(g);
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          poner
+              ? 'Guía ${g.numeroGuia} en custodia. Mañana regístrala con '
+                    '«Registrar entrega».'
+              : 'La guía ${g.numeroGuia} ya no está en custodia.',
+        ),
+      ),
+    );
+  } on ApiException catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text(e.mensaje)));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
+  }
+}
+
 /// Custodia: el transportista se queda con la mercadería y la entrega
 /// directo al día siguiente. La guía sigue en ruta y se entrega con el
 /// flujo de siempre; el comercial la ve "En custodia" en Rastrear.
@@ -39,54 +95,9 @@ class _AccionCustodiaState extends State<AccionCustodia> {
   bool _ocupado = false;
 
   Future<void> _cambiar({required bool poner}) async {
-    final g = widget.guia;
-    final messenger = ScaffoldMessenger.of(context);
-    final app = context.read<AppState>();
-    if (poner) {
-      final seguir = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('¿Dejar en custodia?'),
-          content: Text(
-            'Te quedas con la mercadería de la guía ${g.numeroGuia} y la '
-            'entregas mañana temprano, directo al cliente. El comercial verá '
-            'que está en custodia.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Dejar en custodia'),
-            ),
-          ],
-        ),
-      );
-      if (seguir != true || !mounted) return;
-    }
     setState(() => _ocupado = true);
     try {
-      if (poner) {
-        await app.ponerEnCustodia(g);
-      } else {
-        await app.quitarCustodia(g);
-      }
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            poner
-                ? 'Guía ${g.numeroGuia} en custodia. Mañana regístrala con '
-                      '«Registrar entrega».'
-                : 'La guía ${g.numeroGuia} ya no está en custodia.',
-          ),
-        ),
-      );
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.mensaje)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Error de conexión: $e')));
+      await cambiarCustodia(context, widget.guia, poner: poner);
     } finally {
       if (mounted) setState(() => _ocupado = false);
     }

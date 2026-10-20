@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/sucursal.dart';
@@ -296,9 +297,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (b.enCola || b.leyendo) return 'Leyendo…';
     final numero = b.numero.text.trim();
     if (numero.isEmpty) return 'Falta el número de guía.';
-    if (appState.registroBloqueadoHasta(numero) != null) {
-      return 'Ya registraste esta guía hoy: no puedes asignártela dos veces '
-          'el mismo día.';
+    if (appState.registroBloqueadoHasta(numero) case final libre?) {
+      return 'Ya registraste esta guía: podrás volver a registrarla desde '
+          'las ${DateFormat('HH:mm').format(libre)}.';
     }
     final repetida = _borradores.any(
       (o) => o != b && o.id < b.id && o.numero.text.trim() == numero,

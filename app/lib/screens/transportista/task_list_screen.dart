@@ -11,6 +11,7 @@ import '../../widgets/marca_rpa.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/carrusel_marcas.dart';
+import '../../widgets/custodia.dart';
 import '../../widgets/despacho_corte.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/transbordo.dart';
@@ -912,6 +913,9 @@ class _TarjetaTarea extends StatelessWidget {
   Future<void> _opcion(BuildContext context, _Opcion opcion) async {
     final messenger = ScaffoldMessenger.of(context);
     switch (opcion) {
+      case _Opcion.custodia:
+      case _Opcion.quitarCustodia:
+        await cambiarCustodia(context, guia, poner: opcion == _Opcion.custodia);
       case _Opcion.transbordo:
         if (await mostrarTransbordo(context, guia)) {
           final actual = context.mounted
@@ -1150,6 +1154,24 @@ class _TarjetaTarea extends StatelessWidget {
                       position: PopupMenuPosition.under,
                       onSelected: (o) => _opcion(context, o),
                       itemBuilder: (_) => [
+                        if (AccionCustodia.aplica(g))
+                          PopupMenuItem(
+                            value: g.enCustodia
+                                ? _Opcion.quitarCustodia
+                                : _Opcion.custodia,
+                            child: ListTile(
+                              leading: const Icon(
+                                Icons.inventory_2_outlined,
+                                color: colorCustodia,
+                              ),
+                              title: Text(
+                                g.enCustodia
+                                    ? 'Quitar custodia'
+                                    : 'Dejar en custodia',
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         if (g.esEditablePorTransportista)
                           PopupMenuItem(
                             value: g.transbordoPendiente
@@ -1219,4 +1241,12 @@ class _TarjetaTarea extends StatelessWidget {
   }
 }
 
-enum _Opcion { transbordo, cancelarTransbordo, rechazar, eliminar, retirar }
+enum _Opcion {
+  custodia,
+  quitarCustodia,
+  transbordo,
+  cancelarTransbordo,
+  rechazar,
+  eliminar,
+  retirar,
+}

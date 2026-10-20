@@ -72,12 +72,10 @@ const ROLES_VALIDOS = new Set(Object.values(ROLES));
 
 // Perú está en UTC-5 todo el año (sin horario de verano).
 const DESFASE_PERU_MS = 5 * 60 * 60 * 1000;
-const DIA_MS = 24 * 60 * 60 * 1000;
 
-/** El día (calendario de Perú) de un instante, como número para comparar. */
-function diaPeru(ms) {
-  return Math.floor((ms - DESFASE_PERU_MS) / DIA_MS);
-}
+// El mismo transportista puede volver a registrar una guía suya pasados
+// estos minutos desde su último registro de ella.
+const ESPERA_REGISTRO_MS = 20 * 60 * 1000;
 
 /** "14:35" en hora de Perú (el servidor corre en UTC). */
 function horaPeru(ms) {
@@ -643,8 +641,8 @@ function prepararGuia(datos, existentes, sucursales) {
 
   // Un mismo número de guía se puede volver a registrar: otro
   // transportista que la lleva en el siguiente tramo, en cualquier
-  // momento; el mismo transportista, no el mismo día (hora de Perú) de su
-  // último registro: se puede asignar una guía una sola vez al día.
+  // momento; el mismo transportista, pasados ESPERA_REGISTRO_MS desde su
+  // último registro (así un doble toque o una foto repetida no la duplica).
   // Un registro rechazado no cuenta: esa tarea nunca se hizo.
   const suyas = existentes.filter(
     (g) =>
@@ -656,12 +654,14 @@ function prepararGuia(datos, existentes, sucursales) {
     ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
     0,
   );
-  if (registrada > 0 && diaPeru(registrada) === diaPeru(Date.now())) {
+  const libre = registrada + ESPERA_REGISTRO_MS;
+  if (registrada > 0 && Date.now() < libre) {
+    const faltan = Math.ceil((libre - Date.now()) / 60000);
     return {
       status: 409,
       error:
-        `Ya registraste la guía ${numeroGuia} hoy a las ${horaPeru(registrada)}. `
-        + 'Un transportista no puede asignarse la misma guía dos veces el mismo día.',
+        `Ya registraste la guía ${numeroGuia} a las ${horaPeru(registrada)}. `
+        + `Podrás volver a registrarla desde las ${horaPeru(libre)} (en ${faltan} min).`,
     };
   }
 

@@ -87,32 +87,33 @@ describe('POST /guias (asignación)', () => {
     expect(repo.crearGuias).not.toHaveBeenCalled();
   });
 
-  // Hora fija para que "el mismo día" no dependa de cuándo corre la prueba:
-  // 2026-10-02 18:00 en Perú (23:00 UTC).
+  // Hora fija: 2026-10-02 18:00 en Perú (23:00 UTC).
   const ahoraPeru = Date.parse('2026-10-02T23:00:00.000Z');
   const haceMin = (min) => new Date(ahoraPeru - min * 60000).toISOString();
 
-  it('el mismo transportista no registra la misma guía el mismo día', async () => {
+  it('el mismo transportista no registra otra vez la misma guía antes de 20 min', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
-    // Hoy a las 07:00 de Perú: 11 horas antes, pero el mismo día.
+    // Hoy a las 17:45 de Perú: hace 15 minutos.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: haceMin(11 * 60) }),
+      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: haceMin(15) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
     Date.now.mockRestore();
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/Ya registraste .* hoy a las 07:00/);
-    expect(res.body.error).toMatch(/mismo día/);
+    expect(res.body.error).toBe(
+      `Ya registraste la guía ${payload.numeroGuia} a las 17:45. `
+      + 'Podrás volver a registrarla desde las 18:05 (en 5 min).',
+    );
     expect(repo.crearGuias).not.toHaveBeenCalled();
     // La comprobación lee la hoja sin caché.
     expect(repo.listarGuias).toHaveBeenCalledWith({ fresco: true });
   });
 
-  it('el mismo transportista la puede registrar otra vez al día siguiente', async () => {
+  it('el mismo transportista la puede registrar otra vez pasados 20 min', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
-    // Ayer a las 23:30 de Perú: menos de 24 horas, pero otro día.
+    // El mismo día, hace justo 20 minutos.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(18 * 60 + 30) }),
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(20) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
     Date.now.mockRestore();

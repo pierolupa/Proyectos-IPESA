@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ipesa_guias/models/estado_guia.dart';
 import 'package:ipesa_guias/models/guia.dart';
 import 'package:ipesa_guias/screens/transportista/guia_detail_screen.dart';
+import 'package:ipesa_guias/screens/transportista/task_list_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 import 'package:ipesa_guias/widgets/estado_badge.dart';
@@ -54,7 +55,11 @@ class _Servidor {
   });
 }
 
-Future<void> _abrir(WidgetTester tester, _Servidor servidor) async {
+Future<void> _abrir(
+  WidgetTester tester,
+  _Servidor servidor, {
+  Widget pantalla = const GuiaDetailScreen(numeroGuia: 'T001-700'),
+}) async {
   SharedPreferences.setMockInitialValues({
     'sesion_nombre': 'Oscar Aspur',
     'sesion_rol': 'transportista',
@@ -68,7 +73,7 @@ Future<void> _abrir(WidgetTester tester, _Servidor servidor) async {
   await tester.pumpWidget(
     ChangeNotifierProvider.value(
       value: appState,
-      child: const MaterialApp(home: GuiaDetailScreen(numeroGuia: 'T001-700')),
+      child: MaterialApp(home: pantalla),
     ),
   );
   await tester.pumpAndSettle();
@@ -132,5 +137,30 @@ void main() {
   ) async {
     await _abrir(tester, _Servidor(_guia(tipo: 'entre_sucursales')));
     expect(find.text('Dejar en custodia'), findsNothing);
+  });
+
+  testWidgets('Desde el menú ⋯ de la tarjeta se deja en custodia', (
+    tester,
+  ) async {
+    final servidor = _Servidor(_guia());
+    await _abrir(tester, servidor, pantalla: const TaskListScreen());
+
+    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rechazar tarea'), findsOneWidget);
+    await tester.tap(find.text('Dejar en custodia'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Dejar en custodia'));
+    await tester.pumpAndSettle();
+
+    expect(servidor.pedidos.last.method, 'POST');
+    expect(servidor.pedidos.last.url.path, endsWith('/custodia'));
+    expect(find.text('En custodia'), findsOneWidget);
+
+    // Ya en custodia, el menú ofrece quitarla.
+    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quitar custodia'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

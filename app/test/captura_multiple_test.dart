@@ -164,7 +164,7 @@ void main() {
     expect(find.text('T201'), findsOneWidget);
     expect(find.text('T100'), findsOneWidget);
     // T100 la registró él hace 10 min: esa espera; las otras dos, listas.
-    expect(find.textContaining('Ya registraste esta guía hoy'), findsOneWidget);
+    expect(find.textContaining('Ya registraste esta guía'), findsOneWidget);
     expect(find.text('Registrar 2 guías'), findsOneWidget);
 
     await tester.tap(find.text('Registrar 2 guías'));
@@ -311,39 +311,42 @@ void main() {
     expect(cuerposCorte.single['despachoCorte'], 'DC-9');
   });
 
-  test('No se asigna dos veces el mismo día la guía que él registró', () async {
-    final ahora = DateTime(2026, 9, 28, 15);
-    final deDiego = {
-      ..._guia('T3', ahora.subtract(const Duration(minutes: 5))),
-      'transportista': 'Diego',
-    };
-    final client = MockClient(
-      (request) async => request.url.path.endsWith('/sucursales')
-          ? http.Response('[]', 200)
-          : http.Response(
-              jsonEncode([
-                // Hoy a las 07:00: aunque pasaron 8 horas, sigue bloqueada.
-                _guia('T1', ahora.subtract(const Duration(hours: 8))),
-                // Ayer a las 23:00: otro día, ya se puede.
-                _guia('T2', ahora.subtract(const Duration(hours: 16))),
-                deDiego,
-              ]),
-              200,
-            ),
-    );
-    final appState = AppState(api: GuiasApi(client: client));
-    await appState.restaurarSesion();
-    await appState.cargarGuias();
+  test(
+    'La guía que él registró se puede volver a registrar a los 20 min',
+    () async {
+      final ahora = DateTime(2026, 9, 28, 15);
+      final deDiego = {
+        ..._guia('T3', ahora.subtract(const Duration(minutes: 5))),
+        'transportista': 'Diego',
+      };
+      final client = MockClient(
+        (request) async => request.url.path.endsWith('/sucursales')
+            ? http.Response('[]', 200)
+            : http.Response(
+                jsonEncode([
+                  // Hace 15 minutos: espera 5 más.
+                  _guia('T1', ahora.subtract(const Duration(minutes: 15))),
+                  // Hace 20 minutos: ya se puede.
+                  _guia('T2', ahora.subtract(const Duration(minutes: 20))),
+                  deDiego,
+                ]),
+                200,
+              ),
+      );
+      final appState = AppState(api: GuiasApi(client: client));
+      await appState.restaurarSesion();
+      await appState.cargarGuias();
 
-    expect(
-      appState.registroBloqueadoHasta('T1', ahora: ahora),
-      DateTime(2026, 9, 29),
-    );
-    expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
-    // La registró otro transportista: él la puede registrar al momento.
-    expect(appState.registroBloqueadoHasta('T3', ahora: ahora), isNull);
-    expect(appState.registroBloqueadoHasta('T9', ahora: ahora), isNull);
-  });
+      expect(
+        appState.registroBloqueadoHasta('T1', ahora: ahora),
+        DateTime(2026, 9, 28, 15, 5),
+      );
+      expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
+      // La registró otro transportista: él la puede registrar al momento.
+      expect(appState.registroBloqueadoHasta('T3', ahora: ahora), isNull);
+      expect(appState.registroBloqueadoHasta('T9', ahora: ahora), isNull);
+    },
+  );
 
   testWidgets('El GPS se activa solo si el celular ya dio permiso', (
     tester,
