@@ -302,7 +302,10 @@ class AnalisisTransporte {
   }
 }
 
-final _decimal = NumberFormat('0.#');
+/// Un promedio de guías como número entero, redondeado hacia arriba: no
+/// existen 19,2 guías, se muestra 20. (El margen evita que un 3,0000001 de
+/// la división se vuelva 4.)
+String _redondeoArriba(num? v) => v == null ? '' : '${(v - 1e-9).ceil()}';
 
 /// La tabla como hoja de cálculo (Excel), una fila por transportista.
 Uint8List hojaTransporte(AnalisisTransporte a) {
@@ -328,7 +331,7 @@ Uint8List hojaTransporte(AnalisisTransporte a) {
         f.enRuta,
         f.total == 0 ? '' : (f.eficiencia * 100).round(),
         f.dias.length,
-        f.promedioDiario == null ? '' : _decimal.format(f.promedioDiario),
+        f.promedioDiario == null ? '' : _redondeoArriba(f.promedioDiario),
         f.ultimaActividad == null
             ? ''
             : fecha.format(f.ultimaActividad!.toLocal()),
@@ -528,7 +531,7 @@ class _VistaAnalisisTransporteState extends State<VistaAnalisisTransporte> {
         etiqueta: 'Promedio diario',
         valor: a.promedioDiario == null
             ? '—'
-            : _decimal.format(a.promedioDiario),
+            : _redondeoArriba(a.promedioDiario),
         // Entregas por día trabajado: los días en que hubo actividad.
         detalle: dias == 0
             ? 'sin días trabajados'
@@ -539,7 +542,7 @@ class _VistaAnalisisTransporteState extends State<VistaAnalisisTransporte> {
         etiqueta: 'Por transportista',
         valor: a.promedioPorTransportista == null
             ? '—'
-            : _decimal.format(a.promedioPorTransportista),
+            : _redondeoArriba(a.promedioPorTransportista),
         detalle: 'por día, cada uno',
       ),
       _Cifra(
@@ -772,7 +775,7 @@ class _PorDiaSemana extends StatelessWidget {
                       SizedBox(
                         width: 52,
                         child: Text(
-                          _decimal.format(promedio),
+                          _redondeoArriba(promedio),
                           textAlign: TextAlign.end,
                           style: const TextStyle(
                             fontSize: 14.5,
@@ -997,7 +1000,7 @@ class _TablaTransporte extends StatelessWidget {
                     f.total == 0
                         ? 'Sin guías en el periodo'
                         : [
-                            '${_decimal.format(f.promedioDiario ?? 0)} por día',
+                            '${_redondeoArriba(f.promedioDiario ?? 0)} por día',
                             '${_porcentaje(f.eficiencia)} de ${f.total}',
                             if (f.rechazadas > 0) '${f.rechazadas} rechaz.',
                             if (f.enRuta > 0) '${f.enRuta} en ruta',
@@ -1154,7 +1157,7 @@ class _TablaTransporte extends StatelessWidget {
             numero(
               f.promedioDiario == null
                   ? '—'
-                  : _decimal.format(f.promedioDiario),
+                  : _redondeoArriba(f.promedioDiario),
               anchos[5],
               fuerte: !vacio,
             ),
