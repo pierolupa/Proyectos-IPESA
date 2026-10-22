@@ -796,6 +796,7 @@ class AppState extends ChangeNotifier {
     Uint8List? foto,
     DateTime? fechaCreacion,
     LecturaComprobante? comprobante,
+    DocClienteEntrega? docCliente,
   }) async {
     final (actualizada, avisoFoto) = await _api.actualizarEstado(
       numeroGuia,
@@ -806,6 +807,7 @@ class AppState extends ChangeNotifier {
       foto: foto,
       fechaCreacion: fechaCreacion,
       comprobante: comprobante,
+      docCliente: docCliente,
     );
     final index = _indiceDeRegistro(numeroGuia, fechaCreacion);
     if (index != -1) {
@@ -845,6 +847,7 @@ class AppState extends ChangeNotifier {
     required double lng,
     Uint8List? foto,
     LecturaComprobante? comprobante,
+    DocClienteEntrega? docCliente,
   }) {
     final comp = comprobante?.$1;
     final local = guia.copyWith(
@@ -856,7 +859,7 @@ class AppState extends ChangeNotifier {
     final i = _guias.indexWhere((g) => g.clave == guia.clave);
     if (i != -1) _guias[i] = local;
     notifyListeners();
-    _enviarEntrega(guia, local, lat, lng, foto, comprobante);
+    _enviarEntrega(guia, local, lat, lng, foto, comprobante, docCliente);
   }
 
   Future<void> _enviarEntrega(
@@ -866,6 +869,7 @@ class AppState extends ChangeNotifier {
     double lng,
     Uint8List? foto,
     LecturaComprobante? comprobante,
+    DocClienteEntrega? docCliente,
   ) async {
     Object? error;
     for (var intento = 0; ; intento++) {
@@ -878,6 +882,7 @@ class AppState extends ChangeNotifier {
           foto: foto,
           fechaCreacion: original.fechaCreacion,
           comprobante: comprobante,
+          docCliente: docCliente,
         );
         _entregasEnviando.remove(original.clave);
         final i = _guias.indexWhere((g) => g.clave == original.clave);
@@ -912,6 +917,8 @@ class AppState extends ChangeNotifier {
       : [for (final g in guias) _entregasEnviando[g.clave] ?? g];
 
   Future<Uint8List> fotoEntrega(Guia guia) => _api.fotoEntrega(guia);
+
+  Future<Uint8List> fotoDocCliente(Guia guia) => _api.fotoDocCliente(guia);
 
   /// null mientras no se sabe (o si no se pudo consultar).
   Future<bool?> almacenamientoFotosConfigurado() async {

@@ -69,6 +69,10 @@ class Guia {
   /// mercadería y la entrega directo al día siguiente (null si no).
   final DateTime? custodiaDesde;
 
+  /// Foto del documento del cliente al entregar (MIGO, H.E.S; ver
+  /// DocumentoCliente): dónde quedó, o 'correo' si no lo dieron en físico.
+  final String docCliente;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -100,6 +104,7 @@ class Guia {
     this.agenciaMonto,
     this.agenciaComprobante = '',
     this.custodiaDesde,
+    this.docCliente = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   /// En custodia mientras sigue en ruta: al entregarla, el dato queda solo
@@ -107,6 +112,11 @@ class Guia {
   bool get enCustodia => custodiaDesde != null && estado == EstadoGuia.enRuta;
 
   bool get tieneFotoEntrega => fotoEntregaUrl.isNotEmpty;
+
+  /// El documento del cliente no se dio en físico: lo envían por correo.
+  bool get docClientePorCorreo => docCliente == 'correo';
+
+  bool get tieneFotoDocCliente => docCliente.isNotEmpty && !docClientePorCorreo;
 
   bool get enDespachoCorte => despachoCorte.isNotEmpty;
 
@@ -198,6 +208,7 @@ class Guia {
       agenciaMonto: _coordenada(json['agencia_monto']),
       agenciaComprobante: '${json['agencia_comprobante'] ?? ''}'.trim(),
       custodiaDesde: DateTime.tryParse('${json['custodia_desde'] ?? ''}'),
+      docCliente: '${json['doc_cliente'] ?? ''}'.trim(),
     );
   }
 
@@ -253,6 +264,7 @@ class Guia {
       agenciaMonto: agenciaMonto,
       agenciaComprobante: agenciaComprobante,
       custodiaDesde: custodiaDesde,
+      docCliente: docCliente,
     );
   }
 }

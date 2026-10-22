@@ -22,6 +22,10 @@ String urlFotoEntrega(Guia guia) =>
     '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}/foto'
     '?v=${guia.fotoEntregaUrl.hashCode.toUnsigned(32)}';
 
+/// Lo que se manda del documento del cliente (MIGO, H.E.S) al entregar:
+/// su foto, o que no lo dieron en físico y lo envían por correo.
+typedef DocClienteEntrega = ({Uint8List? foto, bool porCorreo});
+
 /// Tipo MIME de la foto según sus primeros bytes (la cámara da JPEG, pero
 /// una imagen elegida de la galería puede ser PNG o WebP).
 String tipoImagen(Uint8List bytes) {
@@ -366,6 +370,20 @@ class GuiasApi {
     return res.bodyBytes;
   }
 
+  /// Los bytes de la foto del documento del cliente (MIGO, H.E.S).
+  Future<Uint8List> fotoDocCliente(Guia guia) async {
+    final res = await _client.get(
+      Uri.parse(_rutaGuia(guia, '/doc-cliente')).replace(
+        queryParameters: {
+          'fechaCreacion': _fechaCreacion(guia),
+          'v': '${guia.docCliente.hashCode.toUnsigned(32)}',
+        },
+      ),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return res.bodyBytes;
+  }
+
   Future<DatosGuiaLeida> leerGuiaConIA(Uint8List fotoBytes) async {
     final res = await _client.post(
       Uri.parse('$apiBaseUrl/ocr/leer-guia'),
@@ -589,7 +607,9 @@ class GuiasApi {
     Uint8List? foto,
     DateTime? fechaCreacion,
     LecturaComprobante? comprobante,
+    DocClienteEntrega? docCliente,
   }) async {
+    final fotoDoc = docCliente?.foto;
     final res = await _client.patch(
       Uri.parse('$apiBaseUrl/guias/$numeroGuia/estado'),
       headers: {'Content-Type': 'application/json'},
@@ -603,6 +623,10 @@ class GuiasApi {
         // Ya leído por la app (aunque no haya): el backend no lo vuelve a
         // pedir a la IA. Si no viene, lo lee él de la foto.
         if (comprobante != null) 'comprobante': comprobante.$1?.toJson(),
+        if (docCliente?.porCorreo ?? false)
+          'docPorCorreo': true
+        else if (fotoDoc != null)
+          'docCliente': _fotoJson(fotoDoc),
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);

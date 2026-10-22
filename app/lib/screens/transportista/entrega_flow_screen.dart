@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/documento_cliente.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/sucursal.dart';
@@ -170,6 +171,21 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
 
   bool get _fotoSimulada => _fotoBytes != null;
 
+  // Mota-Engil (MIGO) y SK Rental (H.E.S) piden además la foto de su
+  // documento; si no lo dan en físico, se marca que va por correo.
+  late final DocumentoCliente? _documento = DocumentoCliente.de(widget.guia);
+  Uint8List? _docBytes;
+  bool _docPorCorreo = false;
+  bool _tomandoDoc = false;
+
+  /// Hace falta el documento: cliente que lo pide y la IA no vio que fuera
+  /// una entrega en agencia.
+  bool get _pideDocumento =>
+      _documento != null && _lectura?.comprobante == null;
+
+  bool get _documentoListo =>
+      !_pideDocumento || _docPorCorreo || _docBytes != null;
+
   Future<void> _verificarPerimetro(Sucursal sucursal) async {
     setState(() => _verificandoPerimetro = true);
     try {
@@ -245,8 +261,159 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
     }
     return _fotoSimulada &&
         _fotoConfirmada &&
+        _documentoListo &&
         _verificacion != _Verificacion.leyendo &&
         !_guiaEquivocada;
+  }
+
+  /// Foto del documento del cliente: se guarda tal cual, sin IA.
+  Future<void> _ponerDoc(Future<Uint8List?> Function() origen) async {
+    setState(() => _tomandoDoc = true);
+    try {
+      final bytes = await origen();
+      if (bytes == null || !mounted) return;
+      setState(() => _docBytes = bytes);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo abrir la foto: $e')));
+    } finally {
+      if (mounted) setState(() => _tomandoDoc = false);
+    }
+  }
+
+  void _verEjemplo(DocumentoCliente doc) => showDialog<void>(
+    context: context,
+    builder: (context) => Dialog(
+      insetPadding: const EdgeInsets.all(12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Así es el ${doc.nombre}',
+                    style: Ipesa.titulo(17),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cerrar',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Es una hoja aparte de la guía. Pellizca para acercar.',
+              style: TextStyle(color: Ipesa.textoSuave, fontSize: 13.5),
+            ),
+          ),
+          Flexible(
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: Image.asset(doc.ejemplo, fit: BoxFit.contain),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _seccionDocumento(DocumentoCliente doc, bool puedeFoto) {
+    final g = widget.guia;
+    final puede = puedeFoto && !_tomandoDoc;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _docBytes != null && !_docPorCorreo
+                    ? 'Foto del ${doc.nombre} lista'
+                    : 'Foto del ${doc.nombre}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _verEjemplo(doc),
+              icon: const Icon(Icons.help_outline, size: 18),
+              label: const Text('Ver ejemplo'),
+            ),
+          ],
+        ),
+        Text(
+          '${g.destinatario} entrega además su ${doc.nombre}. Sin esta foto '
+          'no se puede cerrar la entrega.',
+          style: const TextStyle(color: Ipesa.textoSuave, fontSize: 13.5),
+        ),
+        if (!_docPorCorreo) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: puede
+                      ? () => _ponerDoc(EntregaFlowScreen.tomarFoto)
+                      : null,
+                  icon: _tomandoDoc
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.camera_alt),
+                  label: Text(_docBytes != null ? 'Otra foto' : 'Tomar foto'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: puede
+                      ? () => _ponerDoc(EntregaFlowScreen.elegirFoto)
+                      : null,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Galería'),
+                ),
+              ),
+            ],
+          ),
+          if (_docBytes != null) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: Image.memory(
+                  _docBytes!,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                ),
+              ),
+            ),
+          ],
+        ],
+        CheckboxListTile(
+          value: _docPorCorreo,
+          onChanged: (v) => setState(() => _docPorCorreo = v ?? false),
+          title: Text('No me dieron el ${doc.nombre} en físico'),
+          subtitle: const Text(
+            'Lo envían por correo al asesor: se cierra solo con la foto de '
+            'la guía.',
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _confirmar(BuildContext context) async {
@@ -297,6 +464,10 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
       }
       // Ya se leyó con el número: el servidor no lo vuelve a pedir.
       final comprobante = _lectura == null ? null : (_lectura!.comprobante,);
+      final DocClienteEntrega? docCliente =
+          _pideDocumento && nuevoEstado == EstadoGuia.entregado
+          ? (foto: _docPorCorreo ? null : _docBytes, porCorreo: _docPorCorreo)
+          : null;
       String? avisoFoto;
       if (nuevoEstado.esFinal && g.tipoEntrega != TipoEntrega.entreSucursales) {
         // La entrega queda registrada al instante y la foto se envía por
@@ -308,6 +479,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
           lng: posicion.longitude,
           foto: _fotoBytes,
           comprobante: comprobante,
+          docCliente: docCliente,
         );
         if (_lectura?.comprobante case final c?) {
           mensaje = 'Entrega en agencia registrada · ${c.resumen}';
@@ -593,6 +765,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
                   ),
                 ),
             ],
+            if (_pideDocumento) _seccionDocumento(_documento!, puedeFoto),
           ],
           const SizedBox(height: 24),
           FilledButton.icon(

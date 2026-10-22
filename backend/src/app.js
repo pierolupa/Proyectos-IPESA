@@ -18,6 +18,7 @@ const {
   hayComprobante,
 } = require('./ocrAgente');
 const fotos = require('./fotos');
+const { documentoCliente, DOC_POR_CORREO } = require('./documentoCliente');
 const { hacenFaltaArchivo, corteMaximo } = require('./archivo');
 const { despachosNuevos } = require('./despachos');
 const auth = require('./auth');
@@ -976,7 +977,9 @@ app.post('/despachos-corte/:codigo/quitar', async (req, res, next) => {
 app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { estado, geo, porAdmin, foto, fechaCreacion } = req.body || {};
+    const { estado, geo, foto, fechaCreacion } = req.body || {};
+    // Solo un administrador corrige desde el panel (sin GPS ni fotos).
+    const porAdmin = Boolean(req.body?.porAdmin) && req.usuario?.rol === ROLES.ADMINISTRADOR;
 
     if (!ESTADOS_VALIDOS.has(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
@@ -1013,17 +1016,41 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       }
     }
 
+    // Mota-Engil (MIGO) y SK Rental (H.E.S): además de la guía, la foto de
+    // su documento, o la marca de que lo envían por correo al asesor.
+    const documento = !porAdmin && estado === ESTADOS.ENTREGADO
+      ? documentoCliente(guia)
+      : null;
+    const docPorCorreo = req.body?.docPorCorreo === true;
+    if (documento && !docPorCorreo && !fotos.esFotoValida(req.body?.docCliente)) {
+      return res.status(400).json({
+        error: `Falta la foto del ${documento.nombre}. Si no te lo dieron en `
+          + 'físico, marca que lo envían por correo al asesor.',
+      });
+    }
+
     // Solo se guarda la foto de la entrega final (guía firmada por el
     // cliente, o comprobante de agencia) — no la de pasos intermedios.
     const entregaFinal = !porAdmin && ESTADOS_FINALES.has(estado);
     // La foto se guarda y, a la vez, la IA busca un comprobante de agencia.
-    const [fotoEntrega, comprobante] = entregaFinal
+    // La del documento del cliente se guarda tal cual (sin IA).
+    const [fotoEntrega, comprobante, fotoDocumento] = entregaFinal
       ? await Promise.all([
           intentarGuardarFoto(guia.numero_guia, foto),
           comprobanteDeEntrega(req.body, foto),
+          documento && !docPorCorreo
+            ? intentarGuardarFoto(`${guia.numero_guia}_${documento.nombre}`, req.body?.docCliente)
+            : { url: null, aviso: null },
         ])
-      : [{ url: null, aviso: null }, null];
+      : [{ url: null, aviso: null }, null, { url: null, aviso: null }];
     if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
+    if (documento) guia.doc_cliente = docPorCorreo ? DOC_POR_CORREO : fotoDocumento.url || '';
+    const avisoFoto = [
+      fotoEntrega.aviso,
+      fotoDocumento.aviso && documento
+        ? fotoDocumento.aviso.replace('La foto', `La foto del ${documento.nombre}`)
+        : null,
+    ].filter(Boolean).join(' ');
     if (comprobante) {
       Object.assign(guia, comprobante);
       // La IA vio el comprobante de una agencia: la entrega fue en agencia.
@@ -1067,7 +1094,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
 
     res.json({
       ...sinCamposInternos(guia),
-      ...(fotoEntrega.aviso && { aviso_foto: fotoEntrega.aviso }),
+      ...(avisoFoto && { aviso_foto: avisoFoto }),
     });
   } catch (err) {
     next(err);
@@ -1134,6 +1161,23 @@ app.get('/guias/:numeroGuia/foto', async (req, res, next) => {
       return res.status(404).json({ error: 'Esta guía no tiene foto de entrega.' });
     }
     await fotos.enviarFoto(guia.foto_entrega_url, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Foto del documento del cliente (MIGO, H.E.S) de una entrega; privada
+// como la de la entrega.
+app.get('/guias/:numeroGuia/doc-cliente', async (req, res, next) => {
+  try {
+    const guia = await buscarRegistro(req.params.numeroGuia, req.query.fechaCreacion);
+    if (!guia) {
+      return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
+    }
+    if (!guia.doc_cliente || guia.doc_cliente === DOC_POR_CORREO) {
+      return res.status(404).json({ error: 'Esta guía no tiene foto del documento del cliente.' });
+    }
+    await fotos.enviarFoto(guia.doc_cliente, res);
   } catch (err) {
     next(err);
   }

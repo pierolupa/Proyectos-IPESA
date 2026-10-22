@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/documento_cliente.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
@@ -12,6 +13,7 @@ import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/gps_transportista.dart';
+import 'entrega_flow_screen.dart';
 
 /// Cuántas fotos lee la IA a la vez y cuántas entregas se envían a la vez
 /// (cada entrega sube su foto: de a pocas para no saturar).
@@ -262,13 +264,43 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
       ? EstadoGuia.finalizado
       : EstadoGuia.entregado;
 
+  /// El cliente pide su documento (MIGO, H.E.S): esa guía no se entrega
+  /// con las demás, sino aparte, con la foto del documento.
+  static DocumentoCliente? _documento(_Foto f) =>
+      _estadoFinal(f) == EstadoGuia.entregado
+      ? DocumentoCliente.de(f.guia!)
+      : null;
+
+  /// Abre la entrega de esa guía con la misma foto; si se entregó, la
+  /// foto sale de la lista.
+  Future<void> _entregarAparte(_Foto f) async {
+    final g = f.guia!;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EntregaFlowScreen(
+          guia: g,
+          desdeDetalle: false,
+          fotoInicial: f.bytes,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    final actual = context.read<AppState>().guiaActual(g);
+    if (actual == null || actual.estado.esCerrada) {
+      setState(() => _fotos.remove(f));
+    }
+  }
+
   /// Entrega todas las encontradas (de a [_entregasSimultaneas]), cada una
   /// con su foto, la hora y el GPS de ahora.
   Future<void> _entregar() async {
     final appState = context.read<AppState>();
     final listas = [
       for (final f in _fotos)
-        if (f.estado == _Estado.encontrada && f.guia != null) f,
+        if (f.estado == _Estado.encontrada &&
+            f.guia != null &&
+            _documento(f) == null)
+          f,
     ];
     if (listas.isEmpty || !gpsActivo || lat == null || lng == null) return;
     final latitud = lat!;
@@ -356,7 +388,7 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
         !_abriendo &&
         !_entregando &&
         _fotos.length < maxGuiasPorCarga;
-    final n = encontradas.length;
+    final n = encontradas.where((f) => _documento(f) == null).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Entrega inteligente')),
@@ -498,6 +530,8 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
         f.error ??
             (f.enviando
                 ? 'Entregando…'
+                : _documento(f) != null
+                ? 'Pide el ${_documento(f)!.nombre}: entrégala aparte'
                 : '${f.guia!.destinatario} · ${f.guia!.destino}'),
         f.error != null ? EstadoGuia.rechazado.color : const Color(0xFF1D6B41),
       ),
@@ -569,6 +603,13 @@ class _EntregaIAScreenState extends State<EntregaIAScreen>
                 ],
               ),
             ),
+            if (f.estado == _Estado.encontrada &&
+                _documento(f) != null &&
+                !_entregando)
+              TextButton(
+                onPressed: () => _entregarAparte(f),
+                child: const Text('Entregar'),
+              ),
             if (f.enviando)
               const Padding(
                 padding: EdgeInsets.all(14),

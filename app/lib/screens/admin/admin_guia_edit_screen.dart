@@ -4,6 +4,7 @@ import '../../theme.dart';
 
 import 'package:provider/provider.dart';
 
+import '../../models/documento_cliente.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
@@ -229,6 +230,14 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             guia: guia,
           ),
           BotonEliminarFoto(guia: guia),
+          if (DocumentoCliente.de(guia) case final documento?) ...[
+            const SizedBox(height: 24),
+            FotoDocumentoCliente(
+              key: ValueKey('${guia.numeroGuia}|${guia.docCliente}'),
+              guia: guia,
+              documento: documento,
+            ),
+          ],
           const SizedBox(height: 24),
           SeccionUbicacion(
             guia: guia,

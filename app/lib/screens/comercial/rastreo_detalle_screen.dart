@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/despacho.dart';
+import '../../models/documento_cliente.dart';
 import '../../models/estado_guia.dart';
 import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
@@ -251,6 +252,9 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
   }
 
   void _verFoto() => _hoja(FotoEntrega(guia: widget.guia!));
+
+  void _verDocumento(DocumentoCliente documento) =>
+      _hoja(FotoDocumentoCliente(guia: widget.guia!, documento: documento));
 
   void _verUbicacion() {
     final guia = widget.guia!;
@@ -508,6 +512,15 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
               ),
             ],
           ),
+          // Mota-Engil y SK Rental: su documento (MIGO, H.E.S).
+          if (DocumentoCliente.de(guia) case final documento?) ...[
+            const SizedBox(height: 10),
+            _BotonBoleto(
+              texto: documento.nombre,
+              icono: Icons.description_outlined,
+              onPressed: () => _verDocumento(documento),
+            ),
+          ],
         ],
       ),
     );

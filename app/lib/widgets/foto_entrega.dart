@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/documento_cliente.dart';
 import '../models/estado_guia.dart';
 import '../models/guia.dart';
 import '../services/archivo_imagen.dart';
@@ -47,7 +48,11 @@ class _FotoEntregaState extends State<FotoEntrega> {
         ),
         const SizedBox(height: 8),
         if (guia.tieneFotoEntrega)
-          _Miniatura(guia: guia)
+          _Miniatura(
+            guia: guia,
+            cargar: (app) => app.fotoEntrega(guia),
+            documento: 'entrega',
+          )
         else if (guia.estado == EstadoGuia.rechazado)
           const _Aviso(
             icono: Icons.no_photography_outlined,
@@ -77,6 +82,62 @@ class _FotoEntregaState extends State<FotoEntrega> {
                     icono: Icons.no_photography_outlined,
                     texto: 'Esta entrega no tiene foto guardada.',
                   ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Foto del documento que pide el cliente (MIGO, H.E.S; ver
+/// DocumentoCliente), para el comercial y el administrador. Si no lo dieron
+/// en físico, dice que se envió por correo al asesor.
+class FotoDocumentoCliente extends StatelessWidget {
+  const FotoDocumentoCliente({
+    super.key,
+    required this.guia,
+    required this.documento,
+  });
+
+  final Guia guia;
+  final DocumentoCliente documento;
+
+  @override
+  Widget build(BuildContext context) {
+    final nombre = documento.nombre;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Foto del $nombre', style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 8),
+        if (guia.tieneFotoDocCliente)
+          _Miniatura(
+            guia: guia,
+            cargar: (app) => app.fotoDocCliente(guia),
+            documento: nombre,
+          )
+        else if (guia.docClientePorCorreo)
+          _Aviso(
+            icono: Icons.mark_email_read_outlined,
+            texto:
+                'No se entregó en físico: el cliente envía el $nombre por '
+                'correo al asesor.',
+          )
+        else if (guia.estado == EstadoGuia.rechazado)
+          _Aviso(
+            icono: Icons.no_photography_outlined,
+            texto: 'Tarea rechazada: no tiene $nombre.',
+          )
+        else if (!guia.estado.esFinal)
+          _Aviso(
+            icono: Icons.photo_camera_outlined,
+            texto:
+                'El transportista lo fotografiará al entregar la guía al '
+                'cliente.',
+          )
+        else
+          _Aviso(
+            icono: Icons.no_photography_outlined,
+            texto: 'Esta entrega no tiene foto del $nombre.',
           ),
       ],
     );
@@ -119,25 +180,33 @@ class _Aviso extends StatelessWidget {
 /// pegarla en WhatsApp, un correo…) y, en celulares, Compartir. Se baja
 /// una sola vez y se reutiliza para todo.
 class _Miniatura extends StatefulWidget {
-  const _Miniatura({required this.guia});
+  const _Miniatura({
+    required this.guia,
+    required this.cargar,
+    required this.documento,
+  });
 
   final Guia guia;
+  final Future<Uint8List> Function(AppState app) cargar;
+
+  /// Qué foto es ("entrega", "MIGO"…): va en el título y en el archivo.
+  final String documento;
 
   @override
   State<_Miniatura> createState() => _MiniaturaState();
 }
 
 class _MiniaturaState extends State<_Miniatura> {
-  late Future<Uint8List> _bytes = context.read<AppState>().fotoEntrega(
-    widget.guia,
-  );
+  late Future<Uint8List> _bytes = widget.cargar(context.read<AppState>());
 
   /// Qué pasó con el último botón ("Foto copiada…"). Se muestra junto a
   /// los botones (una SnackBar quedaría tapada por la hoja o el visor).
   final _mensaje = ValueNotifier<String?>(null);
   Timer? _borrarMensaje;
 
-  String get _titulo => 'Entrega · ${widget.guia.numeroGuia}';
+  String get _titulo => widget.documento == 'entrega'
+      ? 'Entrega · ${widget.guia.numeroGuia}'
+      : '${widget.documento} · ${widget.guia.numeroGuia}';
 
   @override
   void dispose() {
@@ -153,7 +222,8 @@ class _MiniaturaState extends State<_Miniatura> {
       _ => 'jpg',
     };
     final numero = widget.guia.numeroGuia.replaceAll(RegExp(r'[^\w-]'), '_');
-    return 'IPESA_entrega_$numero.$extension';
+    final que = widget.documento.toLowerCase().replaceAll('.', '');
+    return 'IPESA_${que}_$numero.$extension';
   }
 
   void _avisar(String texto) {
@@ -235,8 +305,8 @@ class _MiniaturaState extends State<_Miniatura> {
                         child: _Imagen(
                           foto: foto,
                           onReintentar: () => setState(
-                            () => _bytes = context.read<AppState>().fotoEntrega(
-                              widget.guia,
+                            () => _bytes = widget.cargar(
+                              context.read<AppState>(),
                             ),
                           ),
                         ),

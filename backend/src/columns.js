@@ -1,7 +1,7 @@
 /**
  * Estructura de la hoja "Guias" en Google Sheets (ver ARCHITECTURE.md,
  * sección 3). Fila 1 = encabezados; los datos empiezan en la fila 2.
- * El orden de este arreglo es el orden real de las columnas A..AD.
+ * El orden de este arreglo es el orden real de las columnas A..AE.
  * geo_lat/geo_lng = ubicación del último evento mientras está abierta (al
  * registrarla, dónde se recogió); al entregarla no se toca, así el mapa
  * del admin muestra dónde se recogió. cierre_* = dónde y cuándo el
@@ -29,6 +29,10 @@
  * custodia_desde = cuándo el transportista dejó la guía en custodia: se
  * queda con la mercadería y la entrega directo al día siguiente. La guía
  * sigue "en ruta"; al entregarla queda el dato como historia.
+ * doc_cliente = la foto del documento que algunos clientes dan al recibir
+ * (MIGO de Mota-Engil, H.E.S de SK Rental; ver documentoCliente.js):
+ * dónde quedó la foto, o 'correo' si no lo dieron en físico y lo envían
+ * por correo al asesor.
  */
 const COLUMNS = [
   'numero_guia',
@@ -61,6 +65,7 @@ const COLUMNS = [
   'agencia_monto',
   'agencia_comprobante',
   'custodia_desde',
+  'doc_cliente',
 ];
 
 const ELIMINACION = Object.freeze({

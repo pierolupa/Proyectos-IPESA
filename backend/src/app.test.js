@@ -1678,3 +1678,83 @@ describe('Custodia', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('documento del cliente (MIGO, H.E.S)', () => {
+  const foto = { base64: Buffer.from('guia').toString('base64'), mediaType: 'image/jpeg' };
+  const migo = { base64: Buffer.from('migo').toString('base64'), mediaType: 'image/jpeg' };
+  const transportista = { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA };
+  const entregar = (cuerpo) => como(transportista)
+    .patch('/guias/IPE-2026-000123/estado')
+    .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto, ...cuerpo });
+
+  beforeEach(() => {
+    repo.actualizarGuia.mockResolvedValue();
+    repo.listarSucursales.mockResolvedValue([]);
+    fotos.guardarFoto.mockImplementation(async (nombre) => `drive:${nombre}`);
+  });
+
+  it('Mota-Engil a cliente final no se cierra sin la foto del MIGO', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'MOTA-ENGIL PERU S.A.' }));
+    const res = await entregar();
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Falta la foto del MIGO/);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('guarda la foto del MIGO aparte de la guía', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'Mota Engil Perú S.A.' }));
+    const res = await entregar({ docCliente: migo });
+    expect(res.status).toBe(200);
+    expect(fotos.guardarFoto).toHaveBeenCalledWith('IPE-2026-000123_MIGO', migo);
+    expect(res.body.foto_entrega_url).toBe('drive:IPE-2026-000123');
+    expect(res.body.doc_cliente).toBe('drive:IPE-2026-000123_MIGO');
+  });
+
+  it('sin el documento en físico se cierra marcando que va por correo', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'SK RENTAL S.A.C.' }));
+    const sinNada = await entregar();
+    expect(sinNada.status).toBe(400);
+    expect(sinNada.body.error).toMatch(/Falta la foto del H\.E\.S/);
+    const res = await entregar({ docPorCorreo: true });
+    expect(res.status).toBe(200);
+    expect(res.body.doc_cliente).toBe('correo');
+    expect(fotos.guardarFoto).toHaveBeenCalledTimes(1);
+  });
+
+  it('otros clientes, agencias y el administrador no lo piden', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    expect((await entregar()).status).toBe(200);
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ destinatario: 'MOTA-ENGIL PERU S.A.', tipo_entrega: TIPOS_ENTREGA.AGENCIA }),
+    );
+    expect((await entregar({ estado: ESTADOS.FINALIZADO })).status).toBe(200);
+    repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'MOTA-ENGIL PERU S.A.' }));
+    const admin = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, porAdmin: true });
+    expect(admin.status).toBe(200);
+  });
+
+  it('el comercial ve la foto del documento; si fue por correo, no hay foto', async () => {
+    const comercial = { nombre: 'Ana', rol: ROLES.COMERCIAL };
+    repo.buscarPorNumero.mockResolvedValue(guia({ doc_cliente: 'drive:abc' }));
+    fotos.enviarFoto.mockImplementation(async (_url, res) => res.send('imagen'));
+    const res = await como(comercial).get('/guias/IPE-2026-000123/doc-cliente');
+    expect(res.status).toBe(200);
+    expect(fotos.enviarFoto).toHaveBeenCalledWith('drive:abc', expect.anything());
+
+    repo.buscarPorNumero.mockResolvedValue(guia({ doc_cliente: 'correo' }));
+    const correo = await como(comercial).get('/guias/IPE-2026-000123/doc-cliente');
+    expect(correo.status).toBe(404);
+  });
+});
+
+it('un transportista no se salta el MIGO haciéndose pasar por administrador', async () => {
+  repo.actualizarGuia.mockResolvedValue();
+  repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'MOTA-ENGIL PERU S.A.' }));
+  const res = await como({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA })
+    .patch('/guias/IPE-2026-000123/estado')
+    .send({ estado: ESTADOS.ENTREGADO, porAdmin: true, geo: { lat: -12.1, lng: -77.02 } });
+  expect(res.status).toBe(400);
+  expect(repo.actualizarGuia).not.toHaveBeenCalled();
+});
