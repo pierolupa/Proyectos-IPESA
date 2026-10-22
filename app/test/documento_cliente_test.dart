@@ -56,6 +56,8 @@ void main() {
 
   group('Entrega', () {
     late List<Map<String, dynamic>> cambios;
+    // Lo que la IA lee en la foto de la guía (además del número).
+    late Map<String, dynamic> lectura;
 
     setUp(() {
       SharedPreferences.setMockInitialValues({
@@ -63,6 +65,7 @@ void main() {
         'sesion_rol': 'transportista',
       });
       cambios = [];
+      lectura = {};
       Ubicacion.olvidarUltima();
       Ubicacion.permisoConcedido = () async => true;
       Ubicacion.leer = () async => Position(
@@ -87,7 +90,7 @@ void main() {
         if (ruta.endsWith('/sucursales')) return http.Response('[]', 200);
         if (ruta.endsWith('/ocr/numero-guia')) {
           return http.Response(
-            jsonEncode({'numero_guia': json['numero_guia']}),
+            jsonEncode({'numero_guia': json['numero_guia'], ...lectura}),
             200,
           );
         }
@@ -131,6 +134,10 @@ void main() {
       );
       await tester.tap(find.text('Entregar'));
       await tester.pumpAndSettle();
+      // Antes de la foto de la guía no se sabe si es cliente final o
+      // agencia: todavía no pide el documento.
+      expect(find.textContaining('MIGO'), findsNothing);
+      expect(find.textContaining('H.E.S'), findsNothing);
       // La foto de la guía firmada.
       await tester.tap(find.text('Galería').first);
       await tester.pumpAndSettle();
@@ -196,6 +203,25 @@ void main() {
       await tester.pumpAndSettle();
       expect(cambios.single['docPorCorreo'], isTrue);
       expect(cambios.single.containsKey('docCliente'), isFalse);
+    });
+
+    testWidgets('Si la IA ve un comprobante de agencia, no pide el MIGO', (
+      tester,
+    ) async {
+      lectura = {
+        'agencia_razon_social': 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
+        'agencia_ruc': '20601857457',
+        'agencia_monto': 13,
+        'agencia_comprobante': 'G003-0072373',
+      };
+      await abrir(tester, _guia());
+      expect(find.textContaining('MIGO'), findsNothing);
+      expect(confirmarHabilitado(tester), isTrue);
+      await tester.tap(find.text('Confirmar'));
+      await tester.pumpAndSettle();
+      expect(cambios.single['estado'], 'finalizado');
+      expect(cambios.single.containsKey('docCliente'), isFalse);
+      expect(cambios.single.containsKey('docPorCorreo'), isFalse);
     });
 
     testWidgets('Otro cliente no pide documento', (tester) async {

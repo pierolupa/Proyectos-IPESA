@@ -178,10 +178,15 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
   bool _docPorCorreo = false;
   bool _tomandoDoc = false;
 
-  /// Hace falta el documento: cliente que lo pide y la IA no vio que fuera
-  /// una entrega en agencia.
+  /// Hace falta el documento: cliente que lo pide y, ya leída la foto de la
+  /// guía, la IA no vio que fuera una entrega en agencia. Se pide recién
+  /// después de esa foto: con un comprobante de agencia no se pide nada.
   bool get _pideDocumento =>
-      _documento != null && _lectura?.comprobante == null;
+      _documento != null &&
+      _fotoSimulada &&
+      _verificacion != _Verificacion.ninguna &&
+      _verificacion != _Verificacion.leyendo &&
+      _lectura?.comprobante == null;
 
   bool get _documentoListo =>
       !_pideDocumento || _docPorCorreo || _docBytes != null;
