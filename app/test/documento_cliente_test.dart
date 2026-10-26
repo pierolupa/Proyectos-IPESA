@@ -266,9 +266,6 @@ void main() {
     await tester.tap(find.text('MIGO'));
     await tester.pumpAndSettle();
     expect(find.text('Foto del MIGO'), findsOneWidget);
-    expect(
-      find.textContaining('envía el MIGO por correo al asesor'),
-      findsOneWidget,
-    );
+    expect(find.text('El cliente envía el MIGO por correo'), findsOneWidget);
   });
 }

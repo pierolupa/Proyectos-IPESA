@@ -116,12 +116,7 @@ class FotoDocumentoCliente extends StatelessWidget {
             documento: nombre,
           )
         else if (guia.docClientePorCorreo)
-          _Aviso(
-            icono: Icons.mark_email_read_outlined,
-            texto:
-                'No se entregó en físico: el cliente envía el $nombre por '
-                'correo al asesor.',
-          )
+          _AvisoCorreo(nombre: nombre)
         else if (guia.estado == EstadoGuia.rechazado)
           _Aviso(
             icono: Icons.no_photography_outlined,
@@ -140,6 +135,61 @@ class FotoDocumentoCliente extends StatelessWidget {
             texto: 'Esta entrega no tiene foto del $nombre.',
           ),
       ],
+    );
+  }
+}
+
+/// El documento no se entregó en físico: el cliente lo envía por correo al
+/// asesor. Va centrado y en grande para que no pase desapercibido.
+class _AvisoCorreo extends StatelessWidget {
+  const _AvisoCorreo({required this.nombre});
+
+  final String nombre;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Ipesa.mentaBorde),
+        borderRadius: BorderRadius.circular(Ipesa.radioCampo),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: Ipesa.menta,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.mark_email_read_outlined,
+              size: 32,
+              color: Ipesa.turquesa,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'El cliente envía el $nombre por correo',
+            textAlign: TextAlign.center,
+            style: Ipesa.titulo(19),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No se entregó en físico: el asesor lo recibe por correo.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.35,
+              color: Ipesa.textoSuave,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
