@@ -82,3 +82,14 @@ describe('fotos en Google Drive', () => {
     expect(res.send.mock.calls[0][0].toString()).toBe('png');
   });
 });
+
+describe('estaEnBlob', () => {
+  it('reconoce solo las fotos guardadas en Vercel Blob', () => {
+    const { estaEnBlob } = require('./fotos');
+    expect(estaEnBlob('https://stmno8.private.blob.vercel-storage.com/entregas/T1-x.jpg')).toBe(true);
+    expect(estaEnBlob('drive:1AbC')).toBe(false);
+    expect(estaEnBlob('correo')).toBe(false);
+    expect(estaEnBlob('')).toBe(false);
+    expect(estaEnBlob(undefined)).toBe(false);
+  });
+});

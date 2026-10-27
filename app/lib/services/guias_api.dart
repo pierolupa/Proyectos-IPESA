@@ -22,6 +22,14 @@ String urlFotoEntrega(Guia guia) =>
     '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}/foto'
     '?v=${guia.fotoEntregaUrl.hashCode.toUnsigned(32)}';
 
+/// Una tanda del paso de fotos de Vercel Blob a Drive: cuántas se movieron,
+/// cuántas faltan y por qué falló alguna ("T001-1: motivo").
+typedef ResultadoMigracion = ({
+  int movidas,
+  int pendientes,
+  List<String> errores,
+});
+
 /// Lo que se manda del documento del cliente (MIGO, H.E.S) al entregar:
 /// su foto, o que no lo dieron en físico y lo envían por correo.
 typedef DocClienteEntrega = ({Uint8List? foto, bool porCorreo});
@@ -632,6 +640,22 @@ class GuiasApi {
     if (res.statusCode != 200) _lanzarError(res);
     final json = _decodeBody(res);
     return (Guia.fromJson(json), json['aviso_foto'] as String?);
+  }
+
+  /// Pasa una tanda de fotos viejas de Vercel Blob a Google Drive (solo
+  /// administrador). Se llama hasta que no queden pendientes.
+  Future<ResultadoMigracion> migrarFotos() async {
+    final res = await _client.post(Uri.parse('$apiBaseUrl/fotos/migrar'));
+    if (res.statusCode != 200) _lanzarError(res);
+    final json = _decodeBody(res);
+    return (
+      movidas: (json['movidas'] as num?)?.toInt() ?? 0,
+      pendientes: (json['pendientes'] as num?)?.toInt() ?? 0,
+      errores: [
+        for (final e in (json['errores'] as List? ?? const []))
+          if (e is Map) '${e['numero_guia']}: ${e['error']}',
+      ],
+    );
   }
 
   /// Si el backend tiene conectado el almacenamiento de fotos.

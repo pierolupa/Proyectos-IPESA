@@ -920,6 +920,9 @@ class AppState extends ChangeNotifier {
 
   Future<Uint8List> fotoDocCliente(Guia guia) => _api.fotoDocCliente(guia);
 
+  /// Una tanda del paso de fotos viejas de Vercel Blob a Drive.
+  Future<ResultadoMigracion> migrarFotos() => _api.migrarFotos();
+
   /// null mientras no se sabe (o si no se pudo consultar).
   Future<bool?> almacenamientoFotosConfigurado() async {
     try {

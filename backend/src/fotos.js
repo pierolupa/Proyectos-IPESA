@@ -132,6 +132,36 @@ async function eliminarFoto(url) {
   await del(url);
 }
 
+/** true si `url` es una foto guardada en Vercel Blob (no en Drive). */
+function estaEnBlob(url) {
+  return /^https:\/\/[^/]+\.blob\.vercel-storage\.com\//.test(String(url || ''));
+}
+
+/**
+ * Copia a Drive una foto que está en Vercel Blob y devuelve `drive:<id>`.
+ * No la borra de Blob: quien llama la borra cuando ya guardó la nueva
+ * referencia. `fecha` (YYYY-MM-DD) va en el nombre del archivo.
+ */
+async function copiarADrive(url, nombre, fecha) {
+  if (!driveConfigurado()) throw new Error('Google Drive no está configurado.');
+  const resultado = await get(url, { access: 'private' });
+  if (!resultado || !resultado.stream) throw new Error('La foto ya no existe en Blob.');
+  const tipo = MEDIA_TYPES.has(resultado.blob.contentType)
+    ? resultado.blob.contentType
+    : 'image/jpeg';
+  const extension = tipo.split('/')[1].replace('jpeg', 'jpg');
+  const datos = Buffer.from(await new Response(resultado.stream).arrayBuffer());
+  if (datos.length === 0) throw new Error('La foto de Blob está vacía.');
+  const { id } = await llamarDrive({
+    accion: 'guardar',
+    nombre: `${nombreSeguro(nombre)}_${fecha}.${extension}`,
+    tipo,
+    base64: datos.toString('base64'),
+  });
+  if (!id) throw new Error('Google Drive no devolvió el archivo guardado.');
+  return `${PREFIJO_DRIVE}${id}`;
+}
+
 /** true si el body trae una foto con forma válida ({base64, mediaType?}). */
 function esFotoValida(foto) {
   return Boolean(foto && typeof foto.base64 === 'string' && foto.base64.length > 0);
@@ -139,6 +169,9 @@ function esFotoValida(foto) {
 
 module.exports = {
   almacenamientoConfigurado,
+  driveConfigurado,
+  estaEnBlob,
+  copiarADrive,
   guardarFoto,
   enviarFoto,
   eliminarFoto,

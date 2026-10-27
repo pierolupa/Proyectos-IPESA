@@ -1149,6 +1149,63 @@ app.get('/fotos/estado', (_req, res) => {
   res.json({ configurado: fotos.almacenamientoConfigurado() });
 });
 
+// Pasa las fotos que quedaron en Vercel Blob (entrega y documento del
+// cliente, de la hoja activa y del archivo) a Google Drive, de a pocas por
+// llamada para no pasar el tiempo de Vercel: la app la llama hasta que no
+// queden. Cada foto se copia, se anota `drive:<id>` en su fila y recién
+// entonces se borra de Blob, así nunca queda una guía sin su foto.
+const MIGRAR_POR_LLAMADA = 8;
+const MIGRAR_TIEMPO_MS = 40 * 1000;
+
+app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
+  try {
+    if (!fotos.driveConfigurado()) {
+      return res.status(409).json({ error: 'Primero conecta Google Drive (DRIVE_FOTOS_URL y DRIVE_FOTOS_CLAVE).' });
+    }
+    const { pestanas } = await repo.infoArchivo();
+    const guias = [
+      ...(await repo.listarGuias({ fresco: true })),
+      ...(pestanas.length > 0 ? await repo.listarGuiasArchivadas(pestanas) : []),
+    ];
+    const pendientes = [];
+    for (const guia of guias) {
+      for (const campo of ['foto_entrega_url', 'doc_cliente']) {
+        if (fotos.estaEnBlob(guia[campo])) pendientes.push({ guia, campo });
+      }
+    }
+    const inicio = Date.now();
+    const errores = [];
+    let movidas = 0;
+    for (const { guia, campo } of pendientes.slice(0, MIGRAR_POR_LLAMADA)) {
+      if (Date.now() - inicio > MIGRAR_TIEMPO_MS) break;
+      const anterior = guia[campo];
+      const nombre = campo === 'doc_cliente'
+        ? `${guia.numero_guia}_${documentoCliente(guia)?.nombre || 'documento'}`
+        : guia.numero_guia;
+      const fecha = String(guia.fecha_cierre || guia.fecha_creacion || '').slice(0, 10) || 'sin-fecha';
+      try {
+        guia[campo] = await fotos.copiarADrive(anterior, nombre, fecha);
+        await repo.actualizarGuia(guia._row, guia);
+      } catch (err) {
+        guia[campo] = anterior;
+        errores.push({ numero_guia: guia.numero_guia, error: err.message });
+        continue;
+      }
+      movidas++;
+      // Ya está en Drive y anotada: si borrarla de Blob falla, solo ocupa
+      // espacio (la guía ya no la usa).
+      try {
+        await fotos.eliminarFoto(anterior);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    res.json({ movidas, pendientes: pendientes.length - movidas, errores });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Foto de la entrega de una guía. Las fotos son privadas en Vercel Blob:
 // solo se ven pasando por aquí.
 app.get('/guias/:numeroGuia/foto', async (req, res, next) => {

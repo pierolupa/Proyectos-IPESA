@@ -1758,3 +1758,83 @@ it('un transportista no se salta el MIGO haciéndose pasar por administrador', a
   expect(res.status).toBe(400);
   expect(repo.actualizarGuia).not.toHaveBeenCalled();
 });
+
+describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
+  const BLOB = 'https://abc.private.blob.vercel-storage.com/entregas/T1-x.jpg';
+  const BLOB_DOC = 'https://abc.private.blob.vercel-storage.com/entregas/T2_MIGO-y.jpg';
+
+  beforeEach(() => {
+    jest.spyOn(fotos, 'driveConfigurado').mockReturnValue(true);
+    jest.spyOn(fotos, 'copiarADrive').mockImplementation(async (_url, nombre) => `drive:${nombre}`);
+    fotos.eliminarFoto.mockResolvedValue();
+    repo.actualizarGuia.mockResolvedValue();
+    repo.infoArchivo.mockResolvedValue({ pestanas: [] });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('pasa a Drive la foto y el documento, anota drive: y borra de Blob', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T1', foto_entrega_url: BLOB, fecha_cierre: '2026-10-20T15:00:00.000Z', _row: 2 }),
+      guia({
+        numero_guia: 'T2',
+        destinatario: 'MOTA-ENGIL PERU S.A.',
+        foto_entrega_url: 'drive:ya',
+        doc_cliente: BLOB_DOC,
+        _row: 3,
+      }),
+      guia({ numero_guia: 'T3', foto_entrega_url: '', doc_cliente: 'correo', _row: 4 }),
+    ]);
+    const res = await request(app).post('/fotos/migrar');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ movidas: 2, pendientes: 0, errores: [] });
+    expect(fotos.copiarADrive).toHaveBeenCalledWith(BLOB, 'T1', '2026-10-20');
+    expect(fotos.copiarADrive).toHaveBeenCalledWith(BLOB_DOC, 'T2_MIGO', '2026-01-01');
+    expect(repo.actualizarGuia).toHaveBeenCalledWith(2, expect.objectContaining({ foto_entrega_url: 'drive:T1' }));
+    expect(repo.actualizarGuia).toHaveBeenCalledWith(3, expect.objectContaining({ doc_cliente: 'drive:T2_MIGO' }));
+    expect(fotos.eliminarFoto).toHaveBeenCalledWith(BLOB);
+    expect(fotos.eliminarFoto).toHaveBeenCalledWith(BLOB_DOC);
+  });
+
+  it('si no se puede leer de Blob, no toca la guía ni la borra', async () => {
+    repo.listarGuias.mockResolvedValue([guia({ numero_guia: 'T1', foto_entrega_url: BLOB })]);
+    fotos.copiarADrive.mockRejectedValue(new Error('Your store is blocked'));
+    const res = await request(app).post('/fotos/migrar');
+    expect(res.body.movidas).toBe(0);
+    expect(res.body.pendientes).toBe(1);
+    expect(res.body.errores).toEqual([{ numero_guia: 'T1', error: 'Your store is blocked' }]);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+    expect(fotos.eliminarFoto).not.toHaveBeenCalled();
+  });
+
+  it('también las del archivo, en su pestaña', async () => {
+    repo.listarGuias.mockResolvedValue([]);
+    repo.infoArchivo.mockResolvedValue({ pestanas: ['Guías 2026'] });
+    repo.listarGuiasArchivadas.mockResolvedValue([
+      guia({ numero_guia: 'A1', foto_entrega_url: BLOB, _row: 7, _archivo: 'Guías 2026' }),
+    ]);
+    const res = await request(app).post('/fotos/migrar');
+    expect(res.body.movidas).toBe(1);
+    expect(repo.actualizarGuia).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ _archivo: 'Guías 2026', foto_entrega_url: 'drive:A1' }),
+    );
+  });
+
+  it('de a pocas por llamada; sin Drive o sin ser administrador, no', async () => {
+    repo.listarGuias.mockResolvedValue(
+      Array.from({ length: 12 }, (_, i) => guia({ numero_guia: `T${i}`, foto_entrega_url: BLOB, _row: i + 2 })),
+    );
+    const res = await request(app).post('/fotos/migrar');
+    expect(res.body).toMatchObject({ movidas: 8, pendientes: 4 });
+
+    const transportista = await como({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA }).post('/fotos/migrar');
+    expect(transportista.status).toBe(403);
+
+    fotos.driveConfigurado.mockReturnValue(false);
+    const sinDrive = await request(app).post('/fotos/migrar');
+    expect(sinDrive.status).toBe(409);
+  });
+});

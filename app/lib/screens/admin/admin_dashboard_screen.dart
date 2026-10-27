@@ -17,6 +17,7 @@ import '../../widgets/custodia.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/mapa_ubicacion.dart';
+import '../../widgets/migrar_fotos.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
 import 'archivo_screen.dart';
@@ -201,6 +202,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           builder: (_) => const RegularizacionScreen(),
                         ),
                       ),
+                      onMigrarFotos: () => mostrarMigrarFotos(context),
                       onCerrarSesion: _cerrarSesion,
                     )
                   : null,
@@ -293,6 +295,7 @@ class _MenuAdmin extends StatelessWidget {
     required this.onSeleccion,
     required this.onArchivo,
     required this.onRegularizacion,
+    required this.onMigrarFotos,
     required this.onCerrarSesion,
   });
 
@@ -300,6 +303,7 @@ class _MenuAdmin extends StatelessWidget {
   final ValueChanged<int> onSeleccion;
   final VoidCallback onArchivo;
   final VoidCallback onRegularizacion;
+  final VoidCallback onMigrarFotos;
   final VoidCallback onCerrarSesion;
 
   @override
@@ -387,6 +391,11 @@ class _MenuAdmin extends StatelessWidget {
           ),
           opcion(Icons.inventory_2_outlined, 'Archivo de guías', onArchivo),
           opcion(Icons.fact_check_outlined, 'Regularización', onRegularizacion),
+          opcion(
+            Icons.drive_folder_upload_outlined,
+            'Pasar fotos a Drive',
+            onMigrarFotos,
+          ),
           const Spacer(),
           const Divider(height: 1),
           ListTile(
