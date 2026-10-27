@@ -132,7 +132,7 @@ la app vía `GET /guias/:numeroGuia/foto`.
 
 ### Fotos en Google Drive (recomendado, gratis)
 
-Las fotos quedan en la carpeta **IPESA · Fotos de entregas** del Drive de
+Las fotos quedan en la carpeta **Fotos RPA** del Drive de
 la cuenta de Google que instale el script (usa sus 15 GB gratis). La cuenta
 de servicio de la hoja no sirve para esto: Google no le da espacio en Drive.
 

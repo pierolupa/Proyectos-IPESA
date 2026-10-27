@@ -2,7 +2,7 @@
  * IPESA · Tracking Distribución — fotos de entregas en Google Drive.
  *
  * Este script vive en la cuenta de Google de IPESA y guarda las fotos de
- * las entregas en la carpeta "IPESA · Fotos de entregas" de su Drive (se
+ * las entregas en la carpeta "Fotos RPA" de su Drive (se
  * crea sola). El backend (backend/src/fotos.js) lo llama con una clave;
  * las fotos NO quedan públicas: solo se ven a través de la app.
  *
@@ -17,7 +17,7 @@
  */
 
 const CLAVE = 'ESCRIBE_AQUI_TU_CLAVE';
-const NOMBRE_CARPETA = 'IPESA · Fotos de entregas';
+const NOMBRE_CARPETA = 'Fotos RPA';
 
 function doPost(e) {
   try {
