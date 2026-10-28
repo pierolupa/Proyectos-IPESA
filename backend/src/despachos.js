@@ -37,8 +37,18 @@ function columnasDespachos(encabezado) {
     sucursal: buscar('surcusal', 'sucursal'),
     transporte: buscar('transporte'),
   };
+  // Si a la columna de fechas le borraron el encabezado, es la que está sin
+  // nombre justo antes de "Hora" (o la A, si es la que quedó vacía).
+  if (cols.fecha < 0) {
+    const sinNombre = (i) => i >= 0 && normalizar(encabezado[i]) === '';
+    if (cols.hora > 0 && sinNombre(cols.hora - 1)) cols.fecha = cols.hora - 1;
+    else if (sinNombre(0) && cols.guia !== 0) cols.fecha = 0;
+  }
   if (cols.fecha < 0 || cols.guia < 0) {
-    throw new Error('La hoja Despachos no tiene las columnas "Fecha de Extraccion" y "Nro de guia".');
+    throw new Error(
+      'La hoja Despachos Ate no tiene las columnas "Fecha" y "Nro de guia" en la fila 1 '
+      + `de la pestaña "${DESPACHOS_PESTANA}".`,
+    );
   }
   return cols;
 }

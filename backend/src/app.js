@@ -498,8 +498,12 @@ app.get('/despachos', async (req, res, next) => {
       despachos = await repo.listarDespachos({ desde, hasta });
     } catch (err) {
       console.error(err);
+      // Un encabezado que falta se dice tal cual: no es un problema de permisos.
+      const deEncabezado = String(err.message).startsWith('La hoja Despachos Ate no tiene');
       return res.status(503).json({
-        error: 'No se pudo leer la hoja Despachos Ate (¿está compartida con la cuenta de la app?).',
+        error: deEncabezado
+          ? err.message
+          : 'No se pudo leer la hoja Despachos Ate (¿está compartida con la cuenta de la app?).',
       });
     }
     if (despachos.length === 0) return res.json([]);

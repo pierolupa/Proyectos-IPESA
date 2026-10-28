@@ -98,3 +98,25 @@ describe('hoja Despachos Ate', () => {
     expect(lista.map((x) => x.numero_guia).sort()).toEqual(['T1', 'T2', 'T3', 'T4']);
   });
 });
+
+describe('encabezado de fechas borrado', () => {
+  // Así quedó la fila 1: la A sin nombre (ahí siguen las fechas).
+  const SIN_FECHA = [
+    '', 'Hora', 'Nro de guia', 'Cliente', 'RUC', 'Punto de Partida',
+    'Punto de Llegada', 'Pedido', 'Entrega', 'Peso', 'Bulto', 'Transporte',
+    'Usuario', 'Conductor', 'Tipo', 'Codigo', 'Sucursal ipesa',
+  ];
+
+  it('usa la columna sin nombre de antes de "Hora" como fecha', () => {
+    const cols = columnasDespachos(SIN_FECHA);
+    expect(cols).toMatchObject({ fecha: 0, hora: 1, guia: 2, cliente: 3, pedido: 7, entrega: 8, transporte: 11, sucursal: 16 });
+  });
+
+  it('sin "Hora", la A vacía sigue siendo la fecha', () => {
+    expect(columnasDespachos(['', 'Nro de guia', 'Cliente']).fecha).toBe(0);
+  });
+
+  it('si no hay columna de guía, lo dice claro', () => {
+    expect(() => columnasDespachos(['', 'Hora', 'Cliente'])).toThrow(/"Fecha" y "Nro de guia" en la fila 1/);
+  });
+});
