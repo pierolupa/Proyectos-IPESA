@@ -20,7 +20,8 @@ const apiBaseUrl = 'https://proyectos-ipesa-phi.vercel.app/api';
 /// para que el navegador no muestre la anterior desde su caché.
 String urlFotoEntrega(Guia guia) =>
     '$apiBaseUrl/guias/${Uri.encodeComponent(guia.numeroGuia)}/foto'
-    '?v=${guia.fotoEntregaUrl.hashCode.toUnsigned(32)}';
+    '?fechaCreacion=${Uri.encodeQueryComponent(guia.fechaCreacion.toUtc().toIso8601String())}'
+    '&v=${guia.fotoEntregaUrl.hashCode.toUnsigned(32)}';
 
 /// Una tanda del paso de fotos de Vercel Blob a Drive: cuántas se movieron,
 /// cuántas faltan y por qué falló alguna ("T001-1: motivo").

@@ -1863,3 +1863,17 @@ it('GET /foto: si la foto apunta a Blob, relee la hoja por si ya pasó a Drive',
   expect(repo.buscarPorNumero).toHaveBeenLastCalledWith('IPE-2026-000123', { fresco: true });
   expect(fotos.enviarFoto).toHaveBeenCalledWith('drive:nuevo', expect.anything());
 });
+
+it('GET /foto con fechaCreacion: la foto de esa tarea, no la de la más reciente', async () => {
+  repo.listarGuias.mockResolvedValue([
+    guia({ numero_guia: 'T033-3531', fecha_creacion: '2026-10-01T13:45:00.000Z', foto_entrega_url: 'drive:tramo1' }),
+    guia({ numero_guia: 'T033-3531', fecha_creacion: '2026-10-01T15:28:00.000Z', foto_entrega_url: 'drive:tramo2' }),
+  ]);
+  fotos.enviarFoto.mockImplementation(async (_url, res) => res.send('imagen'));
+  const res = await request(app)
+    .get('/guias/T033-3531/foto')
+    .query({ fechaCreacion: '2026-10-01T13:45:00.000Z' });
+  expect(res.status).toBe(200);
+  expect(fotos.enviarFoto).toHaveBeenCalledWith('drive:tramo1', expect.anything());
+  expect(repo.buscarPorNumero).not.toHaveBeenCalled();
+});

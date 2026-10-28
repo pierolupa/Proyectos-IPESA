@@ -111,7 +111,12 @@ void main() {
     );
     expect(
       urlFotoEntrega(a),
-      startsWith('$apiBaseUrl/guias/T001-94609/foto?v='),
+      startsWith('$apiBaseUrl/guias/T001-94609/foto?fechaCreacion='),
+    );
+    // Pide la foto de esa tarea (una guía puede tener varias).
+    expect(
+      Uri.parse(urlFotoEntrega(a)).queryParameters['fechaCreacion'],
+      a.fechaCreacion.toUtc().toIso8601String(),
     );
     expect(urlFotoEntrega(a), isNot(urlFotoEntrega(b)));
   });

@@ -1233,12 +1233,21 @@ app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
 // solo se ven pasando por aquí.
 app.get('/guias/:numeroGuia/foto', async (req, res, next) => {
   try {
-    let guia = await repo.buscarPorNumero(req.params.numeroGuia);
-    // Si apunta a Vercel Blob, puede que recién la hayan pasado a Drive
-    // (POST /fotos/migrar): se lee la hoja sin caché para no pedir una
-    // foto que ya se movió.
-    if (guia && fotos.estaEnBlob(guia.foto_entrega_url)) {
-      guia = (await repo.buscarPorNumero(req.params.numeroGuia, { fresco: true })) || guia;
+    const { numeroGuia } = req.params;
+    const { fechaCreacion } = req.query;
+    // Con `fechaCreacion`, la foto de esa tarea: una misma guía puede tener
+    // varias (un tramo hasta la sucursal y otro hasta el cliente).
+    let guia = fechaCreacion
+      ? (await repo.listarGuias()).find(
+          (g) => g.numero_guia === numeroGuia
+            && Date.parse(g.fecha_creacion) === Date.parse(fechaCreacion),
+        )
+      : await repo.buscarPorNumero(numeroGuia);
+    // No está en la lista guardada (o está archivada), o apunta a Vercel
+    // Blob y puede que recién la hayan pasado a Drive (POST /fotos/migrar):
+    // se lee la hoja sin caché para no pedir una foto que ya se movió.
+    if (!guia || fotos.estaEnBlob(guia.foto_entrega_url)) {
+      guia = (await buscarRegistro(numeroGuia, fechaCreacion)) || guia;
     }
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
