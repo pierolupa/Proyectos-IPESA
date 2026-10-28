@@ -12,6 +12,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/escena_ruta.dart';
 import '../../widgets/lugares_sucursal.dart';
+import '../../widgets/volver_con_esc.dart';
 import 'rastreo_detalle_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
@@ -58,100 +59,107 @@ class RastreoResultadosScreen extends StatelessWidget {
     final altoEscena = ancho < 600 ? 170.0 : 220.0;
     final n = guias.length + despachos.length;
 
-    return Scaffold(
-      backgroundColor: cieloEscena,
-      body: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: EscenaRuta(alto: altoEscena),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            // La lista termina sobre el suelo: el camión queda a la vista.
-            bottom: math.max(altoEscena - 56, 112),
-            child: SafeArea(
-              bottom: false,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: ancho >= 1000 ? 1200 : 560,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                        child: Row(
-                          children: [
-                            IconButton.filled(
-                              tooltip: 'Nueva búsqueda',
-                              onPressed: () => Navigator.of(context).maybePop(),
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Ipesa.petroleo,
-                                fixedSize: const Size(44, 44),
-                                elevation: 2,
-                                shadowColor: const Color(0x330F4C5C),
+    return VolverConEsc(
+      child: Scaffold(
+        backgroundColor: cieloEscena,
+        body: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: EscenaRuta(alto: altoEscena),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              // La lista termina sobre el suelo: el camión queda a la vista.
+              bottom: math.max(altoEscena - 56, 112),
+              child: SafeArea(
+                bottom: false,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: ancho >= 1000 ? 1200 : 560,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                          child: Row(
+                            children: [
+                              IconButton.filled(
+                                tooltip: 'Nueva búsqueda',
+                                onPressed: () =>
+                                    Navigator.of(context).maybePop(),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Ipesa.petroleo,
+                                  fixedSize: const Size(44, 44),
+                                  elevation: 2,
+                                  shadowColor: const Color(0x330F4C5C),
+                                ),
+                                icon: const Icon(Icons.chevron_left, size: 26),
                               ),
-                              icon: const Icon(Icons.chevron_left, size: 26),
-                            ),
-                            Expanded(
-                              child: Text(
-                                'Resultados',
-                                textAlign: TextAlign.center,
-                                style: Ipesa.titulo(17),
-                              ),
-                            ),
-                            const SizedBox(width: 44),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              n == 1
-                                  ? '1 guía encontrada'
-                                  : '$n guías encontradas',
-                              style: Ipesa.titulo(24),
-                            ),
-                            if (_resumen.isNotEmpty)
-                              Text(
-                                _resumen,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  color: Ipesa.textoSuave,
+                              Expanded(
+                                child: Text(
+                                  'Resultados',
+                                  textAlign: TextAlign.center,
+                                  style: Ipesa.titulo(17),
                                 ),
                               ),
-                            const SizedBox(height: 4),
-                            _Conteos(guias: guias, despachos: despachos.length),
-                          ],
+                              const SizedBox(width: 44),
+                            ],
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child: _Resultados(
-                          guias: guias,
-                          despachos: despachos,
-                          total: n,
-                          cargando: appState.cargando && appState.guias.isEmpty,
-                          error: appState.error,
-                          ancha: ancho >= 700,
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                n == 1
+                                    ? '1 guía encontrada'
+                                    : '$n guías encontradas',
+                                style: Ipesa.titulo(24),
+                              ),
+                              if (_resumen.isNotEmpty)
+                                Text(
+                                  _resumen,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    color: Ipesa.textoSuave,
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              _Conteos(
+                                guias: guias,
+                                despachos: despachos.length,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          child: _Resultados(
+                            guias: guias,
+                            despachos: despachos,
+                            total: n,
+                            cargando:
+                                appState.cargando && appState.guias.isEmpty,
+                            error: appState.error,
+                            ancha: ancho >= 700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
