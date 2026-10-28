@@ -1768,6 +1768,7 @@ describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
     jest.spyOn(fotos, 'copiarADrive').mockImplementation(async (_url, nombre) => `drive:${nombre}`);
     fotos.eliminarFoto.mockResolvedValue();
     repo.actualizarGuia.mockResolvedValue();
+    repo.actualizarGuias.mockResolvedValue();
     repo.infoArchivo.mockResolvedValue({ pestanas: [] });
   });
 
@@ -1792,8 +1793,12 @@ describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
     expect(res.body).toEqual({ movidas: 2, pendientes: 0, errores: [] });
     expect(fotos.copiarADrive).toHaveBeenCalledWith(BLOB, 'T1', '2026-10-20');
     expect(fotos.copiarADrive).toHaveBeenCalledWith(BLOB_DOC, 'T2_MIGO', '2026-01-01');
-    expect(repo.actualizarGuia).toHaveBeenCalledWith(2, expect.objectContaining({ foto_entrega_url: 'drive:T1' }));
-    expect(repo.actualizarGuia).toHaveBeenCalledWith(3, expect.objectContaining({ doc_cliente: 'drive:T2_MIGO' }));
+    // Las activas, en una sola escritura.
+    expect(repo.actualizarGuias).toHaveBeenCalledTimes(1);
+    expect(repo.actualizarGuias.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ _row: 2, foto_entrega_url: 'drive:T1' }),
+      expect.objectContaining({ _row: 3, doc_cliente: 'drive:T2_MIGO' }),
+    ]);
     expect(fotos.eliminarFoto).toHaveBeenCalledWith(BLOB);
     expect(fotos.eliminarFoto).toHaveBeenCalledWith(BLOB_DOC);
   });
@@ -1805,7 +1810,15 @@ describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
     expect(res.body.movidas).toBe(0);
     expect(res.body.pendientes).toBe(1);
     expect(res.body.errores).toEqual([{ numero_guia: 'T1', error: 'Your store is blocked' }]);
-    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+    expect(repo.actualizarGuias).not.toHaveBeenCalled();
+    expect(fotos.eliminarFoto).not.toHaveBeenCalled();
+  });
+
+  it('si no se puede anotar en la hoja, no borra de Blob', async () => {
+    repo.listarGuias.mockResolvedValue([guia({ numero_guia: 'T1', foto_entrega_url: BLOB })]);
+    repo.actualizarGuias.mockRejectedValue(new Error('cuota de Google'));
+    const res = await request(app).post('/fotos/migrar');
+    expect(res.status).toBeGreaterThanOrEqual(500);
     expect(fotos.eliminarFoto).not.toHaveBeenCalled();
   });
 
@@ -1825,10 +1838,10 @@ describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
 
   it('de a pocas por llamada; sin Drive o sin ser administrador, no', async () => {
     repo.listarGuias.mockResolvedValue(
-      Array.from({ length: 12 }, (_, i) => guia({ numero_guia: `T${i}`, foto_entrega_url: BLOB, _row: i + 2 })),
+      Array.from({ length: 25 }, (_, i) => guia({ numero_guia: `T${i}`, foto_entrega_url: BLOB, _row: i + 2 })),
     );
     const res = await request(app).post('/fotos/migrar');
-    expect(res.body).toMatchObject({ movidas: 8, pendientes: 4 });
+    expect(res.body).toMatchObject({ movidas: 20, pendientes: 5 });
 
     const transportista = await como({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA }).post('/fotos/migrar');
     expect(transportista.status).toBe(403);

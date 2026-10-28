@@ -1158,8 +1158,9 @@ app.get('/fotos/estado', (_req, res) => {
 // llamada para no pasar el tiempo de Vercel: la app la llama hasta que no
 // queden. Cada foto se copia, se anota `drive:<id>` en su fila y recién
 // entonces se borra de Blob, así nunca queda una guía sin su foto.
-const MIGRAR_POR_LLAMADA = 8;
-const MIGRAR_TIEMPO_MS = 40 * 1000;
+const MIGRAR_POR_LLAMADA = 20;
+const MIGRAR_A_LA_VEZ = 4;
+const MIGRAR_TIEMPO_MS = 35 * 1000;
 
 app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
   try {
@@ -1174,37 +1175,55 @@ app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
     const pendientes = [];
     for (const guia of guias) {
       for (const campo of ['foto_entrega_url', 'doc_cliente']) {
-        if (fotos.estaEnBlob(guia[campo])) pendientes.push({ guia, campo });
+        if (fotos.estaEnBlob(guia[campo])) pendientes.push({ guia, campo, anterior: guia[campo] });
       }
     }
+    // Se copian a Drive de a varias a la vez.
+    const lote = pendientes.slice(0, MIGRAR_POR_LLAMADA);
     const inicio = Date.now();
     const errores = [];
-    let movidas = 0;
-    for (const { guia, campo } of pendientes.slice(0, MIGRAR_POR_LLAMADA)) {
-      if (Date.now() - inicio > MIGRAR_TIEMPO_MS) break;
-      const anterior = guia[campo];
-      const nombre = campo === 'doc_cliente'
-        ? `${guia.numero_guia}_${documentoCliente(guia)?.nombre || 'documento'}`
-        : guia.numero_guia;
-      const fecha = String(guia.fecha_cierre || guia.fecha_creacion || '').slice(0, 10) || 'sin-fecha';
-      try {
-        guia[campo] = await fotos.copiarADrive(anterior, nombre, fecha);
-        await repo.actualizarGuia(guia._row, guia);
-      } catch (err) {
-        guia[campo] = anterior;
-        errores.push({ numero_guia: guia.numero_guia, error: err.message });
-        continue;
+    const copiadas = [];
+    let siguiente = 0;
+    const copiar = async () => {
+      while (siguiente < lote.length && Date.now() - inicio < MIGRAR_TIEMPO_MS) {
+        const item = lote[siguiente++];
+        const { guia, campo, anterior } = item;
+        const nombre = campo === 'doc_cliente'
+          ? `${guia.numero_guia}_${documentoCliente(guia)?.nombre || 'documento'}`
+          : guia.numero_guia;
+        const fecha = String(guia.fecha_cierre || guia.fecha_creacion || '').slice(0, 10) || 'sin-fecha';
+        try {
+          item.nueva = await fotos.copiarADrive(anterior, nombre, fecha);
+          copiadas.push(item);
+        } catch (err) {
+          errores.push({ numero_guia: guia.numero_guia, error: err.message });
+        }
       }
-      movidas++;
-      // Ya está en Drive y anotada: si borrarla de Blob falla, solo ocupa
-      // espacio (la guía ya no la usa).
+    };
+    await Promise.all(Array.from({ length: MIGRAR_A_LA_VEZ }, copiar));
+
+    // Se anotan en la hoja: las activas en una sola escritura, las
+    // archivadas en su pestaña. Solo se borra de Blob lo ya anotado.
+    for (const { guia, campo, nueva } of copiadas) guia[campo] = nueva;
+    const anotadas = new Set();
+    const activas = [...new Set(copiadas.map((c) => c.guia).filter((g) => !g._archivo))];
+    if (activas.length > 0) {
+      await repo.actualizarGuias(activas);
+      activas.forEach((g) => anotadas.add(g));
+    }
+    for (const guia of new Set(copiadas.map((c) => c.guia).filter((g) => g._archivo))) {
       try {
-        await fotos.eliminarFoto(anterior);
+        await repo.actualizarGuia(guia._row, guia);
+        anotadas.add(guia);
       } catch (err) {
-        console.error(err);
+        errores.push({ numero_guia: guia.numero_guia, error: err.message });
       }
     }
-    res.json({ movidas, pendientes: pendientes.length - movidas, errores });
+    const movidas = copiadas.filter((c) => anotadas.has(c.guia));
+    // Ya está en Drive y anotada: si borrarla de Blob falla, solo ocupa
+    // espacio (la guía ya no la usa).
+    await Promise.all(movidas.map((c) => fotos.eliminarFoto(c.anterior).catch((err) => console.error(err))));
+    res.json({ movidas: movidas.length, pendientes: pendientes.length - movidas.length, errores });
   } catch (err) {
     next(err);
   }
