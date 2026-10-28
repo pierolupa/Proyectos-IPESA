@@ -1851,3 +1851,15 @@ describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
     expect(sinDrive.status).toBe(409);
   });
 });
+
+it('GET /foto: si la foto apunta a Blob, relee la hoja por si ya pasó a Drive', async () => {
+  const BLOB = 'https://abc.private.blob.vercel-storage.com/entregas/T1-x.jpg';
+  repo.buscarPorNumero
+    .mockResolvedValueOnce(guia({ foto_entrega_url: BLOB }))
+    .mockResolvedValueOnce(guia({ foto_entrega_url: 'drive:nuevo' }));
+  fotos.enviarFoto.mockImplementation(async (_url, res) => res.send('imagen'));
+  const res = await request(app).get('/guias/IPE-2026-000123/foto');
+  expect(res.status).toBe(200);
+  expect(repo.buscarPorNumero).toHaveBeenLastCalledWith('IPE-2026-000123', { fresco: true });
+  expect(fotos.enviarFoto).toHaveBeenCalledWith('drive:nuevo', expect.anything());
+});

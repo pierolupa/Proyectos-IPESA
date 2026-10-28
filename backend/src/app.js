@@ -1233,7 +1233,13 @@ app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
 // solo se ven pasando por aquí.
 app.get('/guias/:numeroGuia/foto', async (req, res, next) => {
   try {
-    const guia = await repo.buscarPorNumero(req.params.numeroGuia);
+    let guia = await repo.buscarPorNumero(req.params.numeroGuia);
+    // Si apunta a Vercel Blob, puede que recién la hayan pasado a Drive
+    // (POST /fotos/migrar): se lee la hoja sin caché para no pedir una
+    // foto que ya se movió.
+    if (guia && fotos.estaEnBlob(guia.foto_entrega_url)) {
+      guia = (await repo.buscarPorNumero(req.params.numeroGuia, { fresco: true })) || guia;
+    }
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
     }
