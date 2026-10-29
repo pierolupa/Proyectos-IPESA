@@ -258,7 +258,7 @@ void main() {
     // Aquí todo responde al instante: ya terminó y se ve el check un
     // momento antes de abrir la guía.
     expect(find.byType(VentanaBusqueda), findsOneWidget);
-    expect(find.text('Despachos Ate'), findsOneWidget);
+    expect(find.text('Despachos IPESA'), findsOneWidget);
     expect(find.text('¡Listo! Encontramos tu guía'), findsOneWidget);
 
     await tester.pumpAndSettle();

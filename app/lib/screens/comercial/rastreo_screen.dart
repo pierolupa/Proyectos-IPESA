@@ -235,7 +235,7 @@ class _RastreoScreenState extends State<RastreoScreen> {
     return [
       PasoRegistro('Tareas', Icons.assignment_outlined, paso(_tareasListas)),
       PasoRegistro(
-        'Despachos Ate',
+        'Despachos IPESA',
         Icons.warehouse_outlined,
         paso(_despachosListos),
       ),
