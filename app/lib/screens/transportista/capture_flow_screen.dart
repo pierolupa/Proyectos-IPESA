@@ -14,6 +14,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/aviso_sucursal.dart';
 import '../../widgets/gps_transportista.dart';
+import '../../widgets/pasos_registro.dart';
 
 /// Cuántas fotos lee la IA a la vez (el resto espera su turno).
 const _lecturasSimultaneas = 3;
@@ -27,6 +28,9 @@ const _esperasIAOcupada = [
   Duration(seconds: 30),
   Duration(seconds: 45),
 ];
+
+/// Cuánto se ve el paso "Registrada" antes de que la tarjeta salga.
+const _pausaRegistrada = Duration(milliseconds: 1200);
 
 final _picker = ImagePicker();
 
@@ -74,6 +78,13 @@ class _Borrador {
   String? avisoLectura;
   bool enviando = false;
   String? error;
+
+  // Cuándo pasó cada paso (se muestra debajo de cada uno).
+  final tomada = DateTime.now();
+  DateTime? leida;
+  bool lecturaFallida = false;
+  DateTime? verificada;
+  DateTime? registrada;
 
   void dispose() {
     for (final c in [numero, destinatario, destino, origen, pedido, entrega]) {
@@ -253,12 +264,16 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
       });
     } catch (e) {
       if (!mounted || !_borradores.contains(b)) return;
-      setState(
-        () => b.avisoLectura = 'No se pudo leer la foto: completa los datos.',
-      );
+      setState(() {
+        b.avisoLectura = 'No se pudo leer la foto: completa los datos.';
+        b.lecturaFallida = true;
+      });
     } finally {
       if (mounted && _borradores.contains(b)) {
-        setState(() => b.leyendo = false);
+        setState(() {
+          b.leyendo = false;
+          b.leida = DateTime.now();
+        });
       }
     }
   }
@@ -294,6 +309,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
 
   /// Por qué este borrador no se puede registrar todavía (null = listo).
   String? _falta(_Borrador b, AppState appState) {
+    if (b.registrada != null) return 'Registrada';
     if (b.enCola || b.leyendo) return 'Leyendo…';
     final numero = b.numero.text.trim();
     if (numero.isEmpty) return 'Falta el número de guía.';
@@ -355,6 +371,16 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         ),
       ),
     );
+    // Se ve el paso "Registrada" un momento y luego salen de la lista.
+    if (ok == 0) return;
+    await Future<void>.delayed(_pausaRegistrada);
+    if (!mounted) return;
+    setState(() {
+      for (final b in _borradores.where((b) => b.registrada != null).toList()) {
+        _borradores.remove(b);
+        b.dispose();
+      }
+    });
     if (_borradores.isEmpty) Navigator.of(context).pop();
   }
 
@@ -397,11 +423,10 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
             final error = i < resultados.length
                 ? resultados[i].error
                 : 'No se pudo registrar.';
+            b.enviando = false;
             if (error == null) {
-              _borradores.remove(b);
-              b.dispose();
+              b.registrada = DateTime.now();
             } else {
-              b.enviando = false;
               b.error = error;
             }
           }
@@ -428,6 +453,15 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    // La hora de "Verificada": cuando quedó con todos los datos.
+    for (final b in _borradores) {
+      if (b.registrada != null) continue;
+      if (_falta(b, appState) == null) {
+        b.verificada ??= DateTime.now();
+      } else {
+        b.verificada = null;
+      }
+    }
     final listas = _borradores
         .where((b) => !b.enviando && _falta(b, appState) == null)
         .length;
@@ -556,7 +590,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               falta: _falta(b, appState),
               sucursalAqui: _sucursalAqui(appState)?.nombre,
               onCambio: () => setState(() {}),
-              onQuitar: b.enviando ? null : () => _quitar(b),
+              onQuitar: b.enviando || b.registrada != null
+                  ? null
+                  : () => _quitar(b),
             ),
           ],
         ],
@@ -597,10 +633,58 @@ class _TarjetaBorrador extends StatelessWidget {
     );
   }
 
+  /// Foto → Leída por IA → Verificada → Registrada.
+  List<PasoRegistro> _pasos() {
+    final b = borrador;
+    final leyendo = b.enCola || b.leyendo;
+    return [
+      PasoRegistro(
+        'Foto',
+        Icons.description_outlined,
+        EstadoPaso.hecho,
+        hora: b.tomada,
+      ),
+      PasoRegistro(
+        'Leída por IA',
+        Icons.auto_awesome_outlined,
+        b.leyendo
+            ? EstadoPaso.activo
+            : b.enCola
+            ? EstadoPaso.pendiente
+            : b.lecturaFallida
+            ? EstadoPaso.aviso
+            : EstadoPaso.hecho,
+        hora: b.leida,
+      ),
+      PasoRegistro(
+        'Verificada',
+        Icons.verified_user_outlined,
+        leyendo
+            ? EstadoPaso.pendiente
+            : b.registrada != null || falta == null
+            ? EstadoPaso.hecho
+            : EstadoPaso.aviso,
+        hora: b.verificada,
+      ),
+      PasoRegistro(
+        'Registrada',
+        Icons.cloud_done_outlined,
+        b.registrada != null
+            ? EstadoPaso.hecho
+            : b.enviando
+            ? EstadoPaso.activo
+            : b.error != null
+            ? EstadoPaso.aviso
+            : EstadoPaso.pendiente,
+        hora: b.registrada,
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = borrador;
-    final ocupado = b.enCola || b.leyendo || b.enviando;
+    final ocupado = b.enCola || b.leyendo || b.enviando || b.registrada != null;
     final rojo = Colors.red[700]!;
 
     Widget campo(TextEditingController c, String etiqueta) => Padding(
@@ -615,7 +699,10 @@ class _TarjetaBorrador extends StatelessWidget {
 
     final String estado;
     final Color colorEstado;
-    if (b.enviando) {
+    if (b.registrada != null) {
+      estado = 'Registrada · en ruta';
+      colorEstado = const Color(0xFF1D6B41);
+    } else if (b.enviando) {
       estado = 'Registrando…';
       colorEstado = Ipesa.petroleo;
     } else if (b.enCola) {
@@ -665,7 +752,7 @@ class _TarjetaBorrador extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          if (ocupado)
+                          if (b.enCola || b.leyendo || b.enviando)
                             const Padding(
                               padding: EdgeInsets.only(right: 6),
                               child: SizedBox.square(
@@ -698,6 +785,10 @@ class _TarjetaBorrador extends StatelessWidget {
                   icon: const Icon(Icons.close),
                 ),
               ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 12, 8, 4),
+              child: PasosRegistro(pasos: _pasos()),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8),

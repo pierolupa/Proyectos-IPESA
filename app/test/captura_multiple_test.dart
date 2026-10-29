@@ -169,6 +169,9 @@ void main() {
 
     await tester.tap(find.text('Registrar 2 guías'));
     await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
 
     expect(registradas, unorderedEquals(['T200', 'T201']));
     // Todas en un solo pedido al servidor.
@@ -178,6 +181,36 @@ void main() {
     expect(find.text('T100'), findsOneWidget);
     expect(find.text('T200'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Cada tarjeta muestra sus pasos hasta "Registrada"', (
+    tester,
+  ) async {
+    leidas = ['T200'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Leída por IA'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(
+        RegExp(r'Verificada: listo a las \d\d:\d\d\. Registrada: pendiente'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(find.text('Registrada · en ruta'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Registrada: listo')), findsOneWidget);
+
+    // Luego la tarjeta sale de la lista.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('T200'), findsNothing);
   });
 
   testWidgets('Una guía repetida en la misma tanda no se registra dos veces', (
@@ -219,6 +252,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Registrar 30 guías'));
+    await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(registradas, hasLength(30));
     expect(pedidosDeRegistro, 1);
@@ -270,6 +306,9 @@ void main() {
     );
     await tester.tap(find.text('Registrar guía'));
     await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
     expect(comprobantes.single, {
       'razonSocial': 'TURISMO INTERNACIONAL PALOMINO S.A.C.',
       'ruc': '20515659324',
@@ -291,6 +330,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Despachar guía'));
     await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
     expect(cuerposCorte.single.containsKey('despachoCorte'), isFalse);
     expect(registradas, ['T200']);
   });
@@ -307,6 +349,9 @@ void main() {
     await tester.tap(find.text('Galería'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Despachar guía'));
+    await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(cuerposCorte.single['despachoCorte'], 'DC-9');
   });
@@ -421,6 +466,9 @@ void main() {
 
     await tester.tap(find.text('Registrar guía'));
     await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
     expect(registradas, ['T200']);
     expect(origenes, ['Trp San Luis']);
   });
@@ -504,6 +552,9 @@ void main() {
     expect(find.text('Ubicación aproximada (± 1,8 km)'), findsNothing);
     expect(find.text('Estás en Trp San Luis'), findsOneWidget);
     await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y la tarjeta sale.
+    await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
     expect(registradas, ['T200']);
     expect(origenes, ['Trp San Luis']);
