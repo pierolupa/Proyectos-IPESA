@@ -916,7 +916,23 @@ class AppState extends ChangeNotifier {
       ? guias
       : [for (final g in guias) _entregasEnviando[g.clave] ?? g];
 
-  Future<Uint8List> fotoEntrega(Guia guia) => _api.fotoEntrega(guia);
+  /// Fotos ya pedidas, por URL (la URL cambia si la foto cambia). Así la
+  /// que se adelantó al buscar en Rastrear se abre al instante.
+  final _fotos = <String, Future<Uint8List>>{};
+
+  Future<Uint8List> fotoEntrega(Guia guia) {
+    final url = urlFotoEntrega(guia);
+    final enCache = _fotos.remove(url);
+    if (enCache != null) return _fotos[url] = enCache;
+    if (_fotos.length >= 20) _fotos.remove(_fotos.keys.first);
+    final foto = _api.fotoEntrega(guia);
+    // Si falla no se guarda: "Reintentar" la vuelve a pedir.
+    foto.catchError((Object _) {
+      _fotos.remove(url);
+      return Uint8List(0);
+    });
+    return _fotos[url] = foto;
+  }
 
   Future<Uint8List> fotoDocCliente(Guia guia) => _api.fotoDocCliente(guia);
 

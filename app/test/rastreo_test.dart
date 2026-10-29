@@ -16,6 +16,7 @@ import 'package:ipesa_guias/screens/comercial/rastreo_screen.dart';
 import 'package:ipesa_guias/services/guias_api.dart';
 import 'package:ipesa_guias/state/app_state.dart';
 import 'package:ipesa_guias/widgets/escena_ruta.dart';
+import 'package:ipesa_guias/widgets/ventana_busqueda.dart';
 
 Map<String, dynamic> _guia(
   String numero,
@@ -207,6 +208,72 @@ void main() {
     await tester.tap(find.byTooltip('Nueva búsqueda'));
     await tester.pumpAndSettle();
     expect(find.text('Rastrea tus guías'), findsOneWidget);
+  });
+
+  testWidgets('Mientras busca se ven los pasos y la foto queda lista', (
+    tester,
+  ) async {
+    final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    );
+    var fotosPedidas = 0;
+    final datos = [
+      for (final j in _datosDeHoy)
+        if (j['numero_guia'] == 'T028-130133')
+          {...j, 'foto_entrega_url': 'drive:abc'}
+        else
+          j,
+    ];
+    final client = MockClient((request) async {
+      final ruta = request.url.path;
+      if (ruta.endsWith('/foto')) {
+        fotosPedidas++;
+        return http.Response.bytes(
+          png,
+          200,
+          headers: {'content-type': 'image/png'},
+        );
+      }
+      if (ruta.endsWith('/fotos/estado')) {
+        return http.Response(jsonEncode({'configurado': true}), 200);
+      }
+      if (ruta.endsWith('/sucursales')) return http.Response('[]', 200);
+      if (ruta.endsWith('/despachos')) return http.Response('[]', 200);
+      return http.Response(jsonEncode(datos), 200);
+    });
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.cargarGuias();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: const MaterialApp(home: RastreoScreen()),
+      ),
+    );
+
+    await tester.enterText(find.widgetWithText(TextField, 'Cliente'), 'genus');
+    await tester.pump();
+    await tester.ensureVisible(find.text('Buscar'));
+    await tester.tap(find.text('Buscar'));
+    await tester.pump();
+    // Aquí todo responde al instante: ya terminó y se ve el check un
+    // momento antes de abrir la guía.
+    expect(find.byType(VentanaBusqueda), findsOneWidget);
+    expect(find.text('Despachos Ate'), findsOneWidget);
+    expect(find.text('¡Listo! Encontramos tu guía'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text('Tu guía'), findsOneWidget);
+    expect(find.text('Estamos buscando tu solicitud'), findsNothing);
+    // La foto se pidió al buscar...
+    expect(fotosPedidas, 1);
+
+    // ...y al verla no se vuelve a pedir.
+    await tester.ensureVisible(find.text('Ver foto'));
+    await tester.tap(find.text('Ver foto'));
+    await tester.pumpAndSettle();
+    expect(find.text('Foto de la entrega'), findsOneWidget);
+    expect(fotosPedidas, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Una guía que solo está en Despachos Ate también aparece', (
