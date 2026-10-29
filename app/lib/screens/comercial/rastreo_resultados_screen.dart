@@ -13,7 +13,8 @@ import '../../theme.dart';
 import '../../widgets/escena_ruta.dart';
 import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/volver_con_esc.dart';
-import 'rastreo_detalle_screen.dart';
+import 'abrir_guia.dart';
+import 'rastreo_detalle_screen.dart' show colorDespachado;
 
 final _fecha = DateFormat('dd/MM/yyyy');
 
@@ -225,22 +226,11 @@ class _Conteos extends StatelessWidget {
 /// seguimiento.
 const _colorDespacho = colorDespachado;
 
-void _abrirDespacho(BuildContext context, Despacho d) {
-  Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (_) => RastreoDetalleScreen.despacho(d)));
-}
+void _abrirDespacho(BuildContext context, Despacho d) =>
+    abrirDespachoRastreo(context, d);
 
-void _abrirGuia(BuildContext context, Guia guia) {
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => RastreoDetalleScreen(
-        numeroGuia: guia.numeroGuia,
-        fechaCreacion: guia.fechaCreacion,
-      ),
-    ),
-  );
-}
+void _abrirGuia(BuildContext context, Guia guia) =>
+    abrirGuiaRastreo(context, guia);
 
 final _hora = DateFormat('HH:mm');
 const _dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];

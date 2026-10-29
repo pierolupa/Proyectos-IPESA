@@ -10,9 +10,7 @@ import '../../theme.dart';
 import '../../widgets/marca_rpa.dart';
 import '../../widgets/actualizacion_automatica.dart';
 import '../../widgets/escena_ruta.dart';
-import '../../widgets/pasos_registro.dart';
-import '../../widgets/ventana_busqueda.dart';
-import 'rastreo_detalle_screen.dart';
+import 'abrir_guia.dart';
 import 'rastreo_resultados_screen.dart';
 
 final _fecha = DateFormat('dd/MM/yyyy');
@@ -50,12 +48,6 @@ class _RastreoScreenState extends State<RastreoScreen> {
   DateTime _desde = _inicioPorDefecto();
   DateTime _hasta = _hoy();
   bool _buscando = false;
-
-  // Pasos de la búsqueda (se ven en la ventana mientras busca).
-  bool _tareasListas = false;
-  bool _despachosListos = false;
-  bool _bajandoFoto = false;
-  bool _busquedaLista = false;
   double _altoSinTeclado = 0;
   double _anchoMedido = 0;
 
@@ -154,102 +146,41 @@ class _RastreoScreenState extends State<RastreoScreen> {
     );
     FocusScope.of(context).unfocus();
     final appState = context.read<AppState>();
-    setState(() {
-      _buscando = true;
-      _tareasListas = false;
-      _despachosListos = false;
-      _bajandoFoto = false;
-      _busquedaLista = false;
-    });
+    setState(() => _buscando = true);
     try {
       await Future.wait([
-        appState
-            .asegurarRangoTareas(_desde, _hasta)
-            .whenComplete(() => _marcar(() => _tareasListas = true)),
-        appState
-            .asegurarDespachos(_desde, _hasta)
-            .whenComplete(() => _marcar(() => _despachosListos = true)),
+        appState.asegurarRangoTareas(_desde, _hasta),
+        appState.asegurarDespachos(_desde, _hasta),
       ]);
-      if (!mounted) return;
-      final sinDatos = appState.todasLasGuias.isEmpty && appState.error != null;
-      final encontradas = filtros.aplicar(appState.todasLasGuias);
-      final despachos = filtros.aplicarDespachos(appState.despachos);
-      if (!sinDatos && encontradas.isEmpty && despachos.isEmpty) {
-        setState(
-          () => _error = _esPorDefecto
-              ? 'No encontramos ninguna guía de los últimos $_diasPorDefecto '
-                    'días con esos datos. Si es más antigua, cambia las fechas.'
-              : 'No encontramos ninguna guía con esos datos en esas fechas.',
-        );
-        return;
-      }
-      final unica = !sinDatos && encontradas.length == 1 && despachos.isEmpty
-          ? encontradas.single
-          : null;
-      // Se adelanta la foto: al tocar "Ver foto" sale al instante. Si falla
-      // o demora, la guía se abre igual y la foto se pide ahí.
-      if (unica != null && unica.tieneFotoEntrega) {
-        setState(() => _bajandoFoto = true);
-        try {
-          await appState.fotoEntrega(unica).timeout(const Duration(seconds: 8));
-        } catch (_) {}
-        if (!mounted) return;
-      }
-      setState(() {
-        _bajandoFoto = false;
-        _busquedaLista = true;
-      });
-      // Se ve el check un momento antes de abrir.
-      await Future<void>.delayed(const Duration(milliseconds: 700));
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              !sinDatos && encontradas.isEmpty && despachos.length == 1
-              ? RastreoDetalleScreen.despacho(despachos.single)
-              : unica != null
-              ? RastreoDetalleScreen(
-                  numeroGuia: unica.numeroGuia,
-                  fechaCreacion: unica.fechaCreacion,
-                )
-              : RastreoResultadosScreen(filtros: filtros),
-        ),
-      );
     } finally {
       if (mounted) setState(() => _buscando = false);
     }
-  }
-
-  void _marcar(VoidCallback cambio) {
-    if (mounted) setState(cambio);
-  }
-
-  /// Tareas → Despachos Ate → Foto → Lista (null si no está buscando).
-  List<PasoRegistro>? get _pasosBusqueda {
-    if (!_buscando) return null;
-    EstadoPaso paso(bool hecho, {bool activo = true}) => hecho
-        ? EstadoPaso.hecho
-        : activo
-        ? EstadoPaso.activo
-        : EstadoPaso.pendiente;
-    return [
-      PasoRegistro('Tareas', Icons.assignment_outlined, paso(_tareasListas)),
-      PasoRegistro(
-        'Despachos IPESA',
-        Icons.warehouse_outlined,
-        paso(_despachosListos),
-      ),
-      PasoRegistro(
-        'Foto',
-        Icons.image_outlined,
-        paso(_busquedaLista, activo: _bajandoFoto),
-      ),
-      PasoRegistro(
-        'Lista',
-        Icons.fact_check_outlined,
-        paso(_busquedaLista, activo: false),
-      ),
-    ];
+    if (!mounted) return;
+    final sinDatos = appState.todasLasGuias.isEmpty && appState.error != null;
+    final encontradas = filtros.aplicar(appState.todasLasGuias);
+    final despachos = filtros.aplicarDespachos(appState.despachos);
+    if (!sinDatos && encontradas.isEmpty && despachos.isEmpty) {
+      setState(
+        () => _error = _esPorDefecto
+            ? 'No encontramos ninguna guía de los últimos $_diasPorDefecto '
+                  'días con esos datos. Si es más antigua, cambia las fechas.'
+            : 'No encontramos ninguna guía con esos datos en esas fechas.',
+      );
+      return;
+    }
+    // Una sola: se abre con la ventana de los pasos. Varias: la lista,
+    // directo (la ventana sale al abrir una).
+    if (!sinDatos && encontradas.isEmpty && despachos.length == 1) {
+      abrirDespachoRastreo(context, despachos.single);
+    } else if (!sinDatos && encontradas.length == 1 && despachos.isEmpty) {
+      abrirGuiaRastreo(context, encontradas.single);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => RastreoResultadosScreen(filtros: filtros),
+        ),
+      );
+    }
   }
 
   void _cerrarSesion() {
@@ -272,202 +203,189 @@ class _RastreoScreenState extends State<RastreoScreen> {
       canPop: widget.desdeAdmin,
       child: Scaffold(
         backgroundColor: cieloEscena,
-        body: Stack(
-          children: [
-            ActualizacionAutomatica(
-              intervalo: const Duration(seconds: 60),
-              // Abierta desde el panel del administrador, el panel de abajo ya
-              // actualiza.
-              activa: !widget.desdeAdmin,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Alto de la pantalla sin teclado: el paisaje se queda donde
-                  // estaba y el formulario solo se desplaza.
-                  final alto =
-                      constraints.maxHeight +
-                      MediaQuery.viewInsetsOf(context).bottom;
-                  if (constraints.maxWidth != _anchoMedido) {
-                    _anchoMedido = constraints.maxWidth;
-                    _altoSinTeclado = alto;
-                  } else if (alto > _altoSinTeclado) {
-                    _altoSinTeclado = alto;
-                  }
-                  // En celulares bajitos el paisaje se achica para que todo
-                  // entre en una sola vista.
-                  final altoEscena = ancho >= 600
-                      ? 240.0
-                      : _altoSinTeclado < 720
-                      ? 164.0
-                      : 190.0;
-                  final suelo = math.max(altoEscena - 56, 112.0);
-                  final centrar = ancho >= 600;
-                  // En pantallas anchas la marca va grande en la esquina superior
-                  // izquierda; en las demás, sobre el saludo.
-                  final marcaEnEsquina = ancho >= 1000;
-                  Widget cabecera({
-                    bool conBarra = true,
-                    bool conSaludo = true,
-                    bool conMarca = true,
-                  }) => _Cabecera(
-                    saludo: saludo,
-                    conBarra: conBarra,
-                    conSaludo: conSaludo,
-                    conMarca: conMarca,
-                    onVolver: widget.desdeAdmin
-                        ? () => Navigator.of(context).pop()
-                        : null,
-                    onActualizar: appState.cargarGuias,
-                    onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
-                  );
-                  final tarjeta = _TarjetaBusqueda(
-                    guia: _guia,
-                    cliente: _cliente,
-                    pedido: _pedido,
-                    entrega: _entrega,
-                    hayFiltros: _hayFiltros,
-                    error: _error,
-                    fechaInicio: _fecha.format(_desde),
-                    fechaFin: _fecha.format(_hasta),
-                    buscando: _buscando,
-                    onFechaInicio: () => _elegirFecha(inicio: true),
-                    onFechaFin: () => _elegirFecha(inicio: false),
-                    onPorDefecto: _esPorDefecto
-                        ? null
-                        : () => _cambiarRango(_inicioPorDefecto(), _hoy()),
-                    onTexto: () => setState(() => _error = null),
-                    onLimpiar: _limpiar,
-                    onBuscar: _buscar,
-                  );
-                  return SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: _altoSinTeclado),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: EscenaRuta(alto: altoEscena),
-                          ),
-                          Padding(
-                            // Solo se reserva el suelo del paisaje: la tarjeta puede
-                            // tapar un poco de cielo.
-                            padding: EdgeInsets.only(bottom: suelo),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                SafeArea(
-                                  bottom: false,
-                                  child: Center(
+        body: ActualizacionAutomatica(
+          intervalo: const Duration(seconds: 60),
+          // Abierta desde el panel del administrador, el panel de abajo ya
+          // actualiza.
+          activa: !widget.desdeAdmin,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Alto de la pantalla sin teclado: el paisaje se queda donde
+              // estaba y el formulario solo se desplaza.
+              final alto =
+                  constraints.maxHeight +
+                  MediaQuery.viewInsetsOf(context).bottom;
+              if (constraints.maxWidth != _anchoMedido) {
+                _anchoMedido = constraints.maxWidth;
+                _altoSinTeclado = alto;
+              } else if (alto > _altoSinTeclado) {
+                _altoSinTeclado = alto;
+              }
+              // En celulares bajitos el paisaje se achica para que todo
+              // entre en una sola vista.
+              final altoEscena = ancho >= 600
+                  ? 240.0
+                  : _altoSinTeclado < 720
+                  ? 164.0
+                  : 190.0;
+              final suelo = math.max(altoEscena - 56, 112.0);
+              final centrar = ancho >= 600;
+              // En pantallas anchas la marca va grande en la esquina superior
+              // izquierda; en las demás, sobre el saludo.
+              final marcaEnEsquina = ancho >= 1000;
+              Widget cabecera({
+                bool conBarra = true,
+                bool conSaludo = true,
+                bool conMarca = true,
+              }) => _Cabecera(
+                saludo: saludo,
+                conBarra: conBarra,
+                conSaludo: conSaludo,
+                conMarca: conMarca,
+                onVolver: widget.desdeAdmin
+                    ? () => Navigator.of(context).pop()
+                    : null,
+                onActualizar: appState.cargarGuias,
+                onCerrarSesion: widget.desdeAdmin ? null : _cerrarSesion,
+              );
+              final tarjeta = _TarjetaBusqueda(
+                guia: _guia,
+                cliente: _cliente,
+                pedido: _pedido,
+                entrega: _entrega,
+                hayFiltros: _hayFiltros,
+                error: _error,
+                fechaInicio: _fecha.format(_desde),
+                fechaFin: _fecha.format(_hasta),
+                buscando: _buscando,
+                onFechaInicio: () => _elegirFecha(inicio: true),
+                onFechaFin: () => _elegirFecha(inicio: false),
+                onPorDefecto: _esPorDefecto
+                    ? null
+                    : () => _cambiarRango(_inicioPorDefecto(), _hoy()),
+                onTexto: () => setState(() => _error = null),
+                onLimpiar: _limpiar,
+                onBuscar: _buscar,
+              );
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: _altoSinTeclado),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: EscenaRuta(alto: altoEscena),
+                      ),
+                      Padding(
+                        // Solo se reserva el suelo del paisaje: la tarjeta puede
+                        // tapar un poco de cielo.
+                        padding: EdgeInsets.only(bottom: suelo),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SafeArea(
+                              bottom: false,
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 560,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                      20,
+                                      8,
+                                      8,
+                                      centrar ? 0 : (ancho < 600 ? 14 : 28),
+                                    ),
+                                    child: cabecera(conSaludo: !centrar),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            // En computadora, el saludo y la tarjeta quedan al
+                            // centro del cielo, entre la barra y el paisaje.
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: centrar
+                                    ? math.max(
+                                        0,
+                                        _altoSinTeclado -
+                                            suelo -
+                                            _altoBarra -
+                                            MediaQuery.paddingOf(context).top,
+                                      )
+                                    : 0,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (centrar)
+                                    Center(
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 560,
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            20,
+                                            0,
+                                            20,
+                                            24,
+                                          ),
+                                          child: cabecera(
+                                            conBarra: false,
+                                            conMarca: !marcaEnEsquina,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  Center(
                                     child: ConstrainedBox(
                                       constraints: const BoxConstraints(
                                         maxWidth: 560,
                                       ),
                                       child: Padding(
-                                        padding: EdgeInsets.fromLTRB(
-                                          20,
-                                          8,
-                                          8,
-                                          centrar ? 0 : (ancho < 600 ? 14 : 28),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
                                         ),
-                                        child: cabecera(conSaludo: !centrar),
+                                        child: tarjeta,
                                       ),
                                     ),
                                   ),
-                                ),
-                                // En computadora, el saludo y la tarjeta quedan al
-                                // centro del cielo, entre la barra y el paisaje.
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    minHeight: centrar
-                                        ? math.max(
-                                            0,
-                                            _altoSinTeclado -
-                                                suelo -
-                                                _altoBarra -
-                                                MediaQuery.paddingOf(context)
-                                                    .top,
-                                          )
-                                        : 0,
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (centrar)
-                                        Center(
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 560,
-                                            ),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.fromLTRB(
-                                                    20,
-                                                    0,
-                                                    20,
-                                                    24,
-                                                  ),
-                                              child: cabecera(
-                                                conBarra: false,
-                                                conMarca: !marcaEnEsquina,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      Center(
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 560,
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                            ),
-                                            child: tarjeta,
-                                          ),
-                                        ),
-                                      ),
-                                      // Más arriba que el centro exacto.
-                                      if (centrar)
-                                        SizedBox(
-                                          height: _altoSinTeclado >= 900
-                                              ? 150
-                                              : 64,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (marcaEnEsquina)
-                            Positioned(
-                              left: 48,
-                              top: MediaQuery.paddingOf(context).top + 64,
-                              child: const Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  MarcaRpa(tamano: 76, conDescripcion: true),
-                                  SizedBox(height: 14),
-                                  EsloganRpa(tamano: 20),
+                                  // Más arriba que el centro exacto.
+                                  if (centrar)
+                                    SizedBox(
+                                      height: _altoSinTeclado >= 900 ? 150 : 64,
+                                    ),
                                 ],
                               ),
                             ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            if (_pasosBusqueda case final pasos?)
-              Positioned.fill(
-                child: VentanaBusqueda(pasos: pasos, lista: _busquedaLista),
-              ),
-          ],
+                      if (marcaEnEsquina)
+                        Positioned(
+                          left: 48,
+                          top: MediaQuery.paddingOf(context).top + 64,
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MarcaRpa(tamano: 76, conDescripcion: true),
+                              SizedBox(height: 14),
+                              EsloganRpa(tamano: 20),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

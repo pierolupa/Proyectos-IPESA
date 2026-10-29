@@ -210,7 +210,7 @@ void main() {
     expect(find.text('Rastrea tus guías'), findsOneWidget);
   });
 
-  testWidgets('Mientras busca se ven los pasos y la foto queda lista', (
+  testWidgets('Al abrir la guía se ven los pasos y la foto queda lista', (
     tester,
   ) async {
     final png = base64Decode(
@@ -255,11 +255,10 @@ void main() {
     await tester.ensureVisible(find.text('Buscar'));
     await tester.tap(find.text('Buscar'));
     await tester.pump();
-    // Aquí todo responde al instante: ya terminó y se ve el check un
-    // momento antes de abrir la guía.
+    await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(VentanaBusqueda), findsOneWidget);
+    expect(find.text('Estamos buscando tu solicitud'), findsOneWidget);
     expect(find.text('Despachos IPESA'), findsOneWidget);
-    expect(find.text('¡Listo! Encontramos tu guía'), findsOneWidget);
 
     await tester.pumpAndSettle();
     expect(find.text('Tu guía'), findsOneWidget);
@@ -469,6 +468,17 @@ void main() {
     expect(find.text('T033-3455'), findsOneWidget);
     // El paisaje con el camión también está en los resultados.
     expect(find.byType(EscenaRuta), findsOneWidget);
+    // Con varias, la ventana de los pasos no sale al buscar...
+    expect(find.byType(VentanaBusqueda), findsNothing);
+
+    // ...sino al abrir una.
+    await tester.tap(find.text('T033-3455'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(VentanaBusqueda), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('Tu guía'), findsOneWidget);
+    expect(find.byType(VentanaBusqueda), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

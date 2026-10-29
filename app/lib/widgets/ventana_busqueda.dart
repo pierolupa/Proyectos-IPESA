@@ -9,7 +9,7 @@ import 'pasos_registro.dart';
 const _negro = Color(0xFF000000);
 const _selloVerde = Color(0xFF1E6B4A);
 
-/// Mientras el comercial busca en Rastrear: la pantalla se atenúa y al
+/// Al abrir una guía en Rastrear: la pantalla se atenúa y al
 /// frente una ventana con la marca IPESA, un mensaje y los pasos reales
 /// de la búsqueda (solo iconos). Solo se mueven los pasos.
 class VentanaBusqueda extends StatelessWidget {
