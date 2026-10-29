@@ -51,7 +51,7 @@ class RastreoResultadosScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final guias = filtros.conGrupo(null).aplicar(appState.guias);
+    final guias = filtros.conGrupo(null).aplicar(appState.todasLasGuias);
     final despachos = filtros
         .conGrupo(null)
         .aplicarDespachos(appState.despachos);
@@ -147,7 +147,8 @@ class RastreoResultadosScreen extends StatelessWidget {
                             despachos: despachos,
                             total: n,
                             cargando:
-                                appState.cargando && appState.guias.isEmpty,
+                                appState.cargando &&
+                                appState.todasLasGuias.isEmpty,
                             error: appState.error,
                             ancha: ancho >= 700,
                           ),

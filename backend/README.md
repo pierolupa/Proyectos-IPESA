@@ -206,16 +206,23 @@ tipo (la sucursal se detecta sola por GPS); solo se conserva para leer y
 terminar guías antiguas.
 
 Agrega además una **segunda pestaña** llamada exactamente `Usuarios`, con
-esta fila de encabezados (columnas A a D):
+esta fila de encabezados (columnas A a F):
 
 ```
-nombre | rol | pin | activo
+nombre | rol | pin | activo | provincia | encargado
 ```
 
-- `rol`: `transportista`, `administrador` o `comercial`. El equipo
-  comercial entra a la vista **Rastreo de guías** (todas las guías, solo
-  lectura, con filtros de fecha, número de guía, cliente, entrega y pedido).
-  Las cuentas se crean a mano en la hoja: la app no permite crear usuarios.
+- `rol`: `transportista`, `administrador`, `comercial` o
+  `Sub administrador`. El equipo comercial entra a la vista **Rastreo de
+  guías** (todas las guías, solo lectura, con filtros de fecha, número de
+  guía, cliente, entrega y pedido). El sub administrador ve el panel del
+  administrador (Guías, Transportistas, Dashboard, Sucursales y Rastrear),
+  pero solo con las guías de sus transportistas, y solo puede corregir
+  esas; las sucursales las ve pero no las cambia, y Rastrear busca
+  cualquier guía. Las cuentas se crean a mano en la hoja: la app no
+  permite crear usuarios.
+- `provincia` y `encargado` (de los transportistas): `encargado` es el
+  nombre exacto del sub administrador que los supervisa.
 - `pin`: cualquier texto/número que uses como clave simple (ver advertencia
   de seguridad arriba).
 - `activo`: `true`/`false` — para desactivar un usuario sin borrar la fila.

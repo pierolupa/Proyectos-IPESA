@@ -1877,3 +1877,69 @@ it('GET /foto con fechaCreacion: la foto de esa tarea, no la de la más reciente
   expect(fotos.enviarFoto).toHaveBeenCalledWith('drive:tramo1', expect.anything());
   expect(repo.buscarPorNumero).not.toHaveBeenCalled();
 });
+
+describe('Sub administrador', () => {
+  const usuarios = [
+    { nombre: 'Jairo Fabian', rol: ROLES.SUB_ADMINISTRADOR, pin: 'jairo123', activo: true },
+    { nombre: 'Almacen Viru', rol: ROLES.TRANSPORTISTA, activo: true, encargado: 'Jairo Fabian' },
+    { nombre: 'Trp Huancayo', rol: ROLES.TRANSPORTISTA, activo: false, encargado: 'jairo fabian' },
+    { nombre: 'Oscar Aspur', rol: ROLES.TRANSPORTISTA, activo: true, encargado: 'Encargado Lima' },
+  ];
+  const jairo = () => como({ nombre: 'Jairo Fabian', rol: ROLES.SUB_ADMINISTRADOR });
+  beforeEach(() => repo.listarUsuarios.mockResolvedValue(usuarios));
+
+  it('ingresa con su rol', async () => {
+    const res = await sinSesion()
+      .post('/auth/login')
+      .send({ nombre: 'Jairo Fabian', pin: 'jairo123' });
+    expect(res.status).toBe(200);
+    expect(res.body.rol).toBe(ROLES.SUB_ADMINISTRADOR);
+  });
+
+  it('su equipo: los transportistas que lo tienen de encargado (activos o no)', async () => {
+    const res = await jairo().get('/transportistas/equipo');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ nombre: 'Almacen Viru' }, { nombre: 'Trp Huancayo' }]);
+  });
+
+  it('corrige una guía de su transportista, también sin GPS', async () => {
+    const suya = guia({ numero_guia: 'T1', transportista: 'Almacen Viru' });
+    repo.listarGuias.mockResolvedValue([suya]);
+    repo.buscarPorNumero.mockResolvedValue(suya);
+    const res = await jairo()
+      .patch('/guias/T1/estado')
+      .send({ estado: ESTADOS.ENTREGADO, porAdmin: true });
+    expect(res.status).toBe(200);
+    expect(res.body.corregido_por_admin).toBe(true);
+  });
+
+  it('no toca guías de transportistas que no están a su cargo', async () => {
+    const ajena = guia({ numero_guia: 'T2', transportista: 'Oscar Aspur' });
+    repo.listarGuias.mockResolvedValue([ajena]);
+    repo.buscarPorNumero.mockResolvedValue(ajena);
+    const res = await jairo()
+      .patch('/guias/T2/estado')
+      .send({ estado: ESTADOS.ENTREGADO, porAdmin: true });
+    expect(res.status).toBe(403);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+    expect((await jairo().delete('/guias/T2')).status).toBe(403);
+  });
+
+  it('no registra guías ni cambia sucursales, archivo o regularización', async () => {
+    expect((await jairo().post('/guias').send({})).status).toBe(403);
+    expect((await jairo().post('/guias/lote').send({})).status).toBe(403);
+    expect((await jairo().put('/sucursales/Ate').send({})).status).toBe(403);
+    expect((await jairo().post('/guias/regularizar').send({})).status).toBe(403);
+    expect((await jairo().post('/fotos/migrar')).status).toBe(403);
+    expect(repo.guardarSucursal).not.toHaveBeenCalled();
+  });
+
+  it('puede consultar cualquier guía (Rastrear)', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T2', transportista: 'Oscar Aspur' }),
+    ]);
+    const res = await jairo().get('/guias');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+  });
+});

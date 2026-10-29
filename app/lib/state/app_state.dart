@@ -236,7 +236,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Guia> get guias => List.unmodifiable(_guias);
+  /// Sub administrador: los transportistas a su cargo (en minúsculas).
+  Set<String> _equipo = {};
+
+  bool get esSubAdministrador => _rolActual == RolUsuario.subAdministrador;
+
+  /// Lo que se le muestra: al sub administrador, solo las guías de sus
+  /// transportistas.
+  bool _esDeSuZona(Guia g) =>
+      !esSubAdministrador ||
+      _equipo.contains(g.transportista.trim().toLowerCase());
+
+  List<Guia> get guias => List.unmodifiable(
+    esSubAdministrador ? _guias.where(_esDeSuZona) : _guias,
+  );
+
+  /// Todas las cargadas, también las que no son de su zona: Rastrear busca
+  /// cualquier guía.
+  List<Guia> get todasLasGuias => List.unmodifiable(_guias);
   List<Sucursal> get sucursales => List.unmodifiable(_sucursales);
   RolUsuario? get rolActual => _rolActual;
 
@@ -383,6 +400,7 @@ class AppState extends ChangeNotifier {
     _api.token = null;
     _guias = [];
     _sucursales = [];
+    _equipo = {};
     error = null;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
@@ -403,6 +421,15 @@ class AppState extends ChangeNotifier {
     cargando = true;
     error = null;
     notifyListeners();
+    if (esSubAdministrador) {
+      try {
+        _equipo = {
+          for (final n in await _api.listarEquipo()) n.trim().toLowerCase(),
+        };
+      } catch (_) {
+        // Sin conexión: sigue con el equipo que tenía.
+      }
+    }
     try {
       final rango = (_desdeTareas, _hastaTareas);
       _desdeCargado ??= _pideRango ? null : _ventanaPorDefecto();
@@ -462,7 +489,8 @@ class AppState extends ChangeNotifier {
     final anteriores = {for (final g in _guias) g.clave: g};
     final cambios = <CambioGuia>[
       for (final g in nuevas)
-        if (avisables == null || avisables.contains(g.clave))
+        if ((avisables == null || avisables.contains(g.clave)) &&
+            _esDeSuZona(g))
           if (_describirCambio(anteriores[g.clave], g) case final mensaje?)
             CambioGuia(
               g,

@@ -55,6 +55,39 @@ function soloAdministrador(req, res, next) {
   res.status(403).json({ error: 'Solo el administrador puede hacer esto.' });
 }
 
+// El sub administrador hace lo mismo que el administrador con las guías,
+// pero solo con las de sus transportistas. Lo demás (registrar, sucursales,
+// archivo, regularización, fotos) no le toca. Ver solo, sí: Rastrear busca
+// cualquier guía.
+const RUTA_GUIA = /^\/guias\/([^/]+)(?:\/|$)/;
+const NO_SON_GUIAS = new Set(['lote', 'regularizar', 'transportista']);
+app.use(async (req, res, next) => {
+  if (req.usuario?.rol !== ROLES.SUB_ADMINISTRADOR || req.method === 'GET') return next();
+  try {
+    const ruta = RUTA_GUIA.exec(req.path);
+    const numero = ruta ? decodeURIComponent(ruta[1]) : null;
+    if (!numero || NO_SON_GUIAS.has(numero)) {
+      return res.status(403).json({ error: 'Tu cuenta no puede hacer esto.' });
+    }
+    const guias = (await repo.listarGuias()).filter((g) => g.numero_guia === numero);
+    if (guias.length === 0) {
+      const archivada = await buscarRegistro(numero);
+      if (archivada) guias.push(archivada);
+    }
+    // Si no existe, la ruta responde que no la encontró.
+    if (guias.length === 0) return next();
+    const equipo = await equipoDe(req.usuario.nombre);
+    if (!guias.some((g) => equipo.some((n) => mismoNombre(n, g.transportista)))) {
+      return res.status(403).json({
+        error: 'Esta guía es de un transportista que no está a tu cargo.',
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 const ESTADOS_VALIDOS = new Set(Object.values(ESTADOS));
 // "Entre sucursales" ya no se ofrece: la sucursal se detecta sola por GPS
 // (origen al registrar, destino al entregar). Las guías antiguas de ese tipo
@@ -174,6 +207,17 @@ function limpiarTransbordoAbierto(guia) {
 
 const mismoNombre = (a, b) =>
   String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+/** Los transportistas (activos o no) a cargo de este sub administrador. */
+async function equipoDe(encargado) {
+  const usuarios = await repo.listarUsuarios();
+  return usuarios
+    .filter(
+      (u) => u.rol === ROLES.TRANSPORTISTA && u.nombre.trim() && mismoNombre(u.encargado, encargado),
+    )
+    .map((u) => u.nombre.trim())
+    .sort((a, b) => a.localeCompare(b, 'es'));
+}
 
 /** Transportistas activos de la hoja "Usuarios" (solo el nombre, nunca el PIN). */
 async function transportistasActivos() {
@@ -983,7 +1027,8 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     const { numeroGuia } = req.params;
     const { estado, geo, foto, fechaCreacion } = req.body || {};
     // Solo un administrador corrige desde el panel (sin GPS ni fotos).
-    const porAdmin = Boolean(req.body?.porAdmin) && req.usuario?.rol === ROLES.ADMINISTRADOR;
+    const porAdmin = Boolean(req.body?.porAdmin)
+      && [ROLES.ADMINISTRADOR, ROLES.SUB_ADMINISTRADOR].includes(req.usuario?.rol);
 
     if (!ESTADOS_VALIDOS.has(estado)) {
       return res.status(400).json({ error: `Estado inválido: ${estado}` });
@@ -1462,6 +1507,19 @@ app.post('/guias/:numeroGuia/solicitud-eliminacion/rechazo', async (req, res, ne
 });
 
 // Los transportistas activos, para elegir a quién pasar una tarea.
+// Los transportistas a cargo del sub administrador (para mostrarle solo lo
+// suyo). A los demás, todos los activos.
+app.get('/transportistas/equipo', async (req, res, next) => {
+  try {
+    const nombres = req.usuario.rol === ROLES.SUB_ADMINISTRADOR
+      ? await equipoDe(req.usuario.nombre)
+      : await transportistasActivos();
+    res.json(nombres.map((nombre) => ({ nombre })));
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get('/transportistas', async (_req, res, next) => {
   try {
     res.json((await transportistasActivos()).map((nombre) => ({ nombre })));

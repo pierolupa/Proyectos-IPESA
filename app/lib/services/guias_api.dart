@@ -788,6 +788,18 @@ class GuiasApi {
     return Guia.fromJson(_decodeBody(res));
   }
 
+  /// Sub administrador: los transportistas a su cargo.
+  Future<List<String>> listarEquipo() async {
+    final res = await _client.get(
+      Uri.parse('$apiBaseUrl/transportistas/equipo'),
+    );
+    if (res.statusCode != 200) _lanzarError(res);
+    return [
+      for (final t in jsonDecode(res.body) as List)
+        (t as Map<String, dynamic>)['nombre'] as String,
+    ];
+  }
+
   /// Los transportistas activos (para elegir a quién pasar una tarea).
   Future<List<String>> listarTransportistas() async {
     final res = await _client.get(Uri.parse('$apiBaseUrl/transportistas'));

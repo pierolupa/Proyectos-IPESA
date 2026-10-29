@@ -130,6 +130,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // El sub administrador ve lo suyo, sin archivo, regularización ni
+    // cambios en las sucursales.
+    final subAdmin = context.select<AppState, bool>(
+      (a) => a.esSubAdministrador,
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final ancha = constraints.maxWidth >= _anchoEscritorio;
@@ -190,6 +195,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               // contenido use todo el ancho.
               drawer: ancha
                   ? _MenuAdmin(
+                      subAdmin: subAdmin,
                       seleccionado: _pestana,
                       onSeleccion: (i) => setState(() => _pestana = i),
                       onArchivo: () => Navigator.of(context).push(
@@ -206,7 +212,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       onCerrarSesion: _cerrarSesion,
                     )
                   : null,
-              floatingActionButton: _pestana == 3
+              floatingActionButton: _pestana == 3 && !subAdmin
                   ? FloatingActionButton.extended(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
@@ -291,6 +297,7 @@ class _MenuAdmin extends StatelessWidget {
   static const _iconoGris = Color(0xFF5B6B70);
 
   const _MenuAdmin({
+    required this.subAdmin,
     required this.seleccionado,
     required this.onSeleccion,
     required this.onArchivo,
@@ -299,6 +306,7 @@ class _MenuAdmin extends StatelessWidget {
     required this.onCerrarSesion,
   });
 
+  final bool subAdmin;
   final int seleccionado;
   final ValueChanged<int> onSeleccion;
   final VoidCallback onArchivo;
@@ -367,9 +375,12 @@ class _MenuAdmin extends StatelessWidget {
                   semanticLabel: 'IPESA',
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Administrador',
-                  style: TextStyle(
+                Text(
+                  subAdmin
+                      ? 'Sub administrador · '
+                            '${context.read<AppState>().transportistaActual}'
+                      : 'Administrador',
+                  style: const TextStyle(
                     fontSize: 13,
                     color: Ipesa.suaveSobrePetroleo,
                   ),
@@ -385,17 +396,23 @@ class _MenuAdmin extends StatelessWidget {
               () => onSeleccion(i),
               activo: i == seleccionado,
             ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Divider(height: 1),
-          ),
-          opcion(Icons.inventory_2_outlined, 'Archivo de guías', onArchivo),
-          opcion(Icons.fact_check_outlined, 'Regularización', onRegularizacion),
-          opcion(
-            Icons.drive_folder_upload_outlined,
-            'Pasar fotos a Drive',
-            onMigrarFotos,
-          ),
+          if (!subAdmin) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Divider(height: 1),
+            ),
+            opcion(Icons.inventory_2_outlined, 'Archivo de guías', onArchivo),
+            opcion(
+              Icons.fact_check_outlined,
+              'Regularización',
+              onRegularizacion,
+            ),
+            opcion(
+              Icons.drive_folder_upload_outlined,
+              'Pasar fotos a Drive',
+              onMigrarFotos,
+            ),
+          ],
           const Spacer(),
           const Divider(height: 1),
           ListTile(
@@ -1504,18 +1521,24 @@ class _PestanaSucursales extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sucursales = context.watch<AppState>().sucursales;
+    final appState = context.watch<AppState>();
+    final sucursales = appState.sucursales;
+    // Las sucursales las crea y cambia solo el administrador.
+    final puedeEditar = !appState.esSubAdministrador;
 
     if (sucursales.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
-            'Aún no hay sucursales. Crea una con "Nueva sucursal" y marca su '
-            'perímetro en el mapa: los traslados entre sucursales solo pueden '
-            'registrar su llegada dentro de ese perímetro.',
+            puedeEditar
+                ? 'Aún no hay sucursales. Crea una con "Nueva sucursal" y '
+                      'marca su perímetro en el mapa: los traslados entre '
+                      'sucursales solo pueden registrar su llegada dentro de '
+                      'ese perímetro.'
+                : 'Aún no hay sucursales. Las crea el administrador.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Ipesa.textoSuave),
+            style: const TextStyle(color: Ipesa.textoSuave),
           ),
         ),
       );
@@ -1541,12 +1564,16 @@ class _PestanaSucursales extends StatelessWidget {
             ),
             title: Text(s.nombre, style: Ipesa.titulo(16)),
             subtitle: Text('Perímetro de ${s.radioM.round()} m'),
-            trailing: const Icon(Icons.chevron_right, color: Ipesa.textoSuave),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SucursalEditScreen(sucursal: s),
-              ),
-            ),
+            trailing: puedeEditar
+                ? const Icon(Icons.chevron_right, color: Ipesa.textoSuave)
+                : null,
+            onTap: puedeEditar
+                ? () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SucursalEditScreen(sucursal: s),
+                    ),
+                  )
+                : null,
           ),
         );
       },

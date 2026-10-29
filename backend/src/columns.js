@@ -122,7 +122,9 @@ const TIPOS_ENTREGA = Object.freeze({
  * un mecanismo de autenticación seguro: el PIN se guarda como texto
  * plano en la hoja. Sirve solo para pruebas internas del equipo.
  */
-const USUARIOS_COLUMNS = ['nombre', 'rol', 'pin', 'activo'];
+// provincia y encargado (E, F): de los transportistas. "encargado" es el
+// nombre del sub administrador que los supervisa.
+const USUARIOS_COLUMNS = ['nombre', 'rol', 'pin', 'activo', 'provincia', 'encargado'];
 const USUARIOS_SHEET_NAME = 'Usuarios';
 const USUARIOS_DATA_RANGE = `${USUARIOS_SHEET_NAME}!A2:${String.fromCharCode(
   64 + USUARIOS_COLUMNS.length,
@@ -145,6 +147,10 @@ const ROLES = Object.freeze({
   // Equipo comercial: rastrea todas las guías (solo lectura). Se da de
   // alta a mano en la hoja "Usuarios", igual que los administradores.
   COMERCIAL: 'comercial',
+  // Como el administrador, pero solo con las guías de sus transportistas
+  // (los que lo tienen en la columna "encargado"). En la hoja puede
+  // escribirse "Sub administrador".
+  SUB_ADMINISTRADOR: 'sub_administrador',
 });
 
 module.exports = {

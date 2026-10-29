@@ -162,7 +162,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   static Widget _pantallaDeInicio(RolUsuario rol) => switch (rol) {
-    RolUsuario.administrador => const AdminDashboardScreen(),
+    RolUsuario.administrador ||
+    RolUsuario.subAdministrador => const AdminDashboardScreen(),
     RolUsuario.transportista => const TaskListScreen(),
     RolUsuario.comercial => const RastreoScreen(),
   };

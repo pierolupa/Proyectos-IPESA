@@ -22,6 +22,13 @@ describe('rowToUsuario', () => {
     const usuario = rowToUsuario(['Juan Pérez', 'transportista', '1234']);
     expect(usuario.activo).toBe(false);
   });
+
+  it('lee "Sub administrador" como sub_administrador, con provincia y encargado', () => {
+    expect(rowToUsuario(['Jairo Fabian', 'Sub administrador', 'x', 'TRUE']).rol)
+      .toBe('sub_administrador');
+    const t = rowToUsuario(['Almacen Viru', 'transportista', '1', 'TRUE', 'Viru', 'Jairo Fabian']);
+    expect(t).toMatchObject({ provincia: 'Viru', encargado: 'Jairo Fabian' });
+  });
 });
 
 describe('rowToGuia', () => {

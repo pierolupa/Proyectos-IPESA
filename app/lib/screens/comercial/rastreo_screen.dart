@@ -171,8 +171,8 @@ class _RastreoScreenState extends State<RastreoScreen> {
             .whenComplete(() => _marcar(() => _despachosListos = true)),
       ]);
       if (!mounted) return;
-      final sinDatos = appState.guias.isEmpty && appState.error != null;
-      final encontradas = filtros.aplicar(appState.guias);
+      final sinDatos = appState.todasLasGuias.isEmpty && appState.error != null;
+      final encontradas = filtros.aplicar(appState.todasLasGuias);
       final despachos = filtros.aplicarDespachos(appState.despachos);
       if (!sinDatos && encontradas.isEmpty && despachos.isEmpty) {
         setState(

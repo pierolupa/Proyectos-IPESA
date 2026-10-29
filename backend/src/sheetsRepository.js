@@ -589,6 +589,8 @@ function rowToUsuario(row) {
   usuario.activo =
     usuario.activo === true ||
     String(usuario.activo).trim().toLowerCase() === 'true';
+  // "Sub administrador" → "sub_administrador".
+  usuario.rol = String(usuario.rol).trim().toLowerCase().replace(/\s+/g, '_');
   return usuario;
 }
 
