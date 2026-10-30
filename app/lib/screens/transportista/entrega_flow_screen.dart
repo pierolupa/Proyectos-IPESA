@@ -191,10 +191,9 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
   bool get _documentoListo =>
       !_pideDocumento || _docPorCorreo || _docBytes != null;
 
-  /// Observación de la entrega: opcional, solo si hubo algo que anotar. El
-  /// campo se abre recién si la tocan, para no frenar a nadie.
+  /// Observación de la entrega: opcional, solo si hubo algo que anotar.
+  /// Vacía, la entrega se confirma igual.
   final _observacion = TextEditingController();
-  bool _conObservacion = false;
 
   @override
   void dispose() {
@@ -203,21 +202,10 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
   }
 
   Widget _seccionObservacion() {
-    if (!_conObservacion) {
-      return Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          onPressed: () => setState(() => _conObservacion = true),
-          icon: const Icon(Icons.edit_note_outlined),
-          label: const Text('Agregar observación (opcional)'),
-        ),
-      );
-    }
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 12),
       child: TextField(
         controller: _observacion,
-        autofocus: true,
         maxLength: 300,
         minLines: 2,
         maxLines: 4,
@@ -225,6 +213,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
         decoration: const InputDecoration(
           labelText: 'Observación (opcional)',
           hintText: 'Ej.: caja golpeada, faltó un bulto, recibió el vigilante',
+          alignLabelWithHint: true,
         ),
       ),
     );

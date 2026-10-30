@@ -228,11 +228,11 @@ void main() {
       tester,
     ) async {
       await abrir(tester, _guia(destinatario: 'FERRETERÍA LIMA S.A.C.'));
-      // Sin abrirla no se pide nada: se confirma igual que antes.
-      expect(find.text('Observación (opcional)'), findsNothing);
+      // El cuadro está a la vista tras la foto, sin botón; vacío no frena
+      // la entrega.
+      expect(find.text('Agregar observación (opcional)'), findsNothing);
+      expect(find.text('Observación (opcional)'), findsOneWidget);
       expect(confirmarHabilitado(tester), isTrue);
-      await tester.tap(find.text('Agregar observación (opcional)'));
-      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextField, 'Observación (opcional)'),
         'Faltó un bulto',
