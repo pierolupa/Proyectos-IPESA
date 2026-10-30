@@ -346,7 +346,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 guías encontradas'), findsOneWidget);
-    expect(find.text('1 despachada'), findsOneWidget);
+    // Sin resumen por estado arriba de la lista.
+    expect(find.text('1 despachada'), findsNothing);
     expect(find.text('Despachado'), findsOneWidget);
     await tester.tap(find.text('T033-9999'));
     await tester.pumpAndSettle();
@@ -460,10 +461,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 guías encontradas'), findsOneWidget);
-    // Sin fila de chips por estado: solo cuántas hay de cada uno.
+    // Sin chips ni resumen por estado: solo cuántas se encontraron.
     expect(find.byType(ChoiceChip), findsNothing);
-    expect(find.text('1 en ruta'), findsOneWidget);
-    expect(find.text('1 entregada'), findsOneWidget);
+    expect(find.text('1 en ruta'), findsNothing);
+    expect(find.text('1 entregada'), findsNothing);
     expect(find.text('T028-130133'), findsOneWidget);
     expect(find.text('T033-3455'), findsOneWidget);
     // El paisaje con el camión también está en los resultados.

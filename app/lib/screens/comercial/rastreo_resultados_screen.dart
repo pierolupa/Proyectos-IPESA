@@ -134,11 +134,6 @@ class RastreoResultadosScreen extends StatelessWidget {
                                     color: Ipesa.textoSuave,
                                   ),
                                 ),
-                              const SizedBox(height: 4),
-                              _Conteos(
-                                guias: guias,
-                                despachos: despachos.length,
-                              ),
                             ],
                           ),
                         ),
@@ -163,61 +158,6 @@ class RastreoResultadosScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-String _conteo(GrupoEstado grupo, int n) => switch (grupo) {
-  GrupoEstado.enRuta => '$n en ruta',
-  GrupoEstado.trasbordo => '$n en trasbordo',
-  GrupoEstado.entregado => n == 1 ? '1 entregada' : '$n entregadas',
-  GrupoEstado.rechazado => n == 1 ? '1 rechazada' : '$n rechazadas',
-};
-
-EstadoGuia _estadoDe(GrupoEstado g) => switch (g) {
-  GrupoEstado.enRuta => EstadoGuia.enRuta,
-  GrupoEstado.trasbordo => EstadoGuia.enProcesoTrasbordo,
-  GrupoEstado.entregado => EstadoGuia.entregado,
-  GrupoEstado.rechazado => EstadoGuia.rechazado,
-};
-
-/// "2 en ruta · 1 entregada", cada parte en el color de su estado; solo
-/// los estados que tienen guías.
-class _Conteos extends StatelessWidget {
-  const _Conteos({required this.guias, this.despachos = 0});
-
-  final List<Guia> guias;
-
-  /// Cuántas están solo en la hoja Despachos Ate.
-  final int despachos;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 2,
-      children: [
-        for (final g in GrupoEstado.values)
-          if (guias.where((x) => x.estado.grupo == g).length case final n
-              when n > 0)
-            Text(
-              _conteo(g, n),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _estadoDe(g).color,
-              ),
-            ),
-        if (despachos > 0)
-          Text(
-            despachos == 1 ? '1 despachada' : '$despachos despachadas',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: _colorDespacho,
-            ),
-          ),
-      ],
     );
   }
 }
