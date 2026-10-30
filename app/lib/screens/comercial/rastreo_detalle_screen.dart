@@ -12,6 +12,7 @@ import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/escena_ruta.dart';
+import '../../widgets/aviso_observacion.dart';
 import '../../widgets/foto_entrega.dart';
 import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/volver_con_esc.dart';
@@ -291,7 +292,12 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
   }
 
   /// El sello que cae sobre el talón, con su animación.
-  Widget _selloAnimado(String texto, String fecha, Color color) => Center(
+  Widget _selloAnimado(
+    String texto,
+    String fecha,
+    Color color, {
+    String? detalle,
+  }) => Center(
     child: FadeTransition(
       opacity: _opacidadSello,
       child: ScaleTransition(
@@ -305,7 +311,12 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
             fit: BoxFit.scaleDown,
             child: Transform.rotate(
               angle: -9 * math.pi / 180,
-              child: _Sello(texto: texto, fecha: fecha, color: color),
+              child: _Sello(
+                texto: texto,
+                fecha: fecha,
+                color: color,
+                detalle: detalle,
+              ),
             ),
           ),
         ),
@@ -396,6 +407,8 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
         ? 'Agencia'
         : lugarDeEntrega(context, guia);
     final color = guia.enCustodia ? colorCustodia : guia.estado.color;
+    // Lo que anotó el transportista al entregar: "Entregado con observación".
+    final conObservacion = guia.estado.esFinal && guia.tieneObservacionEntrega;
 
     final datos = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -480,7 +493,16 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _selloAnimado(sello, fechaSello, color),
+          _selloAnimado(
+            sello,
+            fechaSello,
+            color,
+            detalle: conObservacion ? 'CON OBSERVACIÓN' : null,
+          ),
+          if (conObservacion) ...[
+            const SizedBox(height: 14),
+            AvisoObservacion(texto: guia.observacionEntrega),
+          ],
           if (guia.enCustodia) ...[
             const SizedBox(height: 14),
             Text(
@@ -852,11 +874,19 @@ class _LineaPunteada extends CustomPainter {
 
 /// Sello de goma: solo el borde y el texto, sin fondo.
 class _Sello extends StatelessWidget {
-  const _Sello({required this.texto, required this.fecha, required this.color});
+  const _Sello({
+    required this.texto,
+    required this.fecha,
+    required this.color,
+    this.detalle,
+  });
 
   final String texto;
   final String fecha;
   final Color color;
+
+  /// Una línea más bajo el estado ("CON OBSERVACIÓN").
+  final String? detalle;
 
   @override
   Widget build(BuildContext context) {
@@ -879,6 +909,17 @@ class _Sello extends StatelessWidget {
               color: color,
             ),
           ),
+          if (detalle case final d?)
+            Text(
+              d,
+              style: TextStyle(
+                fontFamily: Ipesa.fuenteTitulos,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2,
+                color: color,
+              ),
+            ),
           Text(
             fecha,
             style: TextStyle(

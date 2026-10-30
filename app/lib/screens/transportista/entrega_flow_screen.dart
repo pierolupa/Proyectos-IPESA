@@ -191,6 +191,45 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
   bool get _documentoListo =>
       !_pideDocumento || _docPorCorreo || _docBytes != null;
 
+  /// Observación de la entrega: opcional, solo si hubo algo que anotar. El
+  /// campo se abre recién si la tocan, para no frenar a nadie.
+  final _observacion = TextEditingController();
+  bool _conObservacion = false;
+
+  @override
+  void dispose() {
+    _observacion.dispose();
+    super.dispose();
+  }
+
+  Widget _seccionObservacion() {
+    if (!_conObservacion) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _conObservacion = true),
+          icon: const Icon(Icons.edit_note_outlined),
+          label: const Text('Agregar observación (opcional)'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: TextField(
+        controller: _observacion,
+        autofocus: true,
+        maxLength: 300,
+        minLines: 2,
+        maxLines: 4,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Observación (opcional)',
+          hintText: 'Ej.: caja golpeada, faltó un bulto, recibió el vigilante',
+        ),
+      ),
+    );
+  }
+
   Future<void> _verificarPerimetro(Sucursal sucursal) async {
     setState(() => _verificandoPerimetro = true);
     try {
@@ -485,6 +524,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
           foto: _fotoBytes,
           comprobante: comprobante,
           docCliente: docCliente,
+          observacion: _observacion.text,
         );
         if (_lectura?.comprobante case final c?) {
           mensaje = 'Entrega en agencia registrada · ${c.resumen}';
@@ -498,6 +538,7 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
           foto: nuevoEstado.esFinal ? _fotoBytes : null,
           fechaCreacion: g.fechaCreacion,
           comprobante: comprobante,
+          observacion: nuevoEstado.esFinal ? _observacion.text : '',
         );
         if (!context.mounted) return;
         final actualizada = appState.guiaActual(g);
@@ -771,6 +812,8 @@ class _EntregaFlowScreenState extends State<EntregaFlowScreen>
                 ),
             ],
             if (_pideDocumento) _seccionDocumento(_documento!, puedeFoto),
+            if (_fotoSimulada && g.tipoEntrega != TipoEntrega.entreSucursales)
+              _seccionObservacion(),
           ],
           const SizedBox(height: 24),
           FilledButton.icon(

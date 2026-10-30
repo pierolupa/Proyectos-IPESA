@@ -825,6 +825,7 @@ class AppState extends ChangeNotifier {
     DateTime? fechaCreacion,
     LecturaComprobante? comprobante,
     DocClienteEntrega? docCliente,
+    String observacion = '',
   }) async {
     final (actualizada, avisoFoto) = await _api.actualizarEstado(
       numeroGuia,
@@ -836,6 +837,7 @@ class AppState extends ChangeNotifier {
       fechaCreacion: fechaCreacion,
       comprobante: comprobante,
       docCliente: docCliente,
+      observacion: observacion,
     );
     final index = _indiceDeRegistro(numeroGuia, fechaCreacion);
     if (index != -1) {
@@ -876,18 +878,31 @@ class AppState extends ChangeNotifier {
     Uint8List? foto,
     LecturaComprobante? comprobante,
     DocClienteEntrega? docCliente,
+    String observacion = '',
   }) {
     final comp = comprobante?.$1;
     final local = guia.copyWith(
       estado: nuevoEstado,
       tipoEntrega: comp != null ? TipoEntrega.agencia : null,
       fechaActualizacion: DateTime.now().toUtc(),
+      observacionEntrega: observacion.trim().isEmpty
+          ? null
+          : observacion.trim(),
     );
     _entregasEnviando[guia.clave] = local;
     final i = _guias.indexWhere((g) => g.clave == guia.clave);
     if (i != -1) _guias[i] = local;
     notifyListeners();
-    _enviarEntrega(guia, local, lat, lng, foto, comprobante, docCliente);
+    _enviarEntrega(
+      guia,
+      local,
+      lat,
+      lng,
+      foto,
+      comprobante,
+      docCliente,
+      observacion,
+    );
   }
 
   Future<void> _enviarEntrega(
@@ -898,6 +913,7 @@ class AppState extends ChangeNotifier {
     Uint8List? foto,
     LecturaComprobante? comprobante,
     DocClienteEntrega? docCliente,
+    String observacion,
   ) async {
     Object? error;
     for (var intento = 0; ; intento++) {
@@ -911,6 +927,7 @@ class AppState extends ChangeNotifier {
           fechaCreacion: original.fechaCreacion,
           comprobante: comprobante,
           docCliente: docCliente,
+          observacion: observacion,
         );
         _entregasEnviando.remove(original.clave);
         final i = _guias.indexWhere((g) => g.clave == original.clave);

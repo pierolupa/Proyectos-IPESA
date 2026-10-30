@@ -159,7 +159,7 @@ describe('columnas por posición (hoja de guías)', () => {
         desde: 19,
         valores: [
           ...COLUMNS.slice(19),
-          ...Array(MOVIDOS.length - COLUMNS.length).fill(''),
+          ...Array(Math.max(0, MOVIDOS.length - COLUMNS.length)).fill(''),
         ],
       });
     });

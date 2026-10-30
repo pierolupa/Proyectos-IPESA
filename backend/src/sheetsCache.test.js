@@ -116,7 +116,7 @@ describe('orden de la hoja de guías', () => {
     });
     await repo.listarGuias({ fresco: true });
     expect(escrito()).toEqual([
-      { range: 'Guias!T1:AE1', values: [COLUMNS.slice(19)] },
+      { range: 'Guias!T1:AF1', values: [COLUMNS.slice(19)] },
     ]);
   });
 
@@ -128,7 +128,7 @@ describe('orden de la hoja de guías', () => {
     await repo.listarGuias({ fresco: true });
     expect(escrito()).toEqual([
       {
-        range: 'Guias!V1:AE1',
+        range: 'Guias!V1:AF1',
         values: [COLUMNS.slice(21)],
       },
     ]);
@@ -154,11 +154,11 @@ describe('orden de la hoja de guías', () => {
     expect(guia.foto_entrega_url).toBe('drive:foto');
     expect(guia.numero_pedido).toBe('P-2');
     const [datos, encabezados] = escrito();
-    expect(datos.range).toBe('Guias!A2:AE2');
+    expect(datos.range).toBe('Guias!A2:AF2');
     expect(datos.values[0][17]).toBe('drive:foto'); // R
-    expect(datos.values[0].slice(19)).toEqual(Array(12).fill(''));
+    expect(datos.values[0].slice(19)).toEqual(Array(COLUMNS.length - 19).fill(''));
     expect(encabezados).toEqual({
-      range: 'Guias!T1:AE1',
+      range: 'Guias!T1:AF1',
       values: [COLUMNS.slice(19)],
     });
   });

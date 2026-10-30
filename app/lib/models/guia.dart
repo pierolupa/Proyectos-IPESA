@@ -73,6 +73,9 @@ class Guia {
   /// DocumentoCliente): dónde quedó, o 'correo' si no lo dieron en físico.
   final String docCliente;
 
+  /// Lo que el transportista anotó al entregar (opcional; vacío si nada).
+  final String observacionEntrega;
+
   const Guia({
     required this.numeroGuia,
     required this.estado,
@@ -105,6 +108,7 @@ class Guia {
     this.agenciaComprobante = '',
     this.custodiaDesde,
     this.docCliente = '',
+    this.observacionEntrega = '',
   }) : fechaCreacion = fechaCreacion ?? fechaActualizacion;
 
   /// En custodia mientras sigue en ruta: al entregarla, el dato queda solo
@@ -119,6 +123,8 @@ class Guia {
   bool get tieneFotoDocCliente => docCliente.isNotEmpty && !docClientePorCorreo;
 
   bool get enDespachoCorte => despachoCorte.isNotEmpty;
+
+  bool get tieneObservacionEntrega => observacionEntrega.isNotEmpty;
 
   bool get tieneComprobanteAgencia =>
       agenciaRazonSocial.isNotEmpty ||
@@ -209,6 +215,7 @@ class Guia {
       agenciaComprobante: '${json['agencia_comprobante'] ?? ''}'.trim(),
       custodiaDesde: DateTime.tryParse('${json['custodia_desde'] ?? ''}'),
       docCliente: '${json['doc_cliente'] ?? ''}'.trim(),
+      observacionEntrega: '${json['observacion_entrega'] ?? ''}'.trim(),
     );
   }
 
@@ -232,6 +239,7 @@ class Guia {
     bool? corregidoPorAdmin,
     String? numeroPedido,
     String? numeroEntrega,
+    String? observacionEntrega,
   }) {
     return Guia(
       numeroGuia: numeroGuia ?? this.numeroGuia,
@@ -265,6 +273,7 @@ class Guia {
       agenciaComprobante: agenciaComprobante,
       custodiaDesde: custodiaDesde,
       docCliente: docCliente,
+      observacionEntrega: observacionEntrega ?? this.observacionEntrega,
     );
   }
 }

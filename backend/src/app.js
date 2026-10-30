@@ -1026,6 +1026,11 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const { estado, geo, foto, fechaCreacion } = req.body || {};
+    // Lo que el transportista anotó al entregar (opcional).
+    const observacion = String(req.body?.observacion ?? '').trim();
+    if (observacion.length > 300) {
+      return res.status(400).json({ error: 'La observación es muy larga (máx. 300 caracteres).' });
+    }
     // Solo un administrador corrige desde el panel (sin GPS ni fotos).
     const porAdmin = Boolean(req.body?.porAdmin)
       && [ROLES.ADMINISTRADOR, ROLES.SUB_ADMINISTRADOR].includes(req.usuario?.rol);
@@ -1128,6 +1133,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     if (porAdmin) {
       guia.corregido_por_admin = true;
     } else if (cierra) {
+      if (observacion) guia.observacion_entrega = observacion;
       guia.cierre_lat = geo.lat;
       guia.cierre_lng = geo.lng;
       guia.fecha_cierre = guia.fecha_actualizacion;

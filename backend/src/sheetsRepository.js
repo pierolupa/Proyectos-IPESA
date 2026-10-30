@@ -68,8 +68,8 @@ function requireSheetId() {
  * Columnas de la hoja de guías: posición fija, la del arreglo COLUMNS.
  * A..S son las columnas de siempre y se leen por posición, se llame como se
  * llame su encabezado ("Nro Pedido", "Foto"...): esos encabezados nunca se
- * tocan. Las que se agregaron después van a continuación de la S (T..AE), y
- * el servidor solo escribe esos encabezados. Lo que haya después de la AE
+ * tocan. Las que se agregaron después van a continuación de la S (T..AF), y
+ * el servidor solo escribe esos encabezados. Lo que haya después de la AF
  * se reescribe tal cual estaba.
  */
 const ULTIMA_COLUMNA = 'ZZ';
@@ -218,6 +218,7 @@ function esDeSuColumna(fila, i) {
     case 'agencia_comprobante':
     case 'custodia_desde':
     case 'doc_cliente':
+    case 'observacion_entrega':
       return false;
     default:
       return true;

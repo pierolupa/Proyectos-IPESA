@@ -224,6 +224,24 @@ void main() {
       expect(cambios.single.containsKey('docPorCorreo'), isFalse);
     });
 
+    testWidgets('La observación es opcional y se envía solo si la escriben', (
+      tester,
+    ) async {
+      await abrir(tester, _guia(destinatario: 'FERRETERÍA LIMA S.A.C.'));
+      // Sin abrirla no se pide nada: se confirma igual que antes.
+      expect(find.text('Observación (opcional)'), findsNothing);
+      expect(confirmarHabilitado(tester), isTrue);
+      await tester.tap(find.text('Agregar observación (opcional)'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Observación (opcional)'),
+        'Faltó un bulto',
+      );
+      await tester.tap(find.text('Confirmar'));
+      await tester.pumpAndSettle();
+      expect(cambios.single['observacion'], 'Faltó un bulto');
+    });
+
     testWidgets('Otro cliente no pide documento', (tester) async {
       await abrir(tester, _guia(destinatario: 'FERRETERÍA LIMA S.A.C.'));
       expect(find.textContaining('MIGO'), findsNothing);
@@ -267,5 +285,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Foto del MIGO'), findsOneWidget);
     expect(find.text('El cliente envía el MIGO por correo'), findsOneWidget);
+  });
+
+  testWidgets('En Rastrear: "Entregado con observación" y lo que anotó', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'sesion_nombre': 'Ana',
+      'sesion_rol': 'comercial',
+    });
+    final json = {
+      ..._guia(destinatario: 'FERRETERÍA LIMA S.A.C.', estado: 'entregado'),
+      'observacion_entrega': 'Recibió el vigilante',
+    };
+    final client = MockClient(
+      (request) async => request.url.path.endsWith('/sucursales')
+          ? http.Response('[]', 200)
+          : http.Response(jsonEncode([json]), 200),
+    );
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.restaurarSesion();
+    await appState.cargarGuias();
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: appState,
+        child: const MaterialApp(
+          home: RastreoDetalleScreen(numeroGuia: 'T028-133950'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ENTREGADO'), findsOneWidget);
+    expect(find.text('CON OBSERVACIÓN'), findsOneWidget);
+    expect(find.textContaining('Recibió el vigilante'), findsOneWidget);
   });
 }

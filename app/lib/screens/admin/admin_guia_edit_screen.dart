@@ -11,6 +11,7 @@ import '../../models/tipo_entrega.dart';
 import '../../services/guias_api.dart';
 import '../../state/app_state.dart';
 import '../../widgets/acciones_tarea.dart';
+import '../../widgets/aviso_observacion.dart';
 import '../../widgets/aviso_rechazo.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/foto_entrega.dart';
@@ -223,6 +224,10 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
           if (guia.estado == EstadoGuia.rechazado) ...[
             const SizedBox(height: 24),
             AvisoRechazo(guia: guia),
+          ],
+          if (guia.estado.esFinal && guia.tieneObservacionEntrega) ...[
+            const SizedBox(height: 24),
+            AvisoObservacion(texto: guia.observacionEntrega),
           ],
           const SizedBox(height: 24),
           FotoEntrega(

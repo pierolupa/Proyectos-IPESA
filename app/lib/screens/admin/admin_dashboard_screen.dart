@@ -1109,6 +1109,20 @@ class TarjetaGuiaAdmin extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (guia.estado.esFinal && guia.tieneObservacionEntrega)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Con observación: ${guia.observacionEntrega}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8A4F00),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

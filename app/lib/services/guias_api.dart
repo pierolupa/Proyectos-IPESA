@@ -617,6 +617,7 @@ class GuiasApi {
     DateTime? fechaCreacion,
     LecturaComprobante? comprobante,
     DocClienteEntrega? docCliente,
+    String observacion = '',
   }) async {
     final fotoDoc = docCliente?.foto;
     final res = await _client.patch(
@@ -636,6 +637,7 @@ class GuiasApi {
           'docPorCorreo': true
         else if (fotoDoc != null)
           'docCliente': _fotoJson(fotoDoc),
+        if (observacion.trim().isNotEmpty) 'observacion': observacion.trim(),
       }),
     );
     if (res.statusCode != 200) _lanzarError(res);

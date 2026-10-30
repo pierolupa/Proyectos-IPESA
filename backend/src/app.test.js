@@ -353,6 +353,35 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     expect(res.body.geo_lat).toBe(-12.05);
   });
 
+  it('guarda la observación de la entrega si la hay (opcional)', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const conObs = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({
+        estado: ESTADOS.ENTREGADO,
+        geo: { lat: -12.1, lng: -77.02 },
+        observacion: '  Caja con la esquina golpeada  ',
+      });
+    expect(conObs.status).toBe(200);
+    expect(conObs.body.observacion_entrega).toBe('Caja con la esquina golpeada');
+
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const sinObs = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(sinObs.status).toBe(200);
+    expect(sinObs.body.observacion_entrega).toBeUndefined();
+
+    const larga = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({
+        estado: ESTADOS.ENTREGADO,
+        geo: { lat: -12.1, lng: -77.02 },
+        observacion: 'x'.repeat(301),
+      });
+    expect(larga.status).toBe(400);
+  });
+
   it('con la fecha de creación actualiza ese registro, no el más reciente del número', async () => {
     const deDiego = guia({ transportista: 'Diego', fecha_creacion: '2026-10-01T14:10:00.000Z', _row: 2 });
     const deJuan = guia({ fecha_creacion: '2026-10-01T14:30:00.000Z', _row: 3 });
