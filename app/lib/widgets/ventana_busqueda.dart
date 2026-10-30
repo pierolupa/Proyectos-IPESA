@@ -22,62 +22,67 @@ class VentanaBusqueda extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Bloquea los toques mientras busca.
-        const ModalBarrier(dismissible: false),
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-          child: ColoredBox(color: cieloEscena.withValues(alpha: 0.72)),
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x400F4C5C),
-                      blurRadius: 40,
-                      offset: Offset(0, 18),
-                      spreadRadius: -12,
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 22, 16, 14),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _Sello(),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: _Mensaje(
-                          key: ValueKey(lista),
-                          titulo: lista
-                              ? '¡Listo! Encontramos tu guía'
-                              : 'Estamos buscando tu solicitud',
-                          detalle: lista
-                              ? 'Abriéndola…'
-                              : 'Esto toma solo unos segundos',
-                        ),
+    // Material transparente: en un diálogo no hay otro debajo y, sin él, el
+    // texto sale con el subrayado amarillo de Flutter.
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Bloquea los toques mientras busca.
+          const ModalBarrier(dismissible: false),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+            child: ColoredBox(color: cieloEscena.withValues(alpha: 0.72)),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x400F4C5C),
+                        blurRadius: 40,
+                        offset: Offset(0, 18),
+                        spreadRadius: -12,
                       ),
-                      const SizedBox(height: 14),
-                      PasosRegistro(pasos: pasos),
                     ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 14),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const _Sello(),
+                        const SizedBox(height: 12),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: _Mensaje(
+                            key: ValueKey(lista),
+                            titulo: lista
+                                ? '¡Listo! Encontramos tu guía'
+                                : 'Estamos buscando tu solicitud',
+                            detalle: lista
+                                ? 'Abriéndola…'
+                                : 'Esto toma solo unos segundos',
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        PasosRegistro(pasos: pasos),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

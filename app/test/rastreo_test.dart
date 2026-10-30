@@ -259,6 +259,11 @@ void main() {
     expect(find.byType(VentanaBusqueda), findsOneWidget);
     expect(find.text('Estamos buscando tu solicitud'), findsOneWidget);
     expect(find.text('Despachos IPESA'), findsOneWidget);
+    // Sin el subrayado amarillo de Flutter (texto fuera de un Material).
+    final estilo = DefaultTextStyle.of(
+      tester.element(find.text('Esto toma solo unos segundos')),
+    ).style;
+    expect(estilo.decoration, isNot(TextDecoration.underline));
 
     await tester.pumpAndSettle();
     expect(find.text('Tu guía'), findsOneWidget);
