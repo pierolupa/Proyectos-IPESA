@@ -540,6 +540,49 @@ describe('POST /auth/login', () => {
       .send({ nombre: 'Juan Pérez', pin: '0000' });
     expect(res.status).toBe(401);
   });
+
+  it('el usuario comercial (lo usan varios asesores) nunca se bloquea', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      usuario({ nombre: 'Comercial', rol: ROLES.COMERCIAL, pin: '5678' }),
+    ]);
+    for (let i = 0; i < auth.MAX_FALLOS_IP + 5; i++) {
+      const res = await sinSesion()
+        .post('/auth/login')
+        .send({ nombre: 'Comercial', pin: '0000' });
+      expect(res.status).toBe(401);
+    }
+    const res = await sinSesion()
+      .post('/auth/login')
+      .send({ nombre: 'Comercial', pin: '5678' });
+    expect(res.status).toBe(200);
+  });
+
+  it('una conexión que probó muchos nombres queda frenada, salvo para comercial', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      usuario(),
+      usuario({ nombre: 'Comercial', rol: ROLES.COMERCIAL, pin: '5678' }),
+    ]);
+    const ip = { 'x-forwarded-for': '9.9.9.9' };
+    for (let i = 0; i < auth.MAX_FALLOS_IP; i++) {
+      await sinSesion().post('/auth/login').set(ip).send({ nombre: `Nadie ${i}`, pin: '0000' });
+    }
+    const juan = await sinSesion()
+      .post('/auth/login')
+      .set(ip)
+      .send({ nombre: 'Juan Pérez', pin: '1234' });
+    expect(juan.status).toBe(429);
+    const comercial = await sinSesion()
+      .post('/auth/login')
+      .set(ip)
+      .send({ nombre: 'Comercial', pin: '5678' });
+    expect(comercial.status).toBe(200);
+    // Otra conexión entra normal.
+    const otra = await sinSesion()
+      .post('/auth/login')
+      .set({ 'x-forwarded-for': '8.8.8.8' })
+      .send({ nombre: 'Juan Pérez', pin: '1234' });
+    expect(otra.status).toBe(200);
+  });
 });
 
 describe('Sesiones y permisos', () => {

@@ -358,19 +358,25 @@ app.post('/auth/login', async (req, res, next) => {
     }
     // La IP real del que se conecta (Vercel la pone primera).
     const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
-    if (auth.loginBloqueado(nombre) || auth.ipBloqueada(ip)) {
-      return res.status(429).json({
+    const demasiados = () =>
+      res.status(429).json({
         error: 'Demasiados intentos con un PIN equivocado. Espera 15 minutos.',
       });
-    }
+    // (El usuario comercial nunca queda bloqueado por nombre: no se le cuentan.)
+    if (auth.loginBloqueado(nombre)) return demasiados();
 
     const usuarios = await repo.listarUsuarios();
     const usuario = usuarios.find(
       (u) => u.nombre.trim().toLowerCase() === String(nombre).trim().toLowerCase(),
     );
+    // El usuario comercial lo abren varios asesores a la vez y solo consulta
+    // (Rastrear): a él no se le pone freno de intentos, ni por nombre ni por
+    // conexión, para que un error de uno no deje fuera a los demás.
+    const esComercial = usuario?.rol === ROLES.COMERCIAL;
+    if (!esComercial && auth.ipBloqueada(ip)) return demasiados();
 
     if (!usuario || !usuario.activo || String(usuario.pin) !== String(pin)) {
-      auth.registrarFallo(nombre, Date.now(), ip);
+      if (!esComercial) auth.registrarFallo(nombre, Date.now(), ip);
       return res.status(401).json({ error: 'Nombre o PIN incorrecto.' });
     }
     if (!ROLES_VALIDOS.has(usuario.rol)) {
