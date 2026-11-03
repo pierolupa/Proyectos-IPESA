@@ -24,6 +24,13 @@ const { despachosNuevos } = require('./despachos');
 const auth = require('./auth');
 
 const app = express();
+// Sin decir qué servidor es, y sin que el navegador adivine el tipo de lo
+// que se le manda.
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  next();
+});
 app.use(cors({ origin: true }));
 // Límite alto: el body incluye la foto en base64 (/ocr/leer-guia, y la foto
 // de la entrega al cliente que se guarda). Vercel corta en 4,5 MB.
@@ -53,6 +60,44 @@ app.use((req, res, next) => {
 function soloAdministrador(req, res, next) {
   if (req.usuario?.rol === ROLES.ADMINISTRADOR) return next();
   res.status(403).json({ error: 'Solo el administrador puede hacer esto.' });
+}
+
+// Administrador y sub administrador (al sub administrador, el middleware de
+// abajo ya lo limita a las guías de sus transportistas).
+const ROLES_ADMIN = new Set([ROLES.ADMINISTRADOR, ROLES.SUB_ADMINISTRADOR]);
+const esAdmin = (req) => ROLES_ADMIN.has(req.usuario?.rol);
+const esTransportista = (req) => req.usuario?.rol === ROLES.TRANSPORTISTA;
+
+/** Para las rutas de corrección del panel (administrador o sub administrador). */
+function soloAdministradores(req, res, next) {
+  if (esAdmin(req)) return next();
+  res.status(403).json({ error: 'Solo el administrador puede hacer esto.' });
+}
+
+/**
+ * ¿Puede cambiar esta guía? El transportista, solo las suyas: el nombre
+ * sale de su sesión, nunca de lo que mande la app.
+ */
+function puedeTocar(req, guia) {
+  if (esAdmin(req)) return true;
+  return esTransportista(req) && mismoNombre(guia.transportista, req.usuario.nombre);
+}
+
+const NO_ES_TUYA = { error: 'Esta guía no es tuya.' };
+
+/** Las fotos: el transportista ve las de sus guías; los demás roles, todas. */
+function puedeVer(req, guia) {
+  if (!esTransportista(req)) return true;
+  const yo = req.usuario.nombre;
+  return mismoNombre(guia.transportista, yo) || mismoNombre(guia.transbordo_de, yo);
+}
+
+/** Las guías que registra un transportista van a su nombre (el de la sesión). */
+function aSuNombre(req, guias) {
+  if (!esTransportista(req) || !Array.isArray(guias)) return;
+  for (const g of guias) {
+    if (g && typeof g === 'object') g.transportista = req.usuario.nombre;
+  }
 }
 
 // El sub administrador hace lo mismo que el administrador con las guías,
@@ -311,7 +356,9 @@ app.post('/auth/login', async (req, res, next) => {
     if (!nombre || !pin) {
       return res.status(400).json({ error: 'Faltan nombre y/o pin.' });
     }
-    if (auth.loginBloqueado(nombre)) {
+    // La IP real del que se conecta (Vercel la pone primera).
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    if (auth.loginBloqueado(nombre) || auth.ipBloqueada(ip)) {
       return res.status(429).json({
         error: 'Demasiados intentos con un PIN equivocado. Espera 15 minutos.',
       });
@@ -323,7 +370,7 @@ app.post('/auth/login', async (req, res, next) => {
     );
 
     if (!usuario || !usuario.activo || String(usuario.pin) !== String(pin)) {
-      auth.registrarFallo(nombre);
+      auth.registrarFallo(nombre, Date.now(), ip);
       return res.status(401).json({ error: 'Nombre o PIN incorrecto.' });
     }
     if (!ROLES_VALIDOS.has(usuario.rol)) {
@@ -444,6 +491,17 @@ app.get('/guias', async (req, res, next) => {
         return (inicio === null || t >= inicio) && (fin === null || t < fin);
       });
     }
+    // Un transportista solo recibe sus guías, las que le quieren pasar y las
+    // que él pasó a otro (para ver si las aceptaron).
+    if (esTransportista(req)) {
+      const yo = req.usuario.nombre;
+      guias = guias.filter(
+        (g) =>
+          mismoNombre(g.transportista, yo)
+          || mismoNombre(g.transbordo_a, yo)
+          || mismoNombre(g.transbordo_de, yo),
+      );
+    }
     res.json(guias.map(sinCamposInternos));
   } catch (err) {
     next(err);
@@ -532,6 +590,9 @@ app.get('/cron/archivo', async (req, res, next) => {
 // Solo lectura; requiere `desde` (ISO) y acepta `hasta` (exclusivo).
 app.get('/despachos', async (req, res, next) => {
   try {
+    if (esTransportista(req)) {
+      return res.status(403).json({ error: 'Tu cuenta no puede consultar los despachos.' });
+    }
     const desde = Date.parse(req.query.desde);
     const hasta = req.query.hasta ? Date.parse(req.query.hasta) : null;
     if (!Number.isFinite(desde) || Number.isNaN(hasta)) {
@@ -827,6 +888,10 @@ async function sucursalesParaRegistro() {
 // GPS obligatorio (ARCHITECTURE.md, sección 5).
 app.post('/guias', async (req, res, next) => {
   try {
+    // El transportista registra a su nombre, diga lo que diga la app.
+    if (esTransportista(req) && req.body && typeof req.body === 'object') {
+      req.body.transportista = req.usuario.nombre;
+    }
     const existentes = await repo.listarGuias({ fresco: true });
     const sucursales = await sucursalesParaRegistro();
     const { guia: nueva, status, error } = prepararGuia(req.body, existentes, sucursales);
@@ -850,6 +915,7 @@ app.post('/guias', async (req, res, next) => {
 app.post('/guias/lote', async (req, res, next) => {
   try {
     const { guias } = req.body || {};
+    aSuNombre(req, guias);
     if (!Array.isArray(guias) || guias.length === 0) {
       return res.status(400).json({ error: 'Faltan las guías a registrar.' });
     }
@@ -917,6 +983,7 @@ function abiertasDelCorte(guias, codigo) {
 app.post('/despachos-corte', async (req, res, next) => {
   try {
     const { guias, despachoCorte } = req.body || {};
+    aSuNombre(req, guias);
     if (!Array.isArray(guias) || guias.length === 0) {
       return res.status(400).json({ error: 'Faltan las guías del despacho.' });
     }
@@ -962,7 +1029,8 @@ app.post('/despachos-corte', async (req, res, next) => {
 app.post('/despachos-corte/:codigo/llegada', async (req, res, next) => {
   try {
     const { codigo } = req.params;
-    const { geo, transportista } = req.body || {};
+    const { geo } = req.body || {};
+    const transportista = esTransportista(req) ? req.usuario.nombre : req.body?.transportista;
     if (!geo || typeof geo.lat !== 'number' || typeof geo.lng !== 'number') {
       return res.status(400).json({ error: 'GPS obligatorio para registrar la llegada.' });
     }
@@ -1008,6 +1076,7 @@ app.post('/despachos-corte/:codigo/quitar', async (req, res, next) => {
         error: `La guía ${numeroGuia} no está en el despacho ${codigo}.`,
       });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (ESTADOS_CERRADOS.has(guia.estado)) {
       return res.status(409).json({ error: 'La guía ya está cerrada.' });
     }
@@ -1053,6 +1122,7 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
 
     // Geocerca: la llegada a la sucursal solo cuenta dentro de su perímetro.
     if (!porAdmin && estado === ESTADOS.RECEPCION_SUCURSAL) {
@@ -1175,6 +1245,7 @@ app.post('/guias/:numeroGuia/rechazo', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (ESTADOS_CERRADOS.has(guia.estado)) {
       return res.status(409).json({
         error: `La guía ${numeroGuia} ya está cerrada (${guia.estado}); no se puede rechazar.`,
@@ -1303,6 +1374,7 @@ app.get('/guias/:numeroGuia/foto', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
     }
+    if (!puedeVer(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (!guia.foto_entrega_url) {
       return res.status(404).json({ error: 'Esta guía no tiene foto de entrega.' });
     }
@@ -1320,6 +1392,7 @@ app.get('/guias/:numeroGuia/doc-cliente', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${req.params.numeroGuia}` });
     }
+    if (!puedeVer(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (!guia.doc_cliente || guia.doc_cliente === DOC_POR_CORREO) {
       return res.status(404).json({ error: 'Esta guía no tiene foto del documento del cliente.' });
     }
@@ -1331,7 +1404,7 @@ app.get('/guias/:numeroGuia/doc-cliente', async (req, res, next) => {
 
 // Corrección manual del número de guía (solo administrador — ver nota de
 // seguridad al inicio de este archivo).
-app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
+app.patch('/guias/:numeroGuia/numero', soloAdministradores, async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const { numeroNuevo, fechaCreacion } = req.body || {};
@@ -1366,7 +1439,9 @@ app.patch('/guias/:numeroGuia/numero', async (req, res, next) => {
 app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
-    const { tipoEntrega, destino, porAdmin, fechaCreacion } = req.body || {};
+    const { tipoEntrega, destino, fechaCreacion } = req.body || {};
+    // Solo el panel corrige una guía que ya no está en ruta.
+    const porAdmin = Boolean(req.body?.porAdmin) && esAdmin(req);
     if (!TIPOS_VALIDOS.has(tipoEntrega)) {
       return res.status(400).json({ error: tipoInvalido(tipoEntrega) });
     }
@@ -1374,6 +1449,7 @@ app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (!porAdmin && guia.estado !== ESTADOS.EN_RUTA) {
       return res.status(409).json({
         error: 'Solo se puede cambiar el tipo de entrega mientras la guía está en ruta.',
@@ -1405,6 +1481,7 @@ app.post('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (guia.estado !== ESTADOS.EN_RUTA) {
       return res.status(409).json({
         error: 'Solo se puede pedir eliminar una tarea que está en ruta.',
@@ -1483,6 +1560,7 @@ app.delete('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) =>
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     guia.eliminacion = '';
     guia.motivo_eliminacion = '';
     await repo.actualizarGuia(guia._row, guia);
@@ -1494,7 +1572,7 @@ app.delete('/guias/:numeroGuia/solicitud-eliminacion', async (req, res, next) =>
 
 // El administrador no aprueba borrar la tarea: sigue como estaba y el
 // transportista ve que se rechazó.
-app.post('/guias/:numeroGuia/solicitud-eliminacion/rechazo', async (req, res, next) => {
+app.post('/guias/:numeroGuia/solicitud-eliminacion/rechazo', soloAdministradores, async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const guia = await buscarRegistro(numeroGuia, (req.body || {}).fechaCreacion);
@@ -1553,7 +1631,7 @@ app.post('/guias/:numeroGuia/transbordo', async (req, res, next) => {
         error: 'Solo se puede hacer transbordo de una tarea que está en ruta.',
       });
     }
-    if (de && !mismoNombre(de, guia.transportista)) {
+    if ((de && !mismoNombre(de, guia.transportista)) || !puedeTocar(req, guia)) {
       return res.status(403).json({ error: 'Esta tarea no es tuya.' });
     }
     if (guia.transbordo_estado === TRANSBORDO.PENDIENTE) {
@@ -1585,6 +1663,7 @@ app.delete('/guias/:numeroGuia/transbordo', async (req, res, next) => {
     if (!guia) {
       return res.status(404).json({ error: `Guía no encontrada: ${numeroGuia}` });
     }
+    if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
     if (guia.transbordo_estado !== TRANSBORDO.PENDIENTE) {
       return res.status(409).json({ error: 'Esta tarea no tiene un transbordo pendiente.' });
     }
@@ -1616,7 +1695,9 @@ app.post('/guias/:numeroGuia/transbordo/respuesta', async (req, res, next) => {
         error: 'Este transbordo ya no está pendiente (lo cancelaron o ya se respondió).',
       });
     }
-    if (!mismoNombre(quien, guia.transbordo_a)) {
+    // Quién responde sale de la sesión, no de lo que mande la app.
+    const responde = esTransportista(req) ? req.usuario.nombre : quien;
+    if (!mismoNombre(responde, guia.transbordo_a)) {
       return res.status(403).json({ error: 'Este transbordo no es para ti.' });
     }
     if (guia.estado !== ESTADOS.EN_RUTA) {
@@ -1651,7 +1732,7 @@ app.post('/guias/:numeroGuia/transbordo/respuesta', async (req, res, next) => {
 // aprobar el pedido del transportista). Solo mientras está en ruta: una
 // guía entregada o en trasbordo ya es historia y no se borra (el
 // administrador puede corregir datos o quitar la foto).
-app.delete('/guias/:numeroGuia', async (req, res, next) => {
+app.delete('/guias/:numeroGuia', soloAdministradores, async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);
@@ -1673,7 +1754,7 @@ app.delete('/guias/:numeroGuia', async (req, res, next) => {
 });
 
 // Quita la foto de la entrega (solo administrador). La guía sigue igual.
-app.delete('/guias/:numeroGuia/foto', async (req, res, next) => {
+app.delete('/guias/:numeroGuia/foto', soloAdministradores, async (req, res, next) => {
   try {
     const { numeroGuia } = req.params;
     const guia = await buscarRegistro(numeroGuia, req.query.fechaCreacion);

@@ -69,4 +69,16 @@ describe('freno de intentos de login', () => {
     auth.limpiarFallos('JUAN');
     expect(auth.loginBloqueado('juan')).toBe(false);
   });
+
+  it('frena a una IP que prueba PIN con muchos nombres', () => {
+    const t0 = 1_000_000;
+    for (let i = 0; i < auth.MAX_FALLOS_IP; i++) {
+      auth.registrarFallo(`nombre${i}`, t0, '1.2.3.4');
+    }
+    expect(auth.ipBloqueada('1.2.3.4', t0 + 1000)).toBe(true);
+    expect(auth.ipBloqueada('5.6.7.8', t0 + 1000)).toBe(false);
+    // Ningún nombre llegó a su propio tope.
+    expect(auth.loginBloqueado('nombre0', t0 + 1000)).toBe(false);
+    expect(auth.ipBloqueada('1.2.3.4', t0 + auth.BLOQUEO_MS + 1)).toBe(false);
+  });
 });

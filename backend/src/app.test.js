@@ -1972,3 +1972,113 @@ describe('Sub administrador', () => {
     expect(res.body).toHaveLength(1);
   });
 });
+
+describe('Seguridad: un transportista no puede tocar lo que no es suyo', () => {
+  const juan = () => como({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA });
+  const deDiego = (extra = {}) => guia({ transportista: 'Diego', ...extra });
+
+  beforeEach(() => {
+    repo.buscarPorNumero.mockResolvedValue(deDiego());
+    repo.listarGuias.mockResolvedValue([deDiego()]);
+  });
+
+  it('no entrega, rechaza ni cambia el tipo de una guía ajena', async () => {
+    const geo = { lat: -12.1, lng: -77.02 };
+    const entrega = await juan()
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo });
+    expect(entrega.status).toBe(403);
+    const rechazo = await juan()
+      .post('/guias/IPE-2026-000123/rechazo')
+      .send({ motivo: 'cliente cerrado' });
+    expect(rechazo.status).toBe(403);
+    const tipo = await juan()
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.AGENCIA });
+    expect(tipo.status).toBe(403);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('no usa las acciones del administrador (borrar, foto, número, aprobar)', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ transportista: 'Juan Pérez' }));
+    expect((await juan().delete('/guias/IPE-2026-000123')).status).toBe(403);
+    expect((await juan().delete('/guias/IPE-2026-000123/foto')).status).toBe(403);
+    expect(
+      (await juan().patch('/guias/IPE-2026-000123/numero').send({ numeroNuevo: 'X-1' })).status,
+    ).toBe(403);
+    expect(
+      (await juan().post('/guias/IPE-2026-000123/solicitud-eliminacion/rechazo').send({})).status,
+    ).toBe(403);
+    expect(repo.eliminarGuia).not.toHaveBeenCalled();
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('"porAdmin" no le sirve para cambiar el tipo de una guía ya entregada', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      guia({ transportista: 'Juan Pérez', estado: ESTADOS.ENTREGADO }),
+    );
+    const res = await juan()
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.AGENCIA, porAdmin: true });
+    expect(res.status).toBe(409);
+  });
+
+  it('registra siempre a su nombre, aunque la app mande otro', async () => {
+    const res = await juan().post('/guias').send({
+      numeroGuia: 'IPE-2026-000999',
+      origen: 'Almacén Callao',
+      destino: 'Av. Siempre Viva 742',
+      transportista: 'Diego',
+      destinatario: 'María Torres',
+      geo: { lat: -12.05, lng: -77.04 },
+    });
+    expect(res.status).toBe(201);
+    expect(repo.crearGuias.mock.calls[0][0][0].transportista).toBe('Juan Pérez');
+  });
+
+  it('no acepta un transbordo que es para otro diciendo que es él', async () => {
+    repo.buscarPorNumero.mockResolvedValue(
+      deDiego({ transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Pedro' }),
+    );
+    const res = await juan()
+      .post('/guias/IPE-2026-000123/transbordo/respuesta')
+      .send({ quien: 'Pedro', acepta: true });
+    expect(res.status).toBe(403);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('no pasa a otro una tarea ajena aunque no diga de quién es', async () => {
+    repo.listarUsuarios.mockResolvedValue([
+      { nombre: 'Pedro', rol: ROLES.TRANSPORTISTA, activo: true },
+    ]);
+    const res = await juan()
+      .post('/guias/IPE-2026-000123/transbordo')
+      .send({ a: 'Pedro' });
+    expect(res.status).toBe(403);
+  });
+
+  it('solo recibe sus guías y las de sus transbordos, y solo ve sus fotos', async () => {
+    repo.listarGuias.mockResolvedValue([
+      deDiego({ numero_guia: 'A' }),
+      guia({ numero_guia: 'B', transportista: 'juan pérez' }),
+      deDiego({ numero_guia: 'C', transbordo_estado: TRANSBORDO.PENDIENTE, transbordo_a: 'Juan Pérez' }),
+    ]);
+    const res = await juan().get('/guias');
+    expect(res.status).toBe(200);
+    expect(res.body.map((g) => g.numero_guia)).toEqual(['B', 'C']);
+
+    repo.listarGuias.mockResolvedValue([]);
+    repo.buscarPorNumero.mockResolvedValue(deDiego({ foto_entrega_url: 'drive:x' }));
+    expect((await juan().get('/guias/IPE-2026-000123/foto')).status).toBe(403);
+    expect(fotos.enviarFoto).not.toHaveBeenCalled();
+    expect((await juan().get('/despachos?desde=2026-01-01')).status).toBe(403);
+  });
+
+  it('sigue pudiendo entregar su propia guía', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ transportista: 'Juan Pérez' }));
+    const res = await juan()
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(200);
+  });
+});

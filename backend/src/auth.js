@@ -22,6 +22,10 @@ const DURACION_SESION_MS = 12 * 60 * 60 * 1000;
 // instancia del servidor (no es perfecto, pero frena un ataque simple).
 const MAX_FALLOS = 5;
 const BLOQUEO_MS = 15 * 60 * 1000;
+// Además, por conexión (IP): frena a quien prueba PINs con muchos nombres.
+// Más alto, porque un almacén entero puede salir por la misma IP.
+const MAX_FALLOS_IP = 20;
+const claveIp = (ip) => `ip:${String(ip ?? '').trim()}`;
 
 function claveFirma() {
   const propia = process.env.AUTH_SECRET;
@@ -76,19 +80,32 @@ function leerToken(token, ahora = Date.now()) {
 const fallos = new Map();
 const claveNombre = (nombre) => String(nombre ?? '').trim().toLowerCase();
 
-/** ¿Este nombre está bloqueado por demasiados intentos fallidos? */
-function loginBloqueado(nombre, ahora = Date.now()) {
-  const f = fallos.get(claveNombre(nombre));
+function bloqueada(clave, maximo, ahora) {
+  const f = fallos.get(clave);
   if (!f) return false;
   if (ahora - f.desde > BLOQUEO_MS) {
-    fallos.delete(claveNombre(nombre));
+    fallos.delete(clave);
     return false;
   }
-  return f.n >= MAX_FALLOS;
+  return f.n >= maximo;
 }
 
-function registrarFallo(nombre, ahora = Date.now()) {
-  const clave = claveNombre(nombre);
+/** ¿Este nombre está bloqueado por demasiados intentos fallidos? */
+function loginBloqueado(nombre, ahora = Date.now()) {
+  return bloqueada(claveNombre(nombre), MAX_FALLOS, ahora);
+}
+
+/** ¿Esta IP probó demasiados PIN equivocados (con cualquier nombre)? */
+function ipBloqueada(ip, ahora = Date.now()) {
+  return bloqueada(claveIp(ip), MAX_FALLOS_IP, ahora);
+}
+
+function registrarFallo(nombre, ahora = Date.now(), ip = null) {
+  if (ip) sumarFallo(claveIp(ip), ahora);
+  sumarFallo(claveNombre(nombre), ahora);
+}
+
+function sumarFallo(clave, ahora) {
   const f = fallos.get(clave);
   if (!f || ahora - f.desde > BLOQUEO_MS) {
     fallos.set(clave, { n: 1, desde: ahora });
@@ -109,10 +126,12 @@ function olvidarFallos() {
 module.exports = {
   DURACION_SESION_MS,
   MAX_FALLOS,
+  MAX_FALLOS_IP,
   BLOQUEO_MS,
   crearToken,
   leerToken,
   loginBloqueado,
+  ipBloqueada,
   registrarFallo,
   limpiarFallos,
   olvidarFallos,
