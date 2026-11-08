@@ -840,14 +840,50 @@ function invalidarInfoArchivo() {
 async function asegurarPestana(sheets, spreadsheetId, titulo) {
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
-    fields: 'sheets.properties.title',
+    fields: 'sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))',
   });
-  const existe = (res.data.sheets || []).some((s) => s.properties.title === titulo);
-  if (existe) return;
-  await sheets.spreadsheets.batchUpdate({
+  const existente = (res.data.sheets || []).find((s) => s.properties?.title === titulo);
+  if (existente) return existente.properties;
+  const nueva = await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: { requests: [{ addSheet: { properties: { title: titulo } } }] },
   });
+  return nueva.data?.replies?.[0]?.addSheet?.properties;
+}
+
+// Filas de más al agrandar una pestaña de año, para no hacerlo cada noche.
+const FILAS_DE_MAS = 1000;
+
+/**
+ * Google Sheets no deja escribir fuera de la cuadrícula de la pestaña (al
+ * crearla trae 1000 filas y 26 columnas): si lo que se va a copiar no
+ * entra, primero le agrega filas o columnas al final.
+ */
+async function agrandarSiHaceFalta(sheets, spreadsheetId, props, filas, columnas) {
+  const grid = props?.gridProperties;
+  if (props?.sheetId == null || !grid) return;
+  const requests = [];
+  if (filas > (grid.rowCount ?? 0)) {
+    requests.push({
+      appendDimension: {
+        sheetId: props.sheetId,
+        dimension: 'ROWS',
+        length: filas - (grid.rowCount ?? 0) + FILAS_DE_MAS,
+      },
+    });
+  }
+  if (columnas > (grid.columnCount ?? 0)) {
+    requests.push({
+      appendDimension: {
+        sheetId: props.sheetId,
+        dimension: 'COLUMNS',
+        length: columnas - (grid.columnCount ?? 0),
+      },
+    });
+  }
+  if (requests.length) {
+    await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } });
+  }
 }
 
 const claveGuia = (numero, fecha) => `${numero}|${fecha}`;
@@ -910,7 +946,7 @@ async function archivarGuias(hasta, { ejecutar = false } = {}) {
 
   for (const [anio, lista] of Object.entries(grupos)) {
     const titulo = pestanaDeAnio(anio);
-    await asegurarPestana(sheets, spreadsheetId, titulo);
+    const props = await asegurarPestana(sheets, spreadsheetId, titulo);
     const usadas = (
       await sheets.spreadsheets.values.get({
         spreadsheetId,
@@ -931,6 +967,13 @@ async function archivarGuias(hasta, { ejecutar = false } = {}) {
     const ancho = Math.max(...datos.map((f) => f.length));
     const pad = (f) => [...f, ...Array(ancho - f.length).fill('')];
     const primera = usadas.length + 1;
+    await agrandarSiHaceFalta(
+      sheets,
+      spreadsheetId,
+      props,
+      primera + datos.length - 1,
+      ancho,
+    );
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `'${titulo}'!A${primera}:${letraColumna(ancho)}${primera + datos.length - 1}`,
@@ -1020,6 +1063,7 @@ module.exports = {
   infoArchivo,
   archivarGuias,
   rangosParaBorrar,
+  agrandarSiHaceFalta,
   listarSucursales,
   guardarSucursal,
   eliminarSucursal,

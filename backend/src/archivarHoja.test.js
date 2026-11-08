@@ -90,6 +90,52 @@ describe('archivar guías en la hoja', () => {
     expect(escrito.requestBody.values.map((f) => f[0])).toEqual(['S3', 'S4']);
   });
 
+  it('si la pestaña del año está llena, primero le agrega filas', async () => {
+    // Como pasó en "Guías 2026": 2500 filas usadas de 2500.
+    archivo = [
+      COLUMNS,
+      ...Array.from({ length: 2499 }, (_, i) =>
+        fila(`V${i}`, 'entregado', '2026-08-01T10:00:00.000Z'),
+      ),
+    ];
+    const conCuadricula = mockHojas.get.getMockImplementation();
+    mockHojas.get.mockImplementation(async () => {
+      const res = await conCuadricula();
+      for (const h of res.data.sheets) {
+        if (h.properties.title === 'Guías 2026') {
+          h.properties.gridProperties = { rowCount: 2500, columnCount: 32 };
+        }
+      }
+      return res;
+    });
+    await repo.archivarGuias('2026-10-01', { ejecutar: true });
+    const agrandar = mockHojas.batchUpdate.mock.calls[0][0].requestBody.requests;
+    expect(agrandar).toEqual([
+      { appendDimension: { sheetId: 7, dimension: 'ROWS', length: 3 + 1000 } },
+    ]);
+    // Y después escribe justo debajo de lo que había.
+    const escrito = mockValores.update.mock.calls[0][0];
+    expect(escrito.range).toMatch(/^'Guías 2026'!A2501:AF2503$/);
+    expect(mockHojas.batchUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockValores.update.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('si la pestaña tiene lugar, no la toca', async () => {
+    archivo = [COLUMNS];
+    const conCuadricula = mockHojas.get.getMockImplementation();
+    mockHojas.get.mockImplementation(async () => {
+      const res = await conCuadricula();
+      for (const h of res.data.sheets) {
+        h.properties.gridProperties = { rowCount: 1000, columnCount: 32 };
+      }
+      return res;
+    });
+    await repo.archivarGuias('2026-10-01', { ejecutar: true });
+    const pedidos = mockHojas.batchUpdate.mock.calls.flatMap(([p]) => p.requestBody.requests);
+    expect(pedidos.some((r) => r.appendDimension)).toBe(false);
+  });
+
   it('si la hoja cambió antes de borrar, no borra nada', async () => {
     mockValores.update.mockImplementation(async () => {
       // Alguien borró una fila mientras se copiaba: todo sube una fila.
