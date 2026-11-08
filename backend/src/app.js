@@ -22,6 +22,7 @@ const { documentoCliente, DOC_POR_CORREO } = require('./documentoCliente');
 const { hacenFaltaArchivo, corteMaximo } = require('./archivo');
 const { despachosNuevos } = require('./despachos');
 const auth = require('./auth');
+const avisos = require('./avisos');
 
 const app = express();
 // Sin decir qué servidor es, y sin que el navegador adivine el tipo de lo
@@ -38,7 +39,7 @@ app.use(express.json({ limit: '8mb' }));
 
 // Rutas que no piden sesión: el login, el chequeo de salud y el archivo
 // automático (que tiene su propia clave, CRON_SECRET).
-const RUTAS_PUBLICAS = new Set(['/health', '/auth/login', '/cron/archivo']);
+const RUTAS_PUBLICAS = new Set(['/health', '/auth/login', '/cron/archivo', '/cron/recordatorio']);
 
 // Toda otra ruta exige el token del login (ver auth.js). El equipo
 // comercial solo consulta: no puede cambiar nada.
@@ -152,9 +153,16 @@ const ROLES_VALIDOS = new Set(Object.values(ROLES));
 // Perú está en UTC-5 todo el año (sin horario de verano).
 const DESFASE_PERU_MS = 5 * 60 * 60 * 1000;
 
-// El mismo transportista puede volver a registrar una guía suya pasados
-// estos minutos desde su último registro de ella.
+// El mismo transportista que vuelve a registrar una guía suya el mismo día
+// (o antes de estos minutos, si cambió el día) tiene que confirmarlo.
 const ESPERA_REGISTRO_MS = 20 * 60 * 1000;
+// Código del error de guía repetida: la app pregunta si registrarla igual.
+const CODIGO_REPETIDA = 'repetida_hoy';
+
+/** "2026-11-08": el día en Perú de ese instante. */
+function diaPeru(ms) {
+  return new Date(ms - DESFASE_PERU_MS).toISOString().slice(0, 10);
+}
 
 /** "14:35" en hora de Perú (el servidor corre en UTC). */
 function horaPeru(ms) {
@@ -591,6 +599,121 @@ app.get('/cron/archivo', async (req, res, next) => {
   }
 });
 
+// ── Recordatorio de las 6 p. m. en el celular ──────────────────────────
+// La app pide la clave pública, suscribe el celular (Web Push) y lo manda
+// aquí; Vercel llama a /cron/recordatorio todos los días a las 18:00 de
+// Perú (vercel.json) y cada transportista con tareas por cerrar, que no
+// dejó en custodia, recibe un aviso que suena aunque la app esté cerrada.
+
+app.get('/avisos/clave', (_req, res, next) => {
+  try {
+    res.json({ clave: avisos.clavesVapid().publica });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const textoCorto = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
+
+app.post('/avisos/suscripcion', async (req, res, next) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    let url;
+    try {
+      url = new URL(endpoint);
+    } catch {
+      url = null;
+    }
+    if (
+      !url
+      || url.protocol !== 'https:'
+      || !textoCorto(endpoint, 1000)
+      || !textoCorto(keys?.p256dh, 200)
+      || !textoCorto(keys?.auth, 100)
+    ) {
+      return res.status(400).json({ error: 'Suscripción de avisos inválida.' });
+    }
+    await repo.guardarSuscripcion({
+      nombre: req.usuario.nombre,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+    });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Al cerrar sesión: ese celular deja de recibir avisos (solo el propio).
+app.delete('/avisos/suscripcion', async (req, res, next) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (!textoCorto(endpoint, 1000)) {
+      return res.status(400).json({ error: 'Falta el celular a quitar.' });
+    }
+    const suyo = (await repo.listarSuscripciones()).some(
+      (a) => a.endpoint === endpoint && mismoNombre(a.nombre, req.usuario.nombre),
+    );
+    if (suyo) await repo.quitarSuscripciones([endpoint]);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// El día (en Perú) del último recordatorio enviado por esta instancia: si
+// alguien llama de nuevo el mismo día, no se repite.
+let ultimoRecordatorio = null;
+
+app.get('/cron/recordatorio', async (req, res, next) => {
+  try {
+    const secreto = process.env.CRON_SECRET;
+    const ahora = Date.now();
+    if (secreto) {
+      if (req.headers.authorization !== `Bearer ${secreto}`) {
+        return res.status(401).json({ error: 'No autorizado.' });
+      }
+    } else {
+      // Sin clave, solo corre a su hora: de 17:55 a 18:59 de Perú.
+      const peru = new Date(ahora - DESFASE_PERU_MS);
+      const minutos = peru.getUTCHours() * 60 + peru.getUTCMinutes();
+      if (minutos < 17 * 60 + 55 || minutos >= 19 * 60) {
+        return res.status(403).json({ error: 'El recordatorio solo sale a las 6 p. m.' });
+      }
+    }
+    const dia = diaPeru(ahora);
+    if (ultimoRecordatorio === dia) return res.json({ enviados: 0, repetido: true });
+    ultimoRecordatorio = dia;
+
+    const pendientes = avisos.pendientesPorTransportista(await repo.listarGuias({ fresco: true }));
+    const suscripciones = await repo.listarSuscripciones();
+    const vencidas = [];
+    let enviados = 0;
+    const avisados = new Set();
+    await Promise.all(suscripciones.map(async (s) => {
+      const suyas = pendientes.get(avisos.claveNombre(s.nombre));
+      if (!suyas || suyas.length === 0) return;
+      const resultado = await avisos.enviar(s, avisos.mensajeRecordatorio(suyas));
+      if (resultado === 'ok') {
+        enviados += 1;
+        avisados.add(avisos.claveNombre(s.nombre));
+      } else if (resultado === 'vencida') {
+        vencidas.push(s.endpoint);
+      }
+    }));
+    if (vencidas.length > 0) await repo.quitarSuscripciones(vencidas);
+    const sinAviso = [...pendientes.keys()].filter((k) => !avisados.has(k)).length;
+    console.log(`Recordatorio 6 p. m.: ${enviados} avisos, ${sinAviso} transportistas sin avisos activados.`);
+    res.json({ enviados, transportistas: pendientes.size, sinAviso, vencidas: vencidas.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Solo para pruebas: olvida el último recordatorio enviado. */
+app.olvidarRecordatorio = () => { ultimoRecordatorio = null; };
+
 // Guías de la hoja externa "Despachos Ate" que NO están en la base de la
 // app (las repetidas se omiten): guía, cliente, fecha, pedido y entrega.
 // Solo lectura; requiere `desde` (ISO) y acepta `hasta` (exclusivo).
@@ -737,6 +860,7 @@ function prepararGuia(datos, existentes, sucursales) {
     numeroPedido,
     numeroEntrega,
     comprobante,
+    confirmarRepetida,
   } = datos || {};
 
   if (!numeroGuia || !origen || !destino || !transportista || !destinatario) {
@@ -757,9 +881,10 @@ function prepararGuia(datos, existentes, sucursales) {
 
   // Un mismo número de guía se puede volver a registrar: otro
   // transportista que la lleva en el siguiente tramo, en cualquier
-  // momento; el mismo transportista, pasados ESPERA_REGISTRO_MS desde su
-  // último registro (así un doble toque o una foto repetida no la duplica).
-  // Un registro rechazado no cuenta: esa tarea nunca se hizo.
+  // momento. El mismo transportista, si ya la registró hoy (o hace menos
+  // de ESPERA_REGISTRO_MS), solo si lo confirma: la app le avisa que se
+  // está repitiendo y él decide (`confirmarRepetida`). Un registro
+  // rechazado no cuenta: esa tarea nunca se hizo.
   const suyas = existentes.filter(
     (g) =>
       g.numero_guia === numeroGuia
@@ -770,14 +895,15 @@ function prepararGuia(datos, existentes, sucursales) {
     ...suyas.map((g) => Date.parse(g.fecha_creacion || g.fecha_actualizacion) || 0),
     0,
   );
-  const libre = registrada + ESPERA_REGISTRO_MS;
-  if (registrada > 0 && Date.now() < libre) {
-    const faltan = Math.ceil((libre - Date.now()) / 60000);
+  const ahoraMs = Date.now();
+  const repetida = registrada > 0
+    && (diaPeru(registrada) === diaPeru(ahoraMs) || ahoraMs < registrada + ESPERA_REGISTRO_MS);
+  if (repetida && confirmarRepetida !== true) {
     return {
       status: 409,
-      error:
-        `Ya registraste la guía ${numeroGuia} a las ${horaPeru(registrada)}. `
-        + `Podrás volver a registrarla desde las ${horaPeru(libre)} (en ${faltan} min).`,
+      codigo: CODIGO_REPETIDA,
+      registradaA: horaPeru(registrada),
+      error: `Ya registraste la guía ${numeroGuia} hoy a las ${horaPeru(registrada)}.`,
     };
   }
 
@@ -806,6 +932,11 @@ function prepararGuia(datos, existentes, sucursales) {
       ...columnasComprobante(comprobante),
     },
   };
+}
+
+/** El resultado de una guía que no se registró, para la carga masiva. */
+function errorDeRegistro({ error, codigo, registradaA }) {
+  return codigo ? { error, codigo, registradaA } : { error };
 }
 
 /**
@@ -900,8 +1031,10 @@ app.post('/guias', async (req, res, next) => {
     }
     const existentes = await repo.listarGuias({ fresco: true });
     const sucursales = await sucursalesParaRegistro();
-    const { guia: nueva, status, error } = prepararGuia(req.body, existentes, sucursales);
-    if (error) return res.status(status).json({ error });
+    const {
+      guia: nueva, status, error, codigo, registradaA,
+    } = prepararGuia(req.body, existentes, sucursales);
+    if (error) return res.status(status).json({ error, codigo, registradaA });
     await repo.crearGuias([nueva]);
 
     // La guía completa: la app la agrega a su lista sin volver a pedirlas
@@ -939,7 +1072,7 @@ app.post('/guias/lote', async (req, res, next) => {
       // la misma carga se registra una sola vez.
       const preparada = prepararGuia(datos, [...existentes, ...nuevas], sucursales);
       if (preparada.error) {
-        resultados.push({ error: preparada.error });
+        resultados.push(errorDeRegistro(preparada));
       } else {
         nuevas.push(preparada.guia);
         resultados.push({ guia: preparada.guia });
@@ -1015,7 +1148,7 @@ app.post('/despachos-corte', async (req, res, next) => {
     for (const datos of guias) {
       const preparada = prepararGuia(datos, [...existentes, ...nuevas], sucursales);
       if (preparada.error) {
-        resultados.push({ error: preparada.error });
+        resultados.push(errorDeRegistro(preparada));
       } else {
         preparada.guia.despacho_corte = codigo;
         nuevas.push(preparada.guia);

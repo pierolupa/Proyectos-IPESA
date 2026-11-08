@@ -500,6 +500,9 @@ class GuiasApi {
                 )
               : ResultadoRegistro.error(
                   r['error'] as String? ?? 'No se pudo registrar.',
+                  repetidaA: r['codigo'] == 'repetida_hoy'
+                      ? (r['registradaA'] as String? ?? '')
+                      : null,
                 ),
       ],
     );
@@ -666,6 +669,38 @@ class GuiasApi {
     final res = await _client.get(Uri.parse('$apiBaseUrl/fotos/estado'));
     if (res.statusCode != 200) _lanzarError(res);
     return _decodeBody(res)['configurado'] == true;
+  }
+
+  /// Clave pública del servidor para suscribir el celular a los avisos.
+  Future<String> claveAvisos() async {
+    final res = await _client.get(Uri.parse('$apiBaseUrl/avisos/clave'));
+    if (res.statusCode != 200) _lanzarError(res);
+    return _decodeBody(res)['clave'] as String;
+  }
+
+  /// Guarda este celular para el recordatorio de las 6 p. m.
+  Future<void> guardarSuscripcionAvisos(
+    Map<String, dynamic> suscripcion,
+  ) async {
+    final res = await _client.post(
+      Uri.parse('$apiBaseUrl/avisos/suscripcion'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'endpoint': suscripcion['endpoint'],
+        'keys': suscripcion['keys'],
+      }),
+    );
+    if (res.statusCode != 204) _lanzarError(res);
+  }
+
+  /// Este celular deja de recibir avisos (al cerrar sesión).
+  Future<void> quitarSuscripcionAvisos(String endpoint) async {
+    final res = await _client.delete(
+      Uri.parse('$apiBaseUrl/avisos/suscripcion'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'endpoint': endpoint}),
+    );
+    if (res.statusCode != 204) _lanzarError(res);
   }
 
   /// El transportista rechaza una tarea abierta con un motivo. El GPS va si
@@ -932,6 +967,7 @@ class GuiaNueva {
     this.numeroPedido = '',
     this.numeroEntrega = '',
     this.comprobante,
+    this.confirmarRepetida = false,
   });
 
   final String numeroGuia;
@@ -948,6 +984,9 @@ class GuiaNueva {
   /// El comprobante de agencia leído de la foto (null si no hay).
   final ComprobanteAgencia? comprobante;
 
+  /// Ya la registró hoy y confirmó que quiere registrarla otra vez.
+  final bool confirmarRepetida;
+
   Map<String, dynamic> toJson() => {
     'numeroGuia': numeroGuia,
     'tipoEntrega': tipoEntrega.valorApi,
@@ -959,6 +998,7 @@ class GuiaNueva {
     if (numeroPedido.isNotEmpty) 'numeroPedido': numeroPedido,
     if (numeroEntrega.isNotEmpty) 'numeroEntrega': numeroEntrega,
     if (comprobante case final c?) 'comprobante': c.toJson(),
+    if (confirmarRepetida) 'confirmarRepetida': true,
   };
 }
 
@@ -978,11 +1018,16 @@ class ResultadoCarga {
 
 /// Lo que pasó con una guía de la carga masiva: creada o con su error.
 class ResultadoRegistro {
-  const ResultadoRegistro.guia(Guia this.guia) : error = null;
-  const ResultadoRegistro.error(String this.error) : guia = null;
+  const ResultadoRegistro.guia(Guia this.guia) : error = null, repetidaA = null;
+  const ResultadoRegistro.error(String this.error, {this.repetidaA})
+    : guia = null;
 
   final Guia? guia;
   final String? error;
+
+  /// Si no se registró porque ya la registró hoy: la hora ("09:14") de ese
+  /// registro. La app pregunta si registrarla igual.
+  final String? repetidaA;
 }
 
 /// Agrega el token de la sesión a cada pedido. Si el servidor responde 401

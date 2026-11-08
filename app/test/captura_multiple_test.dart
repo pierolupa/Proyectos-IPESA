@@ -40,6 +40,9 @@ void main() {
   late int pedidosDeRegistro;
   late int ocupadaVeces;
   late List<Map<String, dynamic>> cuerposCorte;
+  late List<String> confirmadas;
+  // Las que el servidor dice que ya registró hoy (su lista estaba atrasada).
+  late Set<String> repetidasEnServidor;
   var sucursales = '[]';
 
   setUp(() {
@@ -53,6 +56,8 @@ void main() {
     pedidosDeRegistro = 0;
     ocupadaVeces = 0;
     cuerposCorte = [];
+    confirmadas = [];
+    repetidasEnServidor = {};
     sucursales = '[]';
     Ubicacion.olvidarUltima();
     Ubicacion.permisoConcedido = () async => false;
@@ -80,7 +85,7 @@ void main() {
     bool corte = false,
     String? codigo,
   }) async {
-    // T100 la registró él hace 10 min: no se puede registrar otra vez aún.
+    // T100 ya la registró él hoy, hace 10 min.
     final hace10 = DateTime.now().subtract(const Duration(minutes: 10));
     final client = MockClient((request) async {
       final ruta = request.url.path;
@@ -118,6 +123,16 @@ void main() {
         final resultados = <Map<String, dynamic>>[];
         for (final g in (cuerpo['guias'] as List).cast<Map>()) {
           final numero = g['numeroGuia'] as String;
+          if (g['confirmarRepetida'] == true) confirmadas.add(numero);
+          if (repetidasEnServidor.contains(numero) &&
+              g['confirmarRepetida'] != true) {
+            resultados.add({
+              'error': 'Ya registraste la guía $numero hoy a las 08:15.',
+              'codigo': 'repetida_hoy',
+              'registradaA': '08:15',
+            });
+            continue;
+          }
           registradas.add(numero);
           origenes.add(g['origen'] as String);
           comprobantes.add(g['comprobante']);
@@ -163,23 +178,26 @@ void main() {
     expect(find.text('T200'), findsOneWidget);
     expect(find.text('T201'), findsOneWidget);
     expect(find.text('T100'), findsOneWidget);
-    // T100 la registró él hace 10 min: esa espera; las otras dos, listas.
-    expect(find.textContaining('Ya registraste esta guía'), findsOneWidget);
-    expect(find.text('Registrar 2 guías'), findsOneWidget);
+    // Las tres están listas; T100 ya la registró hoy, pero él decide.
+    expect(find.text('Registrar 3 guías'), findsOneWidget);
 
-    await tester.tap(find.text('Registrar 2 guías'));
+    await tester.tap(find.text('Registrar 3 guías'));
     await tester.pumpAndSettle();
-    // Se ve el paso "Registrada" y la tarjeta sale.
+    // Le avisa que se está repitiendo antes de mandar nada.
+    expect(find.text('Tarea repetida'), findsOneWidget);
+    expect(find.textContaining('ya la registraste hoy a las'), findsOneWidget);
+    expect(pedidosDeRegistro, 0);
+    await tester.tap(find.text('No registrar'));
+    await tester.pumpAndSettle();
+    // Se ve el paso "Registrada" y las tarjetas salen.
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
     expect(registradas, unorderedEquals(['T200', 'T201']));
     // Todas en un solo pedido al servidor.
     expect(pedidosDeRegistro, 1);
-    expect(find.text('2 guías asignadas · en ruta'), findsOneWidget);
-    // Queda solo la que no se pudo registrar.
-    expect(find.text('T100'), findsOneWidget);
-    expect(find.text('T200'), findsNothing);
+    // No quedó ninguna: la pantalla se cierra.
+    expect(find.text('T100'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -356,24 +374,76 @@ void main() {
     expect(cuerposCorte.single['despachoCorte'], 'DC-9');
   });
 
+  testWidgets('Si confirma la tarea repetida, se registra igual', (
+    tester,
+  ) async {
+    leidas = ['T100'];
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tarea repetida'), findsOneWidget);
+    await tester.tap(find.text('Sí, registrar'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(registradas, ['T100']);
+    expect(confirmadas, ['T100']);
+  });
+
+  testWidgets('Si su lista estaba atrasada, el aviso viene del servidor', (
+    tester,
+  ) async {
+    leidas = ['T555'];
+    repetidasEnServidor = {'T555'};
+    CaptureFlowScreen.elegirFotos = () async => [Uint8List.fromList(_png)];
+    await abrir(tester);
+    await tester.tap(find.text('GPS activo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Galería'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registrar guía'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tarea repetida'), findsOneWidget);
+    expect(
+      find.textContaining('ya la registraste hoy a las 08:15'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Sí, registrar'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(registradas, ['T555']);
+    expect(pedidosDeRegistro, 2);
+    expect(confirmadas, ['T555']);
+  });
+
   test(
-    'La guía que él registró se puede volver a registrar a los 20 min',
+    'Tarea repetida: la suya del mismo día, sin rechazadas ni de otros',
     () async {
-      final ahora = DateTime(2026, 9, 28, 15);
-      final deDiego = {
-        ..._guia('T3', ahora.subtract(const Duration(minutes: 5))),
-        'transportista': 'Diego',
-      };
+      // 15:00 de Perú del 28/09 (20:00 UTC).
+      final ahora = DateTime.utc(2026, 9, 28, 20);
       final client = MockClient(
         (request) async => request.url.path.endsWith('/sucursales')
             ? http.Response('[]', 200)
             : http.Response(
                 jsonEncode([
-                  // Hace 15 minutos: espera 5 más.
-                  _guia('T1', ahora.subtract(const Duration(minutes: 15))),
-                  // Hace 20 minutos: ya se puede.
-                  _guia('T2', ahora.subtract(const Duration(minutes: 20))),
-                  deDiego,
+                  // Hoy a las 08:00 de Perú.
+                  _guia('T1', DateTime.utc(2026, 9, 28, 13)),
+                  // Ayer a las 18:00 de Perú.
+                  _guia('T2', DateTime.utc(2026, 9, 27, 23)),
+                  {
+                    ..._guia('T3', DateTime.utc(2026, 9, 28, 14)),
+                    'transportista': 'Diego',
+                  },
+                  {
+                    ..._guia('T4', DateTime.utc(2026, 9, 28, 14)),
+                    'estado': 'rechazado',
+                  },
                 ]),
                 200,
               ),
@@ -383,13 +453,13 @@ void main() {
       await appState.cargarGuias();
 
       expect(
-        appState.registroBloqueadoHasta('T1', ahora: ahora),
-        DateTime(2026, 9, 28, 15, 5),
+        appState.registradaHoy('T1', ahora: ahora),
+        DateTime.utc(2026, 9, 28, 13),
       );
-      expect(appState.registroBloqueadoHasta('T2', ahora: ahora), isNull);
-      // La registró otro transportista: él la puede registrar al momento.
-      expect(appState.registroBloqueadoHasta('T3', ahora: ahora), isNull);
-      expect(appState.registroBloqueadoHasta('T9', ahora: ahora), isNull);
+      expect(appState.registradaHoy('T2', ahora: ahora), isNull);
+      expect(appState.registradaHoy('T3', ahora: ahora), isNull);
+      expect(appState.registradaHoy('T4', ahora: ahora), isNull);
+      expect(appState.registradaHoy('T9', ahora: ahora), isNull);
     },
   );
 

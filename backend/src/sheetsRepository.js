@@ -595,6 +595,83 @@ function rowToUsuario(row) {
   return usuario;
 }
 
+// Pestaña "Avisos": un celular por fila, para mandarle recordatorios
+// aunque la app esté cerrada. La crea el servidor la primera vez.
+const AVISOS_PESTANA = 'Avisos';
+const AVISOS_COLUMNAS = ['nombre', 'endpoint', 'p256dh', 'auth', 'actualizado'];
+
+async function leerAvisos(sheets, spreadsheetId) {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${AVISOS_PESTANA}'!A2:E`,
+    });
+    return (res.data.values || []).map((f) => ({
+      nombre: String(f[0] ?? '').trim(),
+      endpoint: String(f[1] ?? '').trim(),
+      p256dh: String(f[2] ?? '').trim(),
+      auth: String(f[3] ?? '').trim(),
+      actualizado: String(f[4] ?? ''),
+    }));
+  } catch (err) {
+    // Sin pestaña todavía: nadie activó los avisos.
+    if (err && (err.code === 400 || err.status === 400)) return [];
+    throw err;
+  }
+}
+
+/** Los celulares con avisos activados: [{ nombre, endpoint, p256dh, auth }]. */
+async function listarSuscripciones() {
+  const sheets = await getSheetsClient();
+  const avisos = await leerAvisos(sheets, requireSheetId());
+  return avisos.filter((a) => a.endpoint && a.p256dh && a.auth);
+}
+
+async function escribirAvisos(sheets, spreadsheetId, filas) {
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${AVISOS_PESTANA}'!A2:E`,
+  });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${AVISOS_PESTANA}'!A1:E${filas.length + 1}`,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [
+        AVISOS_COLUMNAS,
+        ...filas.map((a) => [a.nombre, a.endpoint, a.p256dh, a.auth, a.actualizado]),
+      ],
+    },
+  });
+}
+
+/**
+ * Guarda (o renueva) el celular de [nombre]. Un mismo celular (endpoint)
+ * queda una sola vez, a nombre de quien entró último en él.
+ */
+async function guardarSuscripcion({ nombre, endpoint, p256dh, auth }) {
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  await asegurarPestana(sheets, spreadsheetId, AVISOS_PESTANA);
+  const otras = (await leerAvisos(sheets, spreadsheetId)).filter(
+    (a) => a.endpoint && a.endpoint !== endpoint,
+  );
+  otras.push({ nombre, endpoint, p256dh, auth, actualizado: new Date().toISOString() });
+  await escribirAvisos(sheets, spreadsheetId, otras);
+}
+
+/** Borra esos celulares (se dieron de baja o cerraron sesión). */
+async function quitarSuscripciones(endpoints) {
+  const fuera = new Set(endpoints);
+  if (fuera.size === 0) return;
+  const sheets = await getSheetsClient();
+  const spreadsheetId = requireSheetId();
+  const avisos = await leerAvisos(sheets, spreadsheetId);
+  const quedan = avisos.filter((a) => a.endpoint && !fuera.has(a.endpoint));
+  if (quedan.length === avisos.length) return;
+  await escribirAvisos(sheets, spreadsheetId, quedan);
+}
+
 /** Lee todos los usuarios de la hoja "Usuarios" (login simple). */
 async function listarUsuarios() {
   const sheets = await getSheetsClient();
@@ -1077,6 +1154,9 @@ module.exports = {
   actualizarGuias,
   eliminarGuia,
   listarUsuarios,
+  listarSuscripciones,
+  guardarSuscripcion,
+  quitarSuscripciones,
   // Exportadas además para poder testear el parseo sin credenciales reales.
   rowToUsuario,
   rowToGuia,

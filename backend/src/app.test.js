@@ -6,6 +6,10 @@ jest.mock('./ocrAgente', () => ({
   leerNumeroGuia: jest.fn(),
   leerComprobante: jest.fn(),
 }));
+jest.mock('./avisos', () => ({
+  ...jest.requireActual('./avisos'),
+  enviar: jest.fn(),
+}));
 jest.mock('./fotos', () => ({
   ...jest.requireActual('./fotos'),
   guardarFoto: jest.fn(),
@@ -21,6 +25,7 @@ const auth = require('./auth');
 const repo = require('./sheetsRepository');
 const { leerGuiaConIA, leerNumeroGuia, leerComprobante } = require('./ocrAgente');
 const fotos = require('./fotos');
+const avisos = require('./avisos');
 const { ESTADOS, TIPOS_ENTREGA, ROLES, TRANSBORDO } = require('./columns');
 
 const app = require('./app');
@@ -91,34 +96,87 @@ describe('POST /guias (asignación)', () => {
   const ahoraPeru = Date.parse('2026-10-02T23:00:00.000Z');
   const haceMin = (min) => new Date(ahoraPeru - min * 60000).toISOString();
 
-  it('el mismo transportista no registra otra vez la misma guía antes de 20 min', async () => {
+  it('el mismo transportista que la repite el mismo día recibe un aviso para confirmar', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
-    // Hoy a las 17:45 de Perú: hace 15 minutos.
+    // Hoy a las 09:00 de Perú.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: haceMin(15) }),
+      guia({ numero_guia: payload.numeroGuia, transportista: 'juan pérez ', fecha_creacion: haceMin(9 * 60) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
     Date.now.mockRestore();
     expect(res.status).toBe(409);
-    expect(res.body.error).toBe(
-      `Ya registraste la guía ${payload.numeroGuia} a las 17:45. `
-      + 'Podrás volver a registrarla desde las 18:05 (en 5 min).',
-    );
+    expect(res.body).toEqual({
+      error: `Ya registraste la guía ${payload.numeroGuia} hoy a las 09:00.`,
+      codigo: 'repetida_hoy',
+      registradaA: '09:00',
+    });
     expect(repo.crearGuias).not.toHaveBeenCalled();
     // La comprobación lee la hoja sin caché.
     expect(repo.listarGuias).toHaveBeenCalledWith({ fresco: true });
   });
 
-  it('el mismo transportista la puede registrar otra vez pasados 20 min', async () => {
+  it('si confirma que la repite, se registra', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
-    // El mismo día, hace justo 20 minutos.
     repo.listarGuias.mockResolvedValue([
-      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(20) }),
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(5) }),
+    ]);
+    const res = await request(app).post('/guias').send({ ...payload, confirmarRepetida: true });
+    Date.now.mockRestore();
+    expect(res.status).toBe(201);
+    expect(repo.crearGuias).toHaveBeenCalledTimes(1);
+  });
+
+  it('de un día anterior se registra sin preguntar', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
+    // Ayer a las 18:00 de Perú.
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(24 * 60) }),
     ]);
     const res = await request(app).post('/guias').send(payload);
     Date.now.mockRestore();
     expect(res.status).toBe(201);
-    expect(repo.crearGuias).toHaveBeenCalledTimes(1);
+  });
+
+  it('pasada la medianoche, la de hace pocos minutos también pide confirmar', async () => {
+    // 00:05 de Perú; la registró a las 23:55 de ayer.
+    const medianoche = Date.parse('2026-10-03T05:05:00.000Z');
+    jest.spyOn(Date, 'now').mockReturnValue(medianoche);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: new Date(medianoche - 10 * 60000).toISOString() }),
+    ]);
+    const res = await request(app).post('/guias').send(payload);
+    Date.now.mockRestore();
+    expect(res.status).toBe(409);
+    expect(res.body.codigo).toBe('repetida_hoy');
+  });
+
+  it('una rechazada hoy no cuenta como repetida', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, estado: ESTADOS.RECHAZADO, fecha_creacion: haceMin(30) }),
+    ]);
+    const res = await request(app).post('/guias').send(payload);
+    Date.now.mockRestore();
+    expect(res.status).toBe(201);
+  });
+
+  it('en la carga masiva la repetida vuelve con su código y las demás se registran', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(ahoraPeru);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: payload.numeroGuia, fecha_creacion: haceMin(60) }),
+    ]);
+    const res = await request(app)
+      .post('/guias/lote')
+      .send({ guias: [payload, { ...payload, numeroGuia: 'IPE-OTRA' }] });
+    Date.now.mockRestore();
+    expect(res.status).toBe(200);
+    expect(res.body.resultados[0]).toEqual({
+      error: `Ya registraste la guía ${payload.numeroGuia} hoy a las 17:00.`,
+      codigo: 'repetida_hoy',
+      registradaA: '17:00',
+    });
+    expect(res.body.resultados[1].guia.numero_guia).toBe('IPE-OTRA');
+    expect(repo.crearGuias.mock.calls[0][0]).toHaveLength(1);
   });
 
   it('otro transportista la puede registrar al momento, aunque siga activa', async () => {
@@ -2123,5 +2181,111 @@ describe('Seguridad: un transportista no puede tocar lo que no es suyo', () => {
       .patch('/guias/IPE-2026-000123/estado')
       .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('Recordatorio de las 6 p. m.', () => {
+  const juan = { nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA };
+  const sub = (nombre, endpoint) => ({ nombre, endpoint, p256dh: 'BPclave', auth: 'secreto' });
+  // 18:00 de Perú = 23:00 UTC.
+  const seisPm = Date.parse('2026-11-08T23:00:00.000Z');
+
+  beforeEach(() => {
+    app.olvidarRecordatorio();
+    delete process.env.CRON_SECRET;
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('da la clave pública para suscribirse', async () => {
+    const res = await como(juan).get('/avisos/clave');
+    expect(res.status).toBe(200);
+    expect(Buffer.from(res.body.clave, 'base64url')).toHaveLength(65);
+  });
+
+  it('guarda el celular a nombre de quien inició sesión', async () => {
+    const res = await como(juan).post('/avisos/suscripcion').send({
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      keys: { p256dh: 'BPclave', auth: 'secreto' },
+      nombre: 'Otro',
+    });
+    expect(res.status).toBe(204);
+    expect(repo.guardarSuscripcion).toHaveBeenCalledWith({
+      nombre: 'Juan Pérez',
+      endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
+      p256dh: 'BPclave',
+      auth: 'secreto',
+    });
+  });
+
+  it('rechaza una suscripción que no es https', async () => {
+    const res = await como(juan).post('/avisos/suscripcion').send({
+      endpoint: 'http://malo/x',
+      keys: { p256dh: 'a', auth: 'b' },
+    });
+    expect(res.status).toBe(400);
+    expect(repo.guardarSuscripcion).not.toHaveBeenCalled();
+  });
+
+  it('al cerrar sesión solo quita su propio celular', async () => {
+    repo.listarSuscripciones.mockResolvedValue([sub('Diego', 'https://x/diego')]);
+    await como(juan).delete('/avisos/suscripcion').send({ endpoint: 'https://x/diego' });
+    expect(repo.quitarSuscripciones).not.toHaveBeenCalled();
+    repo.listarSuscripciones.mockResolvedValue([sub('juan pérez', 'https://x/juan')]);
+    await como(juan).delete('/avisos/suscripcion').send({ endpoint: 'https://x/juan' });
+    expect(repo.quitarSuscripciones).toHaveBeenCalledWith(['https://x/juan']);
+  });
+
+  it('a las 6 avisa a cada uno sus tareas por cerrar, sin las de custodia', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(seisPm);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T1', transportista: 'Juan Pérez' }),
+      guia({ numero_guia: 'T2', transportista: 'juan pérez' }),
+      guia({ numero_guia: 'T3', transportista: 'Juan Pérez', custodia_desde: '2026-11-08T20:00:00.000Z' }),
+      guia({ numero_guia: 'T4', transportista: 'Juan Pérez', estado: ESTADOS.ENTREGADO }),
+      guia({ numero_guia: 'T5', transportista: 'Luis', custodia_desde: '2026-11-08T20:00:00.000Z' }),
+      guia({ numero_guia: 'T6', transportista: 'Carlos' }),
+    ]);
+    repo.listarSuscripciones.mockResolvedValue([
+      sub('Juan Pérez', 'https://x/juan'),
+      sub('Luis', 'https://x/luis'),
+    ]);
+    avisos.enviar.mockResolvedValue('ok');
+    const res = await sinSesion().get('/cron/recordatorio');
+    expect(res.status).toBe(200);
+    expect(avisos.enviar).toHaveBeenCalledTimes(1);
+    expect(avisos.enviar).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://x/juan' }),
+      {
+        titulo: 'Tienes 2 tareas por cerrar',
+        cuerpo: 'T1, T2. Entrégalas, recházalas o déjalas en custodia.',
+        tag: 'recordatorio-6pm',
+      },
+    );
+    // Carlos tiene tareas pero no activó los avisos.
+    expect(res.body).toEqual({ enviados: 1, transportistas: 2, sinAviso: 1, vencidas: 0 });
+  });
+
+  it('borra los celulares que se dieron de baja', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(seisPm);
+    repo.listarGuias.mockResolvedValue([guia({ transportista: 'Juan Pérez' })]);
+    repo.listarSuscripciones.mockResolvedValue([sub('Juan Pérez', 'https://x/viejo')]);
+    avisos.enviar.mockResolvedValue('vencida');
+    await sinSesion().get('/cron/recordatorio');
+    expect(repo.quitarSuscripciones).toHaveBeenCalledWith(['https://x/viejo']);
+  });
+
+  it('no sale fuera de su hora ni dos veces el mismo día', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-08T15:00:00.000Z'));
+    expect((await sinSesion().get('/cron/recordatorio')).status).toBe(403);
+    Date.now.mockReturnValue(seisPm);
+    repo.listarGuias.mockResolvedValue([]);
+    repo.listarSuscripciones.mockResolvedValue([]);
+    expect((await sinSesion().get('/cron/recordatorio')).body.enviados).toBe(0);
+    expect((await sinSesion().get('/cron/recordatorio')).body.repetido).toBe(true);
+  });
+
+  it('con CRON_SECRET exige la clave', async () => {
+    process.env.CRON_SECRET = 'clave-cron';
+    expect((await sinSesion().get('/cron/recordatorio')).status).toBe(401);
   });
 });

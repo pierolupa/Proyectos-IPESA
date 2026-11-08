@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import '../models/rol_usuario.dart';
 import '../models/sucursal.dart';
 import '../models/tipo_entrega.dart';
 import '../services/guias_api.dart';
+import '../services/notificador.dart';
 
 const _prefNombre = 'sesion_nombre';
 
@@ -69,10 +71,6 @@ const diasPanelPorDefecto = 35;
 /// Cada cuánto el refresco automático vuelve a traer todo lo cargado (y no
 /// solo lo que cambió), por si alguien editó la hoja a mano.
 const recargaCompletaCada = Duration(minutes: 10);
-
-/// El mismo transportista puede volver a registrar una guía suya pasado
-/// este tiempo desde su último registro de ella (igual que el backend).
-const esperaRegistro = Duration(minutes: 20);
 
 /// Distancia en metros entre dos puntos (haversine).
 double distanciaMetros(double lat1, double lng1, double lat2, double lng2) {
@@ -260,6 +258,31 @@ class AppState extends ChangeNotifier {
   /// Nombre del usuario con sesión iniciada (vacío si no hay sesión).
   String get transportistaActual => _nombreUsuario ?? '';
 
+  /// Si este transportista ya registró hoy (día de Perú) la guía [numero]
+  /// —o hace menos de 20 minutos—, cuándo; si no, null. Las rechazadas no
+  /// cuentan. Así la app le avisa antes de repetir la tarea.
+  DateTime? registradaHoy(String numero, {DateTime? ahora}) {
+    final n = numero.trim();
+    if (n.isEmpty) return null;
+    final yo = transportistaActual.trim().toLowerCase();
+    final hoy = ahora ?? DateTime.now();
+    DateTime? ultima;
+    for (final g in _guias) {
+      if (g.numeroGuia.trim() != n ||
+          g.estado == EstadoGuia.rechazado ||
+          g.transportista.trim().toLowerCase() != yo) {
+        continue;
+      }
+      final f = g.fechaCreacion;
+      final reciente = hoy.difference(f) < const Duration(minutes: 20);
+      if ((mismoDiaPeru(f, hoy) || reciente) &&
+          (ultima == null || f.isAfter(ultima))) {
+        ultima = f;
+      }
+    }
+    return ultima;
+  }
+
   /// Login simple contra la hoja "Usuarios" (ver backend/README.md — no
   /// es un mecanismo de autenticación real, ver la advertencia ahí).
   /// Deja que el ApiException se propague para que la pantalla de login
@@ -317,7 +340,48 @@ class AppState extends ChangeNotifier {
     await prefs.setString(_prefNombre, sesion.nombre);
     await prefs.setString(_prefRol, sesion.rol.name);
     await _guardarToken(sesion.token);
+    _renovarRecordatorio();
     await cargarGuias();
+  }
+
+  // ── Recordatorio de las 6 p. m. (aviso en el celular) ────────────────
+
+  /// Este celular puede tener el recordatorio de las 6 p. m. y aún no lo
+  /// activó ni lo rechazó: la lista de tareas le ofrece activarlo.
+  bool get recordatorioPorActivar =>
+      _rolActual == RolUsuario.transportista &&
+      Notificador.pushSoportado &&
+      Notificador.permiso == 'default';
+
+  /// Pide permiso para los avisos y suscribe el celular. Devuelve si quedó
+  /// activo.
+  Future<bool> activarRecordatorio() async {
+    final permitido = await Notificador.pedirPermiso();
+    notifyListeners();
+    if (!permitido) return false;
+    return _suscribirRecordatorio();
+  }
+
+  /// Si ya tenía permiso, renueva la suscripción en segundo plano (el
+  /// navegador puede cambiarla, y así queda a nombre de quien entró).
+  void _renovarRecordatorio() {
+    if (_rolActual == RolUsuario.transportista &&
+        Notificador.pushSoportado &&
+        Notificador.permitido) {
+      unawaited(_suscribirRecordatorio());
+    }
+  }
+
+  Future<bool> _suscribirRecordatorio() async {
+    try {
+      final clave = await _api.claveAvisos();
+      final suscripcion = await Notificador.suscribirPush(clave);
+      if (suscripcion == null) return false;
+      await _api.guardarSuscripcionAvisos(suscripcion);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _guardarToken(String? token) async {
@@ -367,7 +431,7 @@ class AppState extends ChangeNotifier {
       }
     }
     avisoSesion = 'Tu sesión venció. Ingresa de nuevo.';
-    await cerrarSesion();
+    await cerrarSesion(quitarAvisos: false);
     return null;
   }
 
@@ -391,10 +455,27 @@ class AppState extends ChangeNotifier {
     _api.token = prefs.getString(_prefToken);
     _rangoPorDefecto();
     notifyListeners();
+    _renovarRecordatorio();
     await cargarGuias();
   }
 
-  Future<void> cerrarSesion() async {
+  /// [quitarAvisos]: este celular deja de recibir el recordatorio (no se
+  /// hace cuando la sesión venció: el servidor ya no lo aceptaría).
+  Future<void> cerrarSesion({bool quitarAvisos = true}) async {
+    if (quitarAvisos && _rolActual == RolUsuario.transportista) {
+      try {
+        final endpoint = await Notificador.desuscribirPush().timeout(
+          const Duration(seconds: 3),
+        );
+        if (endpoint != null) {
+          await _api
+              .quitarSuscripcionAvisos(endpoint)
+              .timeout(const Duration(seconds: 5));
+        }
+      } catch (_) {
+        // Sin conexión: el servidor la borra solo cuando deje de servir.
+      }
+    }
     _rolActual = null;
     _nombreUsuario = null;
     _api.token = null;
@@ -665,29 +746,6 @@ class AppState extends ChangeNotifier {
     return i == -1 ? null : _guias[i];
   }
 
-  /// Si el usuario actual registró ese número hace menos de
-  /// [esperaRegistro], desde cuándo podrá registrarlo otra vez; si no,
-  /// null. Lo que registró otro transportista y un registro rechazado no
-  /// bloquean. Validación local rápida contra la última lista cargada; la
-  /// definitiva la hace el backend al confirmar (409).
-  DateTime? registroBloqueadoHasta(String numeroGuia, {DateTime? ahora}) {
-    final yo = transportistaActual.trim().toLowerCase();
-    Guia? ultima;
-    for (final g in _guias) {
-      if (g.numeroGuia != numeroGuia ||
-          g.estado == EstadoGuia.rechazado ||
-          g.transportista.trim().toLowerCase() != yo) {
-        continue;
-      }
-      if (ultima == null || g.fechaCreacion.isAfter(ultima.fechaCreacion)) {
-        ultima = g;
-      }
-    }
-    if (ultima == null) return null;
-    final libre = ultima.fechaCreacion.toLocal().add(esperaRegistro);
-    return (ahora ?? DateTime.now()).isBefore(libre) ? libre : null;
-  }
-
   /// El registro exacto (por fecha de creación) o, sin ella, el más
   /// reciente con ese número.
   int _indiceDeRegistro(String numeroGuia, DateTime? fechaCreacion) {
@@ -701,9 +759,6 @@ class AppState extends ChangeNotifier {
     }
     return _indiceDe(numeroGuia);
   }
-
-  bool esDuplicado(String numeroGuia) =>
-      registroBloqueadoHasta(numeroGuia) != null;
 
   /// Lee los datos de la foto de una guía con IA (ver
   /// ../services/guias_api.dart). No toca `_guias`/no notifica — es solo
@@ -1104,4 +1159,12 @@ class AppState extends ChangeNotifier {
     }
     return null;
   }
+}
+
+/// El mismo día en Perú (UTC-5 todo el año), sea cual sea la hora del
+/// celular.
+bool mismoDiaPeru(DateTime a, DateTime b) {
+  DateTime peru(DateTime t) => t.toUtc().subtract(const Duration(hours: 5));
+  final x = peru(a), y = peru(b);
+  return x.year == y.year && x.month == y.month && x.day == y.day;
 }

@@ -37,6 +37,15 @@ function claveFirma() {
   return crypto.createHash('sha256').update(`ipesa-sesiones-v1\n${google}`).digest();
 }
 
+/**
+ * 32 bytes propios de [etiqueta], sacados de la clave de firma: así otras
+ * claves (las de los avisos al celular) no necesitan un secreto aparte y
+ * nunca se escriben en ningún lado.
+ */
+function derivarClave(etiqueta) {
+  return crypto.createHmac('sha256', claveFirma()).update(`derivada\n${etiqueta}`).digest();
+}
+
 function firmar(cuerpo) {
   return crypto.createHmac('sha256', claveFirma()).update(cuerpo).digest('base64url');
 }
@@ -130,6 +139,7 @@ module.exports = {
   BLOQUEO_MS,
   crearToken,
   leerToken,
+  derivarClave,
   loginBloqueado,
   ipBloqueada,
   registrarFallo,

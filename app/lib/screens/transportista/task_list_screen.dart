@@ -7,6 +7,7 @@ import '../../models/guia.dart';
 import '../../models/tipo_entrega.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/invitacion_recordatorio.dart';
 import '../../widgets/marca_rpa.dart';
 import '../../widgets/acciones_tarea.dart';
 import '../../widgets/actualizacion_automatica.dart';
@@ -88,6 +89,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _nuevaGuia() =>
       Navigator.of(context)
           .push(MaterialPageRoute(builder: (_) => const CaptureFlowScreen()));
+
+  /// Dijo "Ahora no" al recordatorio: no se le vuelve a ofrecer en esta
+  /// sesión de la app.
+  bool _sinRecordatorio = false;
+
+  Future<void> _activarRecordatorio() async {
+    final activo = await context.read<AppState>().activarRecordatorio();
+    if (!mounted) return;
+    setState(() => _sinRecordatorio = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          activo
+              ? 'Listo: a las 6 p. m. te avisamos si te faltan tareas por cerrar.'
+              : 'No se pudo activar. Revisa que el navegador permita '
+                    'notificaciones para esta app.',
+        ),
+      ),
+    );
+  }
 
   void _cerrarSesion() {
     context.read<AppState>().cerrarSesion();
@@ -174,6 +195,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 derechaActiva: _verEntregadas,
                 onCambio: (v) => setState(() => _verEntregadas = v),
               ),
+              if (appState.recordatorioPorActivar && !_sinRecordatorio)
+                InvitacionRecordatorio(
+                  onActivar: _activarRecordatorio,
+                  onAhoraNo: () => setState(() => _sinRecordatorio = true),
+                ),
               Expanded(
                 child: _lista(
                   context,

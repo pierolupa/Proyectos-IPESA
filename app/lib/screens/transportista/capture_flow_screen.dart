@@ -79,6 +79,13 @@ class _Borrador {
   bool enviando = false;
   String? error;
 
+  /// Ya la registró hoy y dijo que sí la registra otra vez.
+  bool repetidaConfirmada = false;
+
+  /// El servidor no la registró porque ya la tenía hoy: la hora de ese
+  /// registro ("09:14").
+  String? repetidaA;
+
   // Cuándo pasó cada paso (se muestra debajo de cada uno).
   final tomada = DateTime.now();
   DateTime? leida;
@@ -313,10 +320,6 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (b.enCola || b.leyendo) return 'Leyendo…';
     final numero = b.numero.text.trim();
     if (numero.isEmpty) return 'Falta el número de guía.';
-    if (appState.registroBloqueadoHasta(numero) case final libre?) {
-      return 'Ya registraste esta guía: podrás volver a registrarla desde '
-          'las ${DateFormat('HH:mm').format(libre)}.';
-    }
     final repetida = _borradores.any(
       (o) => o != b && o.id < b.id && o.numero.text.trim() == numero,
     );
@@ -339,6 +342,12 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     ];
     if (listas.isEmpty || !gpsActivo) return;
     if (!await _confirmarAproximada() || !mounted) return;
+    // ¿Alguna ya la registró hoy? Que él decida si la repite.
+    if (!await _decidirRepetidas(listas, _repetidasDe(appState, listas)) ||
+        !mounted) {
+      return;
+    }
+    if (listas.isEmpty) return;
     setState(() {
       _registrando = true;
       for (final b in listas) {
@@ -346,11 +355,42 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
         b.error = null;
       }
     });
-    final resultados = await _registrar(appState, listas);
+    await _registrar(appState, listas);
     if (!mounted) return;
-    final ok = resultados.where((r) => r).length;
-    final fallidas = resultados.length - ok;
+    // Si su lista estaba atrasada, el servidor es el que avisa: se le
+    // pregunta igual y, si dice que sí, se registran.
+    final delServidor = {
+      for (final b in listas)
+        if (b.registrada == null &&
+            b.repetidaA != null &&
+            !b.repetidaConfirmada)
+          b: 'ya la registraste hoy${b.repetidaA!.isEmpty ? '' : ' a las ${b.repetidaA}'}',
+    };
+    if (delServidor.isNotEmpty) {
+      setState(() => _registrando = false);
+      await _decidirRepetidas(listas, delServidor);
+      if (!mounted || _borradores.isEmpty) return;
+      final reintentar = [
+        for (final b in delServidor.keys)
+          if (b.repetidaConfirmada && _borradores.contains(b)) b,
+      ];
+      if (reintentar.isNotEmpty) {
+        setState(() {
+          _registrando = true;
+          for (final b in reintentar) {
+            b.enviando = true;
+            b.error = null;
+          }
+        });
+        await _registrar(appState, reintentar);
+        if (!mounted) return;
+      }
+    }
+    final enviadas = listas.where(_borradores.contains).toList();
+    final ok = enviadas.where((b) => b.registrada != null).length;
+    final fallidas = enviadas.length - ok;
     setState(() => _registrando = false);
+    if (enviadas.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       SnackBar(
@@ -384,6 +424,100 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
     if (_borradores.isEmpty) Navigator.of(context).pop();
   }
 
+  /// Las que ya registró hoy (según su lista), con el motivo para el aviso.
+  Map<_Borrador, String> _repetidasDe(
+    AppState appState,
+    List<_Borrador> listas,
+  ) {
+    final repetidas = <_Borrador, String>{};
+    for (final b in listas) {
+      if (b.repetidaConfirmada) continue;
+      final previa = appState.registradaHoy(b.numero.text.trim());
+      if (previa != null) {
+        repetidas[b] =
+            'ya la registraste hoy a las '
+            '${DateFormat('HH:mm').format(previa.toLocal())}';
+      }
+    }
+    return repetidas;
+  }
+
+  /// Avisa que se está repitiendo la tarea. Si dice que sí, quedan
+  /// confirmadas; si no, salen de [listas] y de la pantalla. Devuelve false
+  /// si cerró el aviso sin elegir (no se registra nada).
+  Future<bool> _decidirRepetidas(
+    List<_Borrador> listas,
+    Map<_Borrador, String> repetidas,
+  ) async {
+    if (repetidas.isEmpty) return true;
+    final registrar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(
+          Icons.content_copy_rounded,
+          color: Color(0xFFB45309),
+          size: 32,
+        ),
+        title: Text(
+          repetidas.length == 1 ? 'Tarea repetida' : 'Tareas repetidas',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final e in repetidas.entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: e.key.numero.text.trim(),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(text: ' · ${e.value}'),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Text(
+              repetidas.length == 1
+                  ? '¿La registras de nuevo?'
+                  : '¿Las registras de nuevo?',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No registrar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sí, registrar'),
+          ),
+        ],
+      ),
+    );
+    if (registrar == null || !mounted) return false;
+    setState(() {
+      for (final b in repetidas.keys) {
+        if (registrar) {
+          b.repetidaConfirmada = true;
+          b.repetidaA = null;
+          b.error = null;
+        } else {
+          listas.remove(b);
+          _borradores.remove(b);
+          b.dispose();
+        }
+      }
+    });
+    if (_borradores.isEmpty) Navigator.of(context).pop();
+    return true;
+  }
+
   /// Registra todas con un solo pedido (carga masiva): las que se crean
   /// salen de la lista y las que no se quedan con su error. Devuelve si
   /// cada una se registró.
@@ -411,6 +545,7 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               numeroPedido: b.pedido.text.trim(),
               numeroEntrega: b.entrega.text.trim(),
               comprobante: b.comprobante,
+              confirmarRepetida: b.repetidaConfirmada,
             ),
         ],
       );
@@ -428,6 +563,9 @@ class _CaptureFlowScreenState extends State<CaptureFlowScreen>
               b.registrada = DateTime.now();
             } else {
               b.error = error;
+              b.repetidaA = i < resultados.length
+                  ? resultados[i].repetidaA
+                  : null;
             }
           }
         });
