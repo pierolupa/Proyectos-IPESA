@@ -189,13 +189,15 @@ class AppState extends ChangeNotifier {
     return ultima.subtract(const Duration(minutes: 2));
   }
 
-  /// El comercial busca en otro rango de fechas: se piden al servidor solo
-  /// esas guías (si no son las que ya están cargadas). Para los demás
-  /// roles no hace nada: ya tienen todas.
+  /// Rastrear busca en otro rango de fechas. El comercial pide al servidor
+  /// solo esas guías (si no son las que ya están cargadas); el
+  /// administrador suma las anteriores a lo que tiene cargado.
   Future<void> asegurarRangoTareas(DateTime desde, DateTime hasta) async {
     _desdeTareas = _inicioDelDia(desde);
     _hastaTareas = _inicioDelDia(hasta);
-    if (!_pideRango) return;
+    // Administrador y sub administrador: tienen cargadas las recientes; si
+    // Rastrear pide fechas anteriores, se traen esas (también archivadas).
+    if (!_pideRango) return asegurarDesde(desde);
     if (_cargaEnCurso case final carga?) await carga;
     if (_rangoCargado == (_desdeTareas, _hastaTareas) && error == null) return;
     await cargarGuias();

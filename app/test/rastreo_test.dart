@@ -637,4 +637,54 @@ void main() {
     await appState.asegurarRangoTareas(ayer, ayer);
     expect(consultas, hasLength(2));
   });
+
+  testWidgets('El administrador que rastrea fechas antiguas las trae del '
+      'servidor', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sesion_nombre': 'Administrador',
+      'sesion_rol': 'administrador',
+    });
+    final hoy = DateUtils.dateOnly(DateTime.now());
+    final antigua = hoy.subtract(const Duration(days: 36));
+    final consultas = <Map<String, String>>[];
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/sucursales')) {
+        return http.Response('[]', 200);
+      }
+      consultas.add(request.url.queryParameters);
+      // Solo la consulta del rango antiguo trae la guía de hace 36 días.
+      final viejas = request.url.queryParameters.containsKey('desde');
+      return http.Response(
+        jsonEncode([
+          if (viejas)
+            _guia(
+              'T028-132956',
+              'entregado',
+              'MAPFRE PERU',
+              salida: antigua.add(const Duration(hours: 10)),
+              cierre: antigua.add(const Duration(hours: 12)),
+            ),
+        ]),
+        200,
+      );
+    });
+    final appState = AppState(api: GuiasApi(client: client));
+    await appState.restaurarSesion();
+    expect(appState.todasLasGuias, isEmpty);
+
+    await appState.asegurarRangoTareas(
+      hoy.subtract(const Duration(days: 40)),
+      hoy,
+    );
+    expect(
+      consultas.last['desde'],
+      hoy.subtract(const Duration(days: 40)).toUtc().toIso8601String(),
+    );
+    final filtros = FiltrosRastreo(
+      numeroGuia: 'T028-132956',
+      desde: hoy.subtract(const Duration(days: 40)),
+      hasta: hoy,
+    );
+    expect(_numeros(filtros.aplicar(appState.todasLasGuias)), ['T028-132956']);
+  });
 }
