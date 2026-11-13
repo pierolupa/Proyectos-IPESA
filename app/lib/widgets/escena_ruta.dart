@@ -246,6 +246,43 @@ class _PintorCielo extends CustomPainter {
 /// Paisaje animado al pie de la vista del comercial: cerros, árboles, nubes
 /// y un avión pasan en capas (las cercanas más rápido) mientras un camión
 /// IPESA avanza por la carretera. Con "reducir animaciones" queda quieto.
+/// Las sucursales por las que pasa el camión del paisaje, en orden.
+const _sucursalesEscena = [
+  'ALMACÉN PIURA',
+  'ALMACÉN CHICLAYO',
+  'TIENDA HUANCAYO',
+  'ALMACÉN ATE',
+];
+
+/// Lo que avanza el paisaje de adelante entre una sucursal y la siguiente.
+const _tramo = 420.0;
+
+/// La parte de cada tramo en que el camión maneja; el resto está parado
+/// dejando el pedido.
+const _manejo = .68;
+
+/// Dónde va el camión en la vuelta [t] (de 0 a 1): los px que avanzó, si
+/// está manejando, en qué tramo va y, si está parado, cuánto lleva de la
+/// entrega (de 0 a 1).
+({double avance, bool enMarcha, int parada, double entrega}) _recorrido(
+  double t,
+) {
+  final n = _sucursalesEscena.length;
+  final x = t * n;
+  final i = x.floor().clamp(0, n - 1);
+  final u = x - i;
+  if (u < _manejo) {
+    final k = Curves.easeInOut.transform(u / _manejo);
+    return (avance: (i + k) * _tramo, enMarcha: true, parada: i, entrega: 0);
+  }
+  return (
+    avance: (i + 1) * _tramo,
+    enMarcha: false,
+    parada: i,
+    entrega: (u - _manejo) / (1 - _manejo),
+  );
+}
+
 class EscenaRuta extends StatefulWidget {
   const EscenaRuta({super.key, this.alto = 210});
 
@@ -298,8 +335,11 @@ class _EscenaRutaState extends State<EscenaRuta>
               animation: _tiempo,
               builder: (context, _) {
                 final t = _tiempo.value;
-                // Pequeño rebote del camión, como si pasara por la pista.
-                final rebote = math.sin(t * 2 * math.pi * 36) * 1.2;
+                final viaje = _recorrido(t);
+                // Pequeño rebote del camión mientras maneja.
+                final rebote = viaje.enMarcha
+                    ? math.sin(t * 2 * math.pi * 36) * 1.2
+                    : 0.0;
                 return Stack(
                   clipBehavior: Clip.hardEdge,
                   children: [
@@ -318,7 +358,14 @@ class _EscenaRutaState extends State<EscenaRuta>
                     Positioned(
                       left: (ancho - _Camion.ancho) / 2,
                       bottom: 20 + rebote,
-                      child: _Camion(giroRuedas: t * 2 * math.pi * 90),
+                      child: _Camion(
+                        giroRuedas:
+                            viaje.avance /
+                            (_tramo * _sucursalesEscena.length) *
+                            2 *
+                            math.pi *
+                            30,
+                      ),
                     ),
                   ],
                 );
@@ -389,24 +436,27 @@ class _PintorEscena extends CustomPainter {
     final xAvion = w + 80 - t * (w + 300);
     _avion(canvas, Offset(xAvion, 40));
 
-    // Carretera entre cerros y bosques. Se dibuja con colores de día y,
+    // Paisaje del Perú: el camión va por la costa y la sierra y se detiene
+    // en cada sucursal a dejar un pedido. Se dibuja con colores de día y,
     // según la hora, se oscurece con el tinte de la paleta.
+    final viaje = _recorrido(t);
+    final d = viaje.avance;
     final tinte = p.tinte;
     if (tinte != null) {
       canvas.saveLayer(Rect.fromLTWH(0, 0, w, h - 40), Paint());
     }
 
-    // Montañas lejanas con nieve (lentas).
-    const periodoM = 520.0;
-    final despM = t * periodoM;
+    // Sierra al fondo (lenta).
+    const periodoM = _tramo;
+    final despM = (d * .25) % periodoM;
     for (var x = -periodoM; x < w + periodoM; x += periodoM) {
       final b = x - despM;
-      _cerro(canvas, b + 110, suelo, 125, 92, _azulLejos, nieve: true);
-      _cerro(canvas, b + 460, suelo, 110, 78, _azulLejos, nieve: true);
-      _cerro(canvas, b + 300, suelo, 140, 114, _azulLejos, nieve: true);
+      _cerro(canvas, b + 80, suelo, 110, 56, _verdeLejos);
+      _cerro(canvas, b + 400, suelo, 85, 46, _verdeLejos);
+      _cerro(canvas, b + 260, suelo, 130, 110, _tierra, nieve: true);
     }
 
-    // Bruma al pie de las montañas: las aleja.
+    // Bruma al pie de los cerros: los aleja.
     final bruma = Rect.fromLTWH(0, suelo - 50, w, 50);
     canvas.drawRect(
       bruma,
@@ -418,13 +468,13 @@ class _PintorEscena extends CustomPainter {
         ).createShader(bruma),
     );
 
-    // Cerros verdes con un bosque chico encima (velocidad media).
-    const periodoH = 400.0;
-    final despH = (t * periodoH * 2) % periodoH;
+    // Cerros verdes con pinos chicos (velocidad media).
+    const periodoH = _tramo;
+    final despH = (d * .5) % periodoH;
     for (var x = -periodoH; x < w + periodoH; x += periodoH) {
       final b = x - despH;
       _cerro(canvas, b + 90, suelo + 2, 135, 54, _verdeCerro);
-      _cerro(canvas, b + 300, suelo + 2, 150, 66, _verdeCerro);
+      _cerro(canvas, b + 310, suelo + 2, 150, 66, _verdeCerro);
       for (final (dx, alto) in const [
         (12.0, 29.0),
         (26.0, 36.0),
@@ -432,18 +482,18 @@ class _PintorEscena extends CustomPainter {
         (150.0, 31.0),
         (164.0, 38.0),
         (178.0, 29.0),
-        (232.0, 26.0),
-        (246.0, 34.0),
-        (330.0, 36.0),
-        (344.0, 29.0),
-        (358.0, 41.0),
-        (372.0, 31.0),
+        (240.0, 26.0),
+        (254.0, 34.0),
+        (340.0, 36.0),
+        (354.0, 29.0),
+        (368.0, 41.0),
+        (382.0, 31.0),
       ]) {
         _pinoEn(canvas, Offset(b + dx, suelo + 2), alto, lejos: true);
       }
     }
 
-    // Bosque de adelante, al borde de la pista (rápido).
+    // Adelante: el campo y las sucursales, que pasan al ritmo del camión.
     final pasto = Rect.fromLTWH(0, suelo - 4, w, h - 40 - suelo + 4);
     canvas.drawRect(
       pasto,
@@ -451,27 +501,31 @@ class _PintorEscena extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF8CC46A), Color(0xFF5E9440)],
+          colors: [Color(0xFF9CCB6A), Color(0xFF6E9E45)],
         ).createShader(pasto),
     );
-    const periodoA = 360.0;
-    final despA = (t * periodoA * 4) % periodoA;
-    final base = suelo + 8;
-    for (var x = -periodoA; x < w + periodoA; x += periodoA) {
-      final b = x - despA;
-      _pinoEn(canvas, Offset(b + 10, base), 65);
-      _pinoEn(canvas, Offset(b + 34, base + 1), 52);
-      _pinoEn(canvas, Offset(b + 64, base), 49);
-      _pinoEn(canvas, Offset(b + 96, base), 70);
-      _pinoEn(canvas, Offset(b + 122, base + 1), 34);
-      _pinoEn(canvas, Offset(b + 150, base), 44);
-      _pinoEn(canvas, Offset(b + 178, base), 57);
-      _pinoEn(canvas, Offset(b + 200, base + 1), 47);
-      _pinoEn(canvas, Offset(b + 236, base), 60);
-      _pinoEn(canvas, Offset(b + 270, base), 65);
-      _pinoEn(canvas, Offset(b + 296, base + 1), 31);
-      _pinoEn(canvas, Offset(b + 320, base), 55);
-      _pinoEn(canvas, Offset(b + 346, base), 47);
+    final n = _sucursalesEscena.length;
+    const largo = _tramo * 4;
+    // La sucursal queda justo detrás del camión cuando se detiene.
+    final junto = (w - _Camion.ancho) / 2 - 44;
+    final inicio = -(d % largo);
+    final avisos = <Offset>[];
+    for (var vuelta = 0; vuelta < 2; vuelta++) {
+      for (var i = 0; i < n; i++) {
+        final a = inicio + vuelta * largo + (i + 1) * _tramo + junto;
+        if (a < -_tramo / 2 - 20 || a > w + _tramo / 2 + 20) continue;
+        final entregada =
+            i < viaje.parada ||
+            (i == viaje.parada && !viaje.enMarcha) ||
+            (i == n - 1 && viaje.parada == 0 && viaje.enMarcha);
+        final cayendo = i == viaje.parada && !viaje.enMarcha
+            ? viaje.entrega
+            : 1.0;
+        _tramoSucursal(canvas, i, a, suelo, h - 40, entregada, cayendo);
+        if (i == viaje.parada && !viaje.enMarcha && viaje.entrega > .35) {
+          avisos.add(Offset(a, suelo - 58));
+        }
+      }
     }
 
     if (tinte != null) {
@@ -482,6 +536,9 @@ class _PintorEscena extends CustomPainter {
           ..blendMode = BlendMode.srcATop,
       );
       canvas.restore();
+    }
+    for (final aviso in avisos) {
+      _entregado(canvas, aviso);
     }
 
     // Carretera (más clara al fondo) con las líneas del centro avanzando.
@@ -507,7 +564,7 @@ class _PintorEscena extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
     const periodoL = 40.0;
-    final despL = t * periodoL * 60;
+    final despL = d;
     pintura.color = Colors.white.withValues(alpha: 0.85);
     for (var x = -periodoL; x < w + periodoL; x += periodoL) {
       final b = x - (despL % periodoL);
@@ -654,11 +711,6 @@ class _PintorEscena extends CustomPainter {
     canvas.restore();
   }
 
-  static const _azulLejos = [
-    Color(0xFFD3E2EC),
-    Color(0xFFA2BCCF),
-    Color(0xFF7593AB),
-  ];
   static const _verdeCerro = [
     Color(0xFFC3E2A8),
     Color(0xFF84BE6E),
@@ -737,6 +789,519 @@ class _PintorEscena extends CustomPainter {
         Paint()..color = const Color(0xFFF7FBFA),
       )
       ..restore();
+  }
+
+  static const _tierra = [
+    Color(0xFFE8B98A),
+    Color(0xFFC58B5E),
+    Color(0xFF8F5C3A),
+  ];
+  void _velero(Canvas canvas, Offset o) {
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 14, o.dy)
+        ..lineTo(o.dx + 14, o.dy)
+        ..lineTo(o.dx + 10, o.dy + 6)
+        ..lineTo(o.dx - 10, o.dy + 6)
+        ..close(),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(o.dx - 13, o.dy, 26, 2.5),
+      Paint()..color = const Color(0xFFE2453C),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(o.dx - .8, o.dy - 26, 1.6, 26),
+      Paint()..color = const Color(0xFF6B6B6B),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 1, o.dy - 25)
+        ..lineTo(o.dx + 13, o.dy - 3)
+        ..lineTo(o.dx + 1, o.dy - 3)
+        ..close(),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 1, o.dy - 20)
+        ..lineTo(o.dx - 10, o.dy - 3)
+        ..lineTo(o.dx - 1, o.dy - 3)
+        ..close(),
+      Paint()..color = const Color(0xFFE9EEF0),
+    );
+  }
+
+  void _palmera(Canvas canvas, Offset base, double alto, double inclina) {
+    final cima = Offset(base.dx + inclina, base.dy - alto);
+    _sombra(canvas, base + const Offset(3, 0), 26);
+    canvas.drawPath(
+      Path()
+        ..moveTo(base.dx, base.dy)
+        ..quadraticBezierTo(
+          base.dx + inclina * .2,
+          base.dy - alto * .6,
+          cima.dx,
+          cima.dy,
+        ),
+      Paint()
+        ..color = const Color(0xFF9A6A3E)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
+    final largo = alto * .8;
+    for (final (angulo, color) in const [
+      (-150.0, Color(0xFF3E9A3A)),
+      (-30.0, Color(0xFF3E9A3A)),
+      (-115.0, Color(0xFF6CC24A)),
+      (10.0, Color(0xFF5CB847)),
+      (-70.0, Color(0xFF7BD155)),
+    ]) {
+      canvas
+        ..save()
+        ..translate(cima.dx, cima.dy)
+        ..rotate(angulo * math.pi / 180)
+        ..drawOval(
+          Rect.fromLTWH(-2, -largo * .12, largo, largo * .24),
+          Paint()..color = color,
+        )
+        ..restore();
+    }
+    final coco = Paint()..color = const Color(0xFF6B4A2A);
+    canvas.drawCircle(cima + const Offset(-1, 3), 2.6, coco);
+    canvas.drawCircle(cima + const Offset(3, 3), 2.6, coco);
+  }
+
+  void _llama(Canvas canvas, Offset o) {
+    _sombra(canvas, o + const Offset(2, 0), 30);
+    final lana = Paint()..color = const Color(0xFFF7F3EC);
+    final pata = Paint()..color = const Color(0xFFE2DACB);
+    for (final x in const [-8.0, -4.0, 5.0, 9.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(o.dx + x, o.dy - 11, 2.6, 11),
+          const Radius.circular(1.2),
+        ),
+        pata,
+      );
+    }
+    canvas.drawOval(
+      Rect.fromCenter(center: o + const Offset(0, -14), width: 24, height: 14),
+      lana,
+    );
+    // La mantita de colores.
+    for (final (y, alto, color) in const [
+      (-21.0, 9.0, Color(0xFFE2453C)),
+      (-17.0, 2.0, Color(0xFFF6C343)),
+      (-14.0, 1.6, Color(0xFF2E9A5C)),
+    ]) {
+      canvas.drawRect(
+        Rect.fromLTWH(o.dx - 6, o.dy + y, 11, alto),
+        Paint()..color = color,
+      );
+    }
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 8, o.dy - 16)
+        ..quadraticBezierTo(o.dx + 11, o.dy - 26, o.dx + 10, o.dy - 34)
+        ..lineTo(o.dx + 15, o.dy - 34)
+        ..quadraticBezierTo(o.dx + 16, o.dy - 24, o.dx + 13, o.dy - 15)
+        ..close(),
+      lana,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: o + const Offset(14, -35), width: 11, height: 7),
+      lana,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 10, o.dy - 37)
+        ..lineTo(o.dx + 9, o.dy - 43)
+        ..lineTo(o.dx + 12, o.dy - 39)
+        ..close()
+        ..moveTo(o.dx + 13, o.dy - 38)
+        ..lineTo(o.dx + 13, o.dy - 44)
+        ..lineTo(o.dx + 15.5, o.dy - 39)
+        ..close(),
+      pata,
+    );
+    canvas.drawCircle(
+      o + const Offset(15.5, -36),
+      .9,
+      Paint()..color = const Color(0xFF222222),
+    );
+  }
+
+  void _casita(Canvas canvas, Offset o) {
+    _sombra(canvas, o, 52);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(o.dx - 20, o.dy - 26, 40, 26),
+        const Radius.circular(2),
+      ),
+      Paint()..color = const Color(0xFFE8C48A),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 26, o.dy - 24)
+        ..lineTo(o.dx, o.dy - 44)
+        ..lineTo(o.dx + 26, o.dy - 24)
+        ..close(),
+      Paint()..color = const Color(0xFFB5532E),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx, o.dy - 44)
+        ..lineTo(o.dx + 26, o.dy - 24)
+        ..lineTo(o.dx + 20, o.dy - 24)
+        ..lineTo(o.dx, o.dy - 40)
+        ..close(),
+      Paint()..color = const Color(0xFF8C3B1E),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTWH(o.dx - 5, o.dy - 15, 10, 15),
+        topLeft: const Radius.circular(4),
+        topRight: const Radius.circular(4),
+      ),
+      Paint()..color = const Color(0xFF7A4A2A),
+    );
+    final ventana = Paint()..color = const Color(0xFF8FC7E0);
+    for (final x in const [-16.0, 9.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(o.dx + x, o.dy - 19, 7, 7),
+          const Radius.circular(1.5),
+        ),
+        ventana,
+      );
+    }
+  }
+
+  static const _verdeLejos = [
+    Color(0xFFC9DCC0),
+    Color(0xFF93B48A),
+    Color(0xFF5F8A5A),
+  ];
+
+  /// Un tramo del viaje: el paisaje alrededor de la sucursal [i], que
+  /// queda en [a]. Con [entregada], la caja ya está en la puerta; [cayendo]
+  /// va de 0 a 1 mientras el pedido baja del camión.
+  void _tramoSucursal(
+    Canvas canvas,
+    int i,
+    double a,
+    double suelo,
+    double piso,
+    bool entregada,
+    double cayendo,
+  ) {
+    final base = suelo + 8;
+    final nombre = _sucursalesEscena[i];
+    switch (i) {
+      case 0: // Piura: la costa, con el mar.
+        _mar(canvas, a + 84, a + 214, suelo, piso);
+        _pinoEn(canvas, Offset(a - 170, base), 55);
+        _palmera(canvas, Offset(a - 120, base), 50, -8);
+        _almacen(canvas, Offset(a, base), nombre);
+        _palmera(canvas, Offset(a + 74, base + 1), 44, 8);
+      case 1: // Chiclayo: palmeras y campo.
+        _palmera(canvas, Offset(a - 190, base), 50, -6);
+        _palmera(canvas, Offset(a - 160, base + 1), 42, 8);
+        _pinoEn(canvas, Offset(a - 112, base), 52);
+        _almacen(canvas, Offset(a, base), nombre);
+        _pinoEn(canvas, Offset(a + 82, base), 60);
+        _pinoEn(canvas, Offset(a + 112, base + 1), 44);
+        _palmera(canvas, Offset(a + 170, base), 48, -8);
+      case 2: // Huancayo: la sierra, con la llama y la casita.
+        _pinoEn(canvas, Offset(a - 185, base), 56);
+        _llama(canvas, Offset(a - 140, base));
+        _pinoEn(canvas, Offset(a - 100, base), 44);
+        _tienda(canvas, Offset(a, base), nombre);
+        _casita(canvas, Offset(a + 92, base));
+        _pinoEn(canvas, Offset(a + 145, base), 58);
+        _pinoEn(canvas, Offset(a + 180, base + 1), 40);
+      default: // Lima: el almacén de Ate entre pinos.
+        _pinoEn(canvas, Offset(a - 180, base), 60);
+        _pinoEn(canvas, Offset(a - 150, base + 1), 46);
+        _pinoEn(canvas, Offset(a - 110, base), 66);
+        _almacen(canvas, Offset(a, base), nombre);
+        _pinoEn(canvas, Offset(a + 84, base), 52);
+        _pinoEn(canvas, Offset(a + 112, base + 1), 64);
+        _pinoEn(canvas, Offset(a + 150, base), 44);
+        _pinoEn(canvas, Offset(a + 185, base), 58);
+    }
+    if (entregada) {
+      // El pedido sale de atrás del camión y cae junto a la puerta.
+      final q = Curves.easeIn.transform((cayendo / .35).clamp(0.0, 1.0));
+      _caja(
+        canvas,
+        Offset.lerp(Offset(a + 54, base - 24), Offset(a + 34, base), q)!,
+      );
+    }
+  }
+
+  void _mar(
+    Canvas canvas,
+    double desde,
+    double hasta,
+    double suelo,
+    double piso,
+  ) {
+    final mar = Rect.fromLTRB(desde, suelo - 18, hasta, piso);
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        mar,
+        topLeft: const Radius.circular(12),
+        topRight: const Radius.circular(12),
+      ),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF3FA9E0), Color(0xFF1C6FB8)],
+        ).createShader(mar),
+    );
+    final ola = Paint()
+      ..color = Colors.white.withValues(alpha: .55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    for (var k = 0; k < 2; k++) {
+      final camino = Path()..moveTo(desde + 8 + k * 9, suelo - 9 + k * 6);
+      while (camino.getBounds().right < hasta - 22) {
+        camino
+          ..relativeQuadraticBezierTo(5, -3, 10, 0)
+          ..relativeQuadraticBezierTo(5, 3, 10, 0);
+      }
+      canvas.drawPath(camino, ola);
+    }
+    _velero(canvas, Offset((desde + hasta) / 2 + 6, suelo - 12));
+    // Arena delante del mar.
+    final arena = Rect.fromLTRB(desde - 20, suelo - 8, hasta + 14, piso);
+    canvas.drawPath(
+      Path()
+        ..moveTo(desde - 20, piso)
+        ..quadraticBezierTo(desde, suelo - 2, desde + 40, suelo)
+        ..quadraticBezierTo((desde + hasta) / 2, suelo - 6, hasta - 10, suelo)
+        ..quadraticBezierTo(hasta + 6, suelo + 2, hasta + 14, piso)
+        ..close(),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF6DFA8), Color(0xFFD9B675)],
+        ).createShader(arena),
+    );
+  }
+
+  static final _letreros = <String, TextPainter>{};
+
+  /// El nombre de la sucursal, en blanco (se arma una sola vez).
+  static TextPainter _letrero(String texto, {Color color = Colors.white}) =>
+      _letreros.putIfAbsent(
+        '$texto${color.toARGB32()}',
+        () => TextPainter(
+          text: TextSpan(
+            text: texto,
+            style: TextStyle(
+              color: color,
+              fontSize: 7.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .3,
+              height: 1,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+      );
+
+  void _letreroEn(Canvas canvas, Rect tabla, String nombre) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(tabla, const Radius.circular(2.5)),
+      Paint()..color = Ipesa.petroleo,
+    );
+    final texto = _letrero(nombre);
+    final escala = math.min(1.0, (tabla.width - 6) / texto.width);
+    canvas
+      ..save()
+      ..translate(tabla.center.dx, tabla.center.dy)
+      ..scale(escala);
+    texto.paint(canvas, Offset(-texto.width / 2, -texto.height / 2));
+    canvas.restore();
+  }
+
+  /// Almacén con volumen: techo y costado, portón enrollable y el letrero.
+  void _almacen(Canvas canvas, Offset o, String nombre) {
+    final x = o.dx;
+    final y = o.dy;
+    _sombra(canvas, Offset(x + 6, y), 116);
+    // Costado (en sombra) y techo.
+    canvas.drawPath(
+      Path()
+        ..moveTo(x + 50, y - 44)
+        ..lineTo(x + 62, y - 53)
+        ..lineTo(x + 62, y - 8)
+        ..lineTo(x + 50, y)
+        ..close(),
+      Paint()..color = const Color(0xFFB7C3C8),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(x - 52, y - 44)
+        ..lineTo(x - 40, y - 53)
+        ..lineTo(x + 62, y - 53)
+        ..lineTo(x + 50, y - 44)
+        ..close(),
+      Paint()..color = const Color(0xFF1B6C7F),
+    );
+    // Frente.
+    final frente = Rect.fromLTRB(x - 52, y - 44, x + 50, y);
+    canvas.drawRect(
+      frente,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF7F9FA), Color(0xFFD9E1E4)],
+        ).createShader(frente),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(x - 52, y - 44, x + 50, y - 42),
+      Paint()..color = const Color(0xFF0F4C5C),
+    );
+    _letreroEn(canvas, Rect.fromLTRB(x - 47, y - 39, x + 45, y - 29), nombre);
+    // Portón enrollable.
+    final porton = Rect.fromLTRB(x - 20, y - 25, x + 18, y);
+    canvas.drawRect(porton, Paint()..color = const Color(0xFFA3AFB4));
+    final raya = Paint()..color = const Color(0xFF86949A);
+    for (var k = porton.top + 3; k < porton.bottom; k += 3.5) {
+      canvas.drawRect(Rect.fromLTRB(porton.left, k, porton.right, k + 1), raya);
+    }
+    // Ventanitas a los lados.
+    final vidrio = Paint()..color = const Color(0xFF8FC7E0);
+    for (final dx in const [-42.0, 28.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x + dx, y - 22, 12, 8),
+          const Radius.circular(1.5),
+        ),
+        vidrio,
+      );
+    }
+  }
+
+  /// Tienda con toldo a rayas, vitrina, puerta y el letrero.
+  void _tienda(Canvas canvas, Offset o, String nombre) {
+    final x = o.dx;
+    final y = o.dy;
+    _sombra(canvas, Offset(x + 5, y), 100);
+    canvas.drawPath(
+      Path()
+        ..moveTo(x + 44, y - 46)
+        ..lineTo(x + 54, y - 54)
+        ..lineTo(x + 54, y - 8)
+        ..lineTo(x + 44, y)
+        ..close(),
+      Paint()..color = const Color(0xFFD6C29E),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(x - 46, y - 46)
+        ..lineTo(x - 36, y - 54)
+        ..lineTo(x + 54, y - 54)
+        ..lineTo(x + 44, y - 46)
+        ..close(),
+      Paint()..color = const Color(0xFF1B6C7F),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(x - 46, y - 46, x + 44, y),
+      Paint()..color = const Color(0xFFF6EBD6),
+    );
+    _letreroEn(canvas, Rect.fromLTRB(x - 42, y - 43, x + 40, y - 33), nombre);
+    // Toldo a rayas.
+    for (var k = 0; k < 9; k++) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(x - 46 + k * 10, y - 31)
+          ..lineTo(x - 36 + k * 10, y - 31)
+          ..lineTo(x - 36 + k * 10, y - 25)
+          ..arcToPoint(
+            Offset(x - 46 + k * 10, y - 25),
+            radius: const Radius.circular(5),
+          )
+          ..close(),
+        Paint()..color = k.isEven ? const Color(0xFF16A34A) : Colors.white,
+      );
+    }
+    // Vitrina y puerta.
+    canvas.drawRect(
+      Rect.fromLTRB(x - 38, y - 19, x - 6, y - 4),
+      Paint()..color = const Color(0xFF8FC7E0),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(x + 6, y - 20, x + 22, y),
+      Paint()..color = const Color(0xFF7A4A2A),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(x + 9, y - 17, x + 19, y - 9),
+      Paint()..color = const Color(0xFFB9DDEB),
+    );
+  }
+
+  /// La caja del pedido, apoyada en [base] (el centro de abajo).
+  void _caja(Canvas canvas, Offset base) {
+    final caja = Rect.fromCenter(
+      center: base - const Offset(0, 5),
+      width: 13,
+      height: 10,
+    );
+    _sombra(canvas, base + const Offset(1, 0), 16);
+    canvas.drawRect(caja, Paint()..color = const Color(0xFFC8955C));
+    canvas.drawRect(
+      Rect.fromLTWH(caja.left, caja.top, caja.width, 2.5),
+      Paint()..color = const Color(0xFFDDB07A),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(caja.center.dx - 1, caja.top, 2, caja.height),
+      Paint()..color = const Color(0xFFEAD3A6),
+    );
+  }
+
+  /// Globito "Entregado" con el check, sobre la sucursal.
+  void _entregado(Canvas canvas, Offset centro) {
+    const verde = Color(0xFF15803D);
+    final texto = _letrero('ENTREGADO', color: verde);
+    final globo = Rect.fromCenter(
+      center: centro,
+      width: texto.width + 26,
+      height: texto.height + 8,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        globo.shift(const Offset(0, 1.5)),
+        const Radius.circular(8),
+      ),
+      Paint()..color = const Color(0x33000000),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(globo, const Radius.circular(8)),
+      Paint()..color = Colors.white,
+    );
+    final cy = globo.center.dy;
+    canvas.drawPath(
+      Path()
+        ..moveTo(globo.left + 7, cy)
+        ..lineTo(globo.left + 9.5, cy + 2.5)
+        ..lineTo(globo.left + 14, cy - 2.5),
+      Paint()
+        ..color = verde
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.7
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    texto.paint(canvas, Offset(globo.left + 18, globo.top + 4));
   }
 
   /// Sombra sobre el pasto (sin desenfoque: son muchas por cuadro).
