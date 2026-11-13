@@ -44,4 +44,27 @@ void main() {
     expect(vista.momento, MomentoDia.noche);
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'El camión pasa por las 30 sucursales, una por región en cada vuelta',
+    () {
+      expect(sucursalEnEscena(7, 2), sucursalEnEscena(7, 2));
+      expect(sucursalEnEscena(7, 0), isNot(sucursalEnEscena(8, 0)));
+      final vistas = {
+        for (var v = 1; v <= 9; v++)
+          for (var r = 0; r < 4; r++) sucursalEnEscena(v, r),
+      };
+      expect(vistas, hasLength(30));
+      expect(vistas, containsAll(['Almacen Piura', 'Tienda TR Callao']));
+      expect(
+        sucursalEnEscena(3, 3),
+        anyOf(
+          'Almacen Iquitos',
+          'Almacen Pucallpa',
+          'Almacen Tarapoto',
+          'Tienda TR Nueva Cajamarca',
+        ),
+      );
+    },
+  );
 }

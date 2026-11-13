@@ -243,16 +243,61 @@ class _PintorCielo extends CustomPainter {
   bool shouldRepaint(_PintorCielo anterior) => anterior.p.momento != p.momento;
 }
 
-/// Paisaje animado al pie de la vista del comercial: cerros, árboles, nubes
-/// y un avión pasan en capas (las cercanas más rápido) mientras un camión
-/// IPESA avanza por la carretera. Con "reducir animaciones" queda quieto.
-/// Las sucursales por las que pasa el camión del paisaje, en orden.
-const _sucursalesEscena = [
-  'ALMACÉN PIURA',
-  'ALMACÉN CHICLAYO',
-  'TIENDA HUANCAYO',
-  'ALMACÉN ATE',
+/// Las sucursales con las que trabaja IPESA, por región. En cada vuelta
+/// el camión del paisaje para en una de cada región, en este orden.
+const _sucursalesPorRegion = [
+  // Costa.
+  [
+    'Almacen Barranca',
+    'Almacen Chiclayo',
+    'Almacen Chocope',
+    'Almacen Ica',
+    'Almacen Piura',
+    'Almacen Viru',
+    'Tienda TR Tacna',
+    'Tienda TR Trujillo',
+  ],
+  // Lima.
+  [
+    'Almacen Ate',
+    'Almacen Lurin',
+    'Almacen Santa Clara',
+    'Tienda TR Callao',
+    'Tienda TR Los Olivos',
+    'Tienda TR Lurin Kio',
+    'Tienda TR San Luis',
+    'Tienda TR Santa Anita',
+    'Tienda TR Santa Clara',
+  ],
+  // Sierra.
+  [
+    'Almacen Arequipa',
+    'Almacen Cajamarca',
+    'Almacen Cusco',
+    'Almacen Huancayo',
+    'Almacen Juliaca',
+    'Tienda TR Arequipa',
+    'Tienda TR Cusco',
+    'Tienda TR Huancayo',
+    'Tienda TR Juliaca',
+  ],
+  // Selva.
+  [
+    'Almacen Iquitos',
+    'Almacen Pucallpa',
+    'Almacen Tarapoto',
+    'Tienda TR Nueva Cajamarca',
+  ],
 ];
+
+/// La sucursal de la [region] donde para el camión en la [vuelta]: cada
+/// vuelta pasa a la siguiente de la lista, así no se repite hasta haber
+/// pasado por todas (la vuelta inicial es al azar).
+@visibleForTesting
+String sucursalEnEscena(int vuelta, int region) {
+  final lista = _sucursalesPorRegion[region];
+  return lista[(vuelta + region * 3) % lista.length];
+}
 
 /// Lo que avanza el paisaje de adelante entre una sucursal y la siguiente.
 const _tramo = 420.0;
@@ -267,7 +312,7 @@ const _manejo = .68;
 ({double avance, bool enMarcha, int parada, double entrega}) _recorrido(
   double t,
 ) {
-  final n = _sucursalesEscena.length;
+  final n = _sucursalesPorRegion.length;
   final x = t * n;
   final i = x.floor().clamp(0, n - 1);
   final u = x - i;
@@ -283,6 +328,9 @@ const _manejo = .68;
   );
 }
 
+/// Paisaje animado al pie de la vista del comercial: cerros, árboles, nubes
+/// y un avión pasan en capas (las cercanas más rápido) mientras un camión
+/// IPESA recorre las sucursales. Con "reducir animaciones" queda quieto.
 class EscenaRuta extends StatefulWidget {
   const EscenaRuta({super.key, this.alto = 210});
 
@@ -302,7 +350,17 @@ class _EscenaRutaState extends State<EscenaRuta>
   late final AnimationController _tiempo = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 24),
-  );
+  )..addListener(_contarVuelta);
+
+  /// Las vueltas que dio el camión; empieza al azar para que cada vez que
+  /// se abre la pantalla salgan otras sucursales.
+  int _vuelta = math.Random().nextInt(10000) + 1;
+  double _ultimo = 0;
+
+  void _contarVuelta() {
+    if (_tiempo.value < _ultimo) _vuelta++;
+    _ultimo = _tiempo.value;
+  }
 
   @override
   void didChangeDependencies() {
@@ -344,7 +402,9 @@ class _EscenaRutaState extends State<EscenaRuta>
                   clipBehavior: Clip.hardEdge,
                   children: [
                     Positioned.fill(
-                      child: CustomPaint(painter: _PintorEscena(t, paleta)),
+                      child: CustomPaint(
+                        painter: _PintorEscena(t, paleta, _vuelta),
+                      ),
                     ),
                     // De noche, la luz de los faros sobre la pista.
                     if (paleta.momento == MomentoDia.noche)
@@ -361,7 +421,7 @@ class _EscenaRutaState extends State<EscenaRuta>
                       child: _Camion(
                         giroRuedas:
                             viaje.avance /
-                            (_tramo * _sucursalesEscena.length) *
+                            (_tramo * _sucursalesPorRegion.length) *
                             2 *
                             math.pi *
                             30,
@@ -404,11 +464,14 @@ class _PintorFaros extends CustomPainter {
 }
 
 class _PintorEscena extends CustomPainter {
-  _PintorEscena(this.t, this.p);
+  _PintorEscena(this.t, this.p, this.vuelta);
 
   /// Avance de 0 a 1 en cada vuelta de la animación.
   final double t;
   final PaletaEscena p;
+
+  /// Qué vuelta da el camión: elige las sucursales del recorrido.
+  final int vuelta;
 
   /// Posición x que se desplaza a la izquierda y vuelve a entrar por la
   /// derecha, para capas que se repiten cada [periodo] px.
@@ -504,25 +567,33 @@ class _PintorEscena extends CustomPainter {
           colors: [Color(0xFF9CCB6A), Color(0xFF6E9E45)],
         ).createShader(pasto),
     );
-    final n = _sucursalesEscena.length;
-    const largo = _tramo * 4;
+    final n = _sucursalesPorRegion.length;
+    final largo = _tramo * n;
     // La sucursal queda justo detrás del camión cuando se detiene.
     final junto = (w - _Camion.ancho) / 2 - 44;
-    final inicio = -(d % largo);
+    // Sin módulo: en la última parada `d` vale justo `largo` y la sucursal
+    // tiene que seguir siendo la de esta vuelta.
+    final inicio = -d;
     final avisos = <Offset>[];
-    for (var vuelta = 0; vuelta < 2; vuelta++) {
+    // La vuelta anterior, la actual y la siguiente: así, al empezar otra
+    // vuelta, la última sucursal sigue en su sitio.
+    for (var c = -1; c <= 1; c++) {
       for (var i = 0; i < n; i++) {
-        final a = inicio + vuelta * largo + (i + 1) * _tramo + junto;
+        final a = inicio + c * largo + (i + 1) * _tramo + junto;
         if (a < -_tramo / 2 - 20 || a > w + _tramo / 2 + 20) continue;
-        final entregada =
-            i < viaje.parada ||
-            (i == viaje.parada && !viaje.enMarcha) ||
-            (i == n - 1 && viaje.parada == 0 && viaje.enMarcha);
-        final cayendo = i == viaje.parada && !viaje.enMarcha
-            ? viaje.entrega
-            : 1.0;
-        _tramoSucursal(canvas, i, a, suelo, h - 40, entregada, cayendo);
-        if (i == viaje.parada && !viaje.enMarcha && viaje.entrega > .35) {
+        final parada = i == viaje.parada && !viaje.enMarcha;
+        final entregada = c < 0 || (c == 0 && (i < viaje.parada || parada));
+        _tramoSucursal(
+          canvas,
+          i,
+          sucursalEnEscena(vuelta + c, i),
+          a,
+          suelo,
+          h - 40,
+          entregada,
+          c == 0 && parada ? viaje.entrega : 1.0,
+        );
+        if (c == 0 && parada && viaje.entrega > .35) {
           avisos.add(Offset(a, suelo - 58));
         }
       }
@@ -985,12 +1056,13 @@ class _PintorEscena extends CustomPainter {
     Color(0xFF5F8A5A),
   ];
 
-  /// Un tramo del viaje: el paisaje alrededor de la sucursal [i], que
-  /// queda en [a]. Con [entregada], la caja ya está en la puerta; [cayendo]
-  /// va de 0 a 1 mientras el pedido baja del camión.
+  /// Un tramo del viaje: el paisaje de la [region] alrededor de la
+  /// sucursal [nombre], que queda en [a]. Con [entregada], la caja ya está
+  /// en la puerta; [cayendo] va de 0 a 1 mientras el pedido baja del camión.
   void _tramoSucursal(
     Canvas canvas,
-    int i,
+    int region,
+    String nombre,
     double a,
     double suelo,
     double piso,
@@ -998,39 +1070,47 @@ class _PintorEscena extends CustomPainter {
     double cayendo,
   ) {
     final base = suelo + 8;
-    final nombre = _sucursalesEscena[i];
-    switch (i) {
-      case 0: // Piura: la costa, con el mar.
-        _mar(canvas, a + 84, a + 214, suelo, piso);
+    void sucursal() {
+      final letrero = nombre.toUpperCase().replaceFirst('ALMACEN', 'ALMACÉN');
+      if (nombre.startsWith('Tienda')) {
+        _tienda(canvas, Offset(a, base), letrero);
+      } else {
+        _almacen(canvas, Offset(a, base), letrero);
+      }
+    }
+
+    switch (region) {
+      case 0: // Costa: el mar con el velero y palmeras.
+        _agua(canvas, a + 84, a + 214, suelo, piso);
         _pinoEn(canvas, Offset(a - 170, base), 55);
         _palmera(canvas, Offset(a - 120, base), 50, -8);
-        _almacen(canvas, Offset(a, base), nombre);
+        sucursal();
         _palmera(canvas, Offset(a + 74, base + 1), 44, 8);
-      case 1: // Chiclayo: palmeras y campo.
-        _palmera(canvas, Offset(a - 190, base), 50, -6);
-        _palmera(canvas, Offset(a - 160, base + 1), 42, 8);
-        _pinoEn(canvas, Offset(a - 112, base), 52);
-        _almacen(canvas, Offset(a, base), nombre);
-        _pinoEn(canvas, Offset(a + 82, base), 60);
-        _pinoEn(canvas, Offset(a + 112, base + 1), 44);
-        _palmera(canvas, Offset(a + 170, base), 48, -8);
-      case 2: // Huancayo: la sierra, con la llama y la casita.
+      case 1: // Lima: edificios al fondo y pinos.
+        _edificios(canvas, a - 205, base);
+        _edificios(canvas, a + 120, base);
+        _pinoEn(canvas, Offset(a - 150, base + 1), 46);
+        _pinoEn(canvas, Offset(a - 110, base), 66);
+        sucursal();
+        _pinoEn(canvas, Offset(a + 84, base), 52);
+        _pinoEn(canvas, Offset(a + 186, base), 58);
+      case 2: // Sierra: la llama y la casita.
         _pinoEn(canvas, Offset(a - 185, base), 56);
         _llama(canvas, Offset(a - 140, base));
         _pinoEn(canvas, Offset(a - 100, base), 44);
-        _tienda(canvas, Offset(a, base), nombre);
+        sucursal();
         _casita(canvas, Offset(a + 92, base));
         _pinoEn(canvas, Offset(a + 145, base), 58);
         _pinoEn(canvas, Offset(a + 180, base + 1), 40);
-      default: // Lima: el almacén de Ate entre pinos.
-        _pinoEn(canvas, Offset(a - 180, base), 60);
-        _pinoEn(canvas, Offset(a - 150, base + 1), 46);
-        _pinoEn(canvas, Offset(a - 110, base), 66);
-        _almacen(canvas, Offset(a, base), nombre);
-        _pinoEn(canvas, Offset(a + 84, base), 52);
-        _pinoEn(canvas, Offset(a + 112, base + 1), 64);
-        _pinoEn(canvas, Offset(a + 150, base), 44);
-        _pinoEn(canvas, Offset(a + 185, base), 58);
+      default: // Selva: el río y la vegetación tupida.
+        _palmera(canvas, Offset(a - 188, base), 54, -6);
+        _pinoEn(canvas, Offset(a - 160, base), 66, selva: true);
+        _palmera(canvas, Offset(a - 128, base + 1), 46, 8);
+        _pinoEn(canvas, Offset(a - 100, base), 52, selva: true);
+        sucursal();
+        _agua(canvas, a + 84, a + 190, suelo, piso, rio: true);
+        _palmera(canvas, Offset(a + 76, base + 1), 50, 8);
+        _pinoEn(canvas, Offset(a + 200, base), 62, selva: true);
     }
     if (entregada) {
       // El pedido sale de atrás del camión y cae junto a la puerta.
@@ -1042,13 +1122,16 @@ class _PintorEscena extends CustomPainter {
     }
   }
 
-  void _mar(
+  /// El mar con un velero y arena; con [rio], un río de selva con orillas
+  /// de tierra.
+  void _agua(
     Canvas canvas,
     double desde,
     double hasta,
     double suelo,
-    double piso,
-  ) {
+    double piso, {
+    bool rio = false,
+  }) {
     final mar = Rect.fromLTRB(desde, suelo - 18, hasta, piso);
     canvas.drawRRect(
       RRect.fromRectAndCorners(
@@ -1057,10 +1140,12 @@ class _PintorEscena extends CustomPainter {
         topRight: const Radius.circular(12),
       ),
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF3FA9E0), Color(0xFF1C6FB8)],
+          colors: rio
+              ? const [Color(0xFF5FB3A6), Color(0xFF2F7466)]
+              : const [Color(0xFF3FA9E0), Color(0xFF1C6FB8)],
         ).createShader(mar),
     );
     final ola = Paint()
@@ -1076,7 +1161,7 @@ class _PintorEscena extends CustomPainter {
       }
       canvas.drawPath(camino, ola);
     }
-    _velero(canvas, Offset((desde + hasta) / 2 + 6, suelo - 12));
+    if (!rio) _velero(canvas, Offset((desde + hasta) / 2 + 6, suelo - 12));
     // Arena delante del mar.
     final arena = Rect.fromLTRB(desde - 20, suelo - 8, hasta + 14, piso);
     canvas.drawPath(
@@ -1087,12 +1172,36 @@ class _PintorEscena extends CustomPainter {
         ..quadraticBezierTo(hasta + 6, suelo + 2, hasta + 14, piso)
         ..close(),
       Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFF6DFA8), Color(0xFFD9B675)],
+          colors: rio
+              ? const [Color(0xFFB9A26E), Color(0xFF8A7448)]
+              : const [Color(0xFFF6DFA8), Color(0xFFD9B675)],
         ).createShader(arena),
     );
+  }
+
+  /// Tres edificios de ciudad, con ventanas, desde [x] hacia la derecha.
+  void _edificios(Canvas canvas, double x, double base) {
+    for (final (dx, ancho, alto, color) in const [
+      (0.0, 26.0, 70.0, Color(0xFFC9D6DD)),
+      (22.0, 30.0, 92.0, Color(0xFFB3C4CE)),
+      (50.0, 24.0, 58.0, Color(0xFFD6E0E5)),
+    ]) {
+      final edificio = Rect.fromLTWH(x + dx, base - alto, ancho, alto);
+      canvas.drawRect(edificio, Paint()..color = color);
+      canvas.drawRect(
+        Rect.fromLTWH(edificio.right - 4, edificio.top, 4, alto),
+        Paint()..color = Colors.black.withValues(alpha: .08),
+      );
+      final ventana = Paint()..color = const Color(0xFF8FB8CC);
+      for (var y = edificio.top + 6; y < base - 8; y += 9) {
+        for (var vx = edificio.left + 4; vx < edificio.right - 8; vx += 7) {
+          canvas.drawRect(Rect.fromLTWH(vx, y, 4, 5), ventana);
+        }
+      }
+    }
   }
 
   static final _letreros = <String, TextPainter>{};
@@ -1314,7 +1423,13 @@ class _PintorEscena extends CustomPainter {
 
   /// Pino de tres pisos, mitad con luz y mitad en sombra. Los [lejos] son
   /// más claros (por la bruma) y sin sombra.
-  void _pinoEn(Canvas canvas, Offset base, double alto, {bool lejos = false}) {
+  void _pinoEn(
+    Canvas canvas,
+    Offset base,
+    double alto, {
+    bool lejos = false,
+    bool selva = false,
+  }) {
     if (!lejos) _sombra(canvas, base + const Offset(3, 0), alto * .55);
     canvas.drawRect(
       Rect.fromLTWH(
@@ -1325,7 +1440,11 @@ class _PintorEscena extends CustomPainter {
       ),
       Paint()..color = const Color(0xFF7A5634),
     );
-    final verde = lejos ? const Color(0xFF4F9A68) : const Color(0xFF2E9A55);
+    final verde = lejos
+        ? const Color(0xFF4F9A68)
+        : selva
+        ? const Color(0xFF1F7A3E)
+        : const Color(0xFF2E9A55);
     final hoja = Paint()..color = verde;
     final hojaSombra = Paint()..color = Color.lerp(verde, Colors.black, .32)!;
     for (var i = 0; i < 3; i++) {
@@ -1353,7 +1472,9 @@ class _PintorEscena extends CustomPainter {
 
   @override
   bool shouldRepaint(_PintorEscena anterior) =>
-      anterior.t != t || anterior.p.momento != p.momento;
+      anterior.t != t ||
+      anterior.vuelta != vuelta ||
+      anterior.p.momento != p.momento;
 }
 
 /// Camión IPESA de costado, con volumen: la caja negra con el logo (con su
