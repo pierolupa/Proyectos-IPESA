@@ -1,11 +1,274 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-/// Cielo de la escena (y fondo de la pantalla que la contiene).
+/// Cielo de la escena de día, a la altura del paisaje.
 const cieloEscena = Color(0xFFE3F1EE);
+
+/// El momento del día que pinta el paisaje de Rastrear.
+enum MomentoDia { dia, tarde, noche }
+
+/// Día de 6:00 a 17:29, atardecer de 17:30 a 18:44 y noche el resto (hora
+/// del celular, que en Perú es la de Lima).
+MomentoDia momentoDelDia(DateTime hora) {
+  final minuto = hora.hour * 60 + hora.minute;
+  if (minuto >= 6 * 60 && minuto < 17 * 60 + 30) return MomentoDia.dia;
+  if (minuto >= 17 * 60 + 30 && minuto < 18 * 60 + 45) {
+    return MomentoDia.tarde;
+  }
+  return MomentoDia.noche;
+}
+
+/// Los colores del cielo y del paisaje para un momento del día.
+class PaletaEscena {
+  const PaletaEscena._({
+    required this.momento,
+    required this.cielo,
+    required this.montana,
+    required this.cerro,
+    required this.pasto,
+    required this.pino,
+    required this.copa,
+    required this.tronco,
+    required this.nieve,
+    required this.pista,
+    required this.nubes,
+  });
+
+  final MomentoDia momento;
+
+  /// De arriba (el tope de la pantalla) a abajo (detrás del paisaje).
+  final List<Color> cielo;
+  final Color montana;
+  final Color cerro;
+  final Color pasto;
+  final Color pino;
+  final Color copa;
+  final Color tronco;
+  final Color nieve;
+  final Color pista;
+
+  /// Cuánto se ven las nubes (de noche, casi nada).
+  final double nubes;
+
+  /// La hora del celular; los tests la fijan.
+  @visibleForTesting
+  static DateTime Function() reloj = DateTime.now;
+
+  static PaletaEscena ahora() => de(momentoDelDia(reloj()));
+
+  static PaletaEscena de(MomentoDia momento) => switch (momento) {
+    MomentoDia.dia => _dia,
+    MomentoDia.tarde => _tarde,
+    MomentoDia.noche => _noche,
+  };
+
+  /// Al atardecer y de noche el cielo es oscuro: lo que va encima, claro.
+  bool get oscuro => momento != MomentoDia.dia;
+
+  /// Texto e íconos que van directo sobre el cielo.
+  Color get texto => oscuro ? Colors.white : Ipesa.petroleo;
+  Color get textoSuave => oscuro ? const Color(0xFFDCE6F2) : Ipesa.textoSuave;
+
+  /// El cielo detrás del paisaje (el fondo de la pantalla).
+  Color get fondo => cielo.last;
+
+  /// El cielo a media pantalla.
+  Color get medio => cielo[1];
+
+  /// La línea del tiempo en la lista de resultados.
+  Color get linea => oscuro ? const Color(0x59FFFFFF) : Ipesa.mentaBorde;
+
+  static const _dia = PaletaEscena._(
+    momento: MomentoDia.dia,
+    cielo: [Color(0xFFA9D8EE), Color(0xFFD3ECEF), Color(0xFFE3F1EE)],
+    montana: Color(0xFFA3D2C8),
+    cerro: Color(0xFF74B8AA),
+    pasto: Color(0xFFBFDCD3),
+    pino: Color(0xFF0E7A3A),
+    copa: Color(0xFF1B7F79),
+    tronco: Color(0xFF6B4F3A),
+    nieve: Colors.white,
+    pista: Color(0xFF1E272C),
+    nubes: 1,
+  );
+
+  static const _tarde = PaletaEscena._(
+    momento: MomentoDia.tarde,
+    cielo: [Color(0xFF2A3170), Color(0xFF8E4A86), Color(0xFFEE8A5E)],
+    montana: Color(0xFF8C6A9E),
+    cerro: Color(0xFF5A4A80),
+    pasto: Color(0xFF52606A),
+    pino: Color(0xFF1F5B4F),
+    copa: Color(0xFF2D6B60),
+    tronco: Color(0xFF3A2A22),
+    nieve: Color(0xFFFFE2D0),
+    pista: Color(0xFF1A1A24),
+    nubes: .55,
+  );
+
+  static const _noche = PaletaEscena._(
+    momento: MomentoDia.noche,
+    cielo: [Color(0xFF0A1238), Color(0xFF16276B), Color(0xFF2A4890)],
+    montana: Color(0xFF30478A),
+    cerro: Color(0xFF1E3568),
+    pasto: Color(0xFF233F58),
+    pino: Color(0xFF12403F),
+    copa: Color(0xFF1A4F4C),
+    tronco: Color(0xFF1C1717),
+    nieve: Color(0xFFCAD8F5),
+    pista: Color(0xFF10141F),
+    nubes: .15,
+  );
+}
+
+/// El cielo de las pantallas de Rastrear: de arriba abajo, con el sol, el
+/// sol bajando o la luna y las estrellas según la hora. Cambia solo cuando
+/// pasa de un momento del día a otro. [EscenaRuta] y las pantallas toman
+/// los colores con [FondoCielo.paletaDe].
+class FondoCielo extends StatefulWidget {
+  const FondoCielo({super.key, required this.child});
+
+  final Widget child;
+
+  /// La paleta del cielo que la contiene (o la de ahora, si no hay).
+  static PaletaEscena paletaDe(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PaletaHeredada>()?.paleta ??
+      PaletaEscena.ahora();
+
+  @override
+  State<FondoCielo> createState() => _FondoCieloState();
+}
+
+class _FondoCieloState extends State<FondoCielo> {
+  PaletaEscena _paleta = PaletaEscena.ahora();
+  late final Timer _reloj = Timer.periodic(const Duration(minutes: 1), (_) {
+    final nueva = PaletaEscena.ahora();
+    if (nueva.momento != _paleta.momento) setState(() => _paleta = nueva);
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _reloj;
+  }
+
+  @override
+  void dispose() {
+    _reloj.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _PaletaHeredada(
+      paleta: _paleta,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ExcludeSemantics(
+              child: CustomPaint(painter: _PintorCielo(_paleta)),
+            ),
+          ),
+          widget.child,
+        ],
+      ),
+    );
+  }
+}
+
+class _PaletaHeredada extends InheritedWidget {
+  const _PaletaHeredada({required this.paleta, required super.child});
+
+  final PaletaEscena paleta;
+
+  @override
+  bool updateShouldNotify(_PaletaHeredada anterior) =>
+      anterior.paleta.momento != paleta.momento;
+}
+
+class _PintorCielo extends CustomPainter {
+  _PintorCielo(this.p);
+
+  final PaletaEscena p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final todo = Offset.zero & size;
+    canvas.drawRect(
+      todo,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: p.cielo,
+        ).createShader(todo),
+    );
+    final w = size.width;
+    final h = size.height;
+    switch (p.momento) {
+      case MomentoDia.noche:
+        // Estrellas siempre en el mismo lugar (semilla fija).
+        final azar = math.Random(7);
+        final estrella = Paint();
+        for (var i = 0; i < 110; i++) {
+          final x = azar.nextDouble() * w;
+          final y = azar.nextDouble() * h * .78;
+          final r = .5 + azar.nextDouble() * 1.1;
+          estrella.color = Colors.white.withValues(
+            alpha: .3 + azar.nextDouble() * .7,
+          );
+          canvas.drawCircle(Offset(x, y), r, estrella);
+        }
+        _astro(
+          canvas,
+          Offset(w - 52, 112),
+          17,
+          const Color(0xFFF5F1DC),
+          const Color(0xFFDDE6FF),
+        );
+        final crater = Paint()..color = const Color(0xFFDDD8BE);
+        canvas.drawCircle(Offset(w - 58, 107), 3.4, crater);
+        canvas.drawCircle(Offset(w - 46, 118), 2.5, crater);
+        canvas.drawCircle(Offset(w - 48, 103), 1.6, crater);
+      case MomentoDia.tarde:
+        // El sol bajando, detrás de los cerros.
+        _astro(
+          canvas,
+          Offset(w * .68, h - 150),
+          30,
+          const Color(0xFFFFE6A3),
+          const Color(0xFFFFD27A),
+        );
+      case MomentoDia.dia:
+        _astro(
+          canvas,
+          Offset(w - 52, 112),
+          20,
+          const Color(0xFFFFE27A),
+          const Color(0xFFFFF1B8),
+        );
+    }
+  }
+
+  void _astro(Canvas canvas, Offset c, double r, Color color, Color halo) {
+    canvas.drawCircle(
+      c,
+      r * 3.2,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [halo.withValues(alpha: .55), halo.withValues(alpha: 0)],
+        ).createShader(Rect.fromCircle(center: c, radius: r * 3.2)),
+    );
+    canvas.drawCircle(c, r, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_PintorCielo anterior) => anterior.p.momento != p.momento;
+}
 
 /// Paisaje animado al pie de la vista del comercial: cerros, árboles, nubes
 /// y un avión pasan en capas (las cercanas más rápido) mientras un camión
@@ -51,6 +314,7 @@ class _EscenaRutaState extends State<EscenaRuta>
 
   @override
   Widget build(BuildContext context) {
+    final paleta = FondoCielo.paletaDe(context);
     return ExcludeSemantics(
       child: SizedBox(
         height: widget.alto,
@@ -67,8 +331,17 @@ class _EscenaRutaState extends State<EscenaRuta>
                   clipBehavior: Clip.hardEdge,
                   children: [
                     Positioned.fill(
-                      child: CustomPaint(painter: _PintorEscena(t)),
+                      child: CustomPaint(painter: _PintorEscena(t, paleta)),
                     ),
+                    // De noche, la luz de los faros sobre la pista.
+                    if (paleta.momento == MomentoDia.noche)
+                      Positioned(
+                        left: (ancho + _Camion.ancho) / 2 - 6,
+                        right: 0,
+                        bottom: 14 + rebote,
+                        height: 46,
+                        child: const CustomPaint(painter: _PintorFaros()),
+                      ),
                     Positioned(
                       left: (ancho - _Camion.ancho) / 2,
                       bottom: 20 + rebote,
@@ -85,19 +358,37 @@ class _EscenaRutaState extends State<EscenaRuta>
   }
 }
 
+/// El haz de luz de los faros, que se abre y se apaga hacia adelante.
+class _PintorFaros extends CustomPainter {
+  const _PintorFaros();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final haz = Path()
+      ..moveTo(0, size.height - 30)
+      ..lineTo(size.width, size.height - 44)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height - 25)
+      ..close();
+    canvas.drawPath(
+      haz,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xA6FFE9A0), Color(0x00FFE9A0)],
+        ).createShader(Offset.zero & size),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PintorFaros anterior) => false;
+}
+
 class _PintorEscena extends CustomPainter {
-  _PintorEscena(this.t);
+  _PintorEscena(this.t, this.p);
 
   /// Avance de 0 a 1 en cada vuelta de la animación.
   final double t;
-
-  static const _montana = Color(0xFFA3D2C8);
-  static const _cerro = Color(0xFF74B8AA);
-  static const _pino = Color(0xFF0E7A3A);
-  static const _copa = Color(0xFF1B7F79);
-  static const _tronco = Color(0xFF6B4F3A);
-  static const _pasto = Color(0xFFBFDCD3);
-  static const _pista = Color(0xFF1E272C);
+  final PaletaEscena p;
 
   /// Posición x que se desplaza a la izquierda y vuelve a entrar por la
   /// derecha, para capas que se repiten cada [periodo] px.
@@ -128,7 +419,7 @@ class _PintorEscena extends CustomPainter {
     // Montañas lejanas (lentas) con nieve.
     const periodoM = 260.0;
     final despM = t * periodoM;
-    pintura.color = _montana;
+    pintura.color = p.montana;
     for (var x = -periodoM; x < w + periodoM; x += periodoM) {
       final b = x - despM;
       final picos = [
@@ -146,7 +437,7 @@ class _PintorEscena extends CustomPainter {
         ..lineTo(b + 260, suelo)
         ..close();
       canvas.drawPath(camino, pintura);
-      final nieve = Paint()..color = Colors.white;
+      final nieve = Paint()..color = p.nieve;
       canvas.drawPath(
         Path()
           ..moveTo(b + 172, suelo - 83)
@@ -171,7 +462,7 @@ class _PintorEscena extends CustomPainter {
     // Cerros cercanos.
     const periodoC = 220.0;
     final despC = t * periodoC * 2;
-    pintura.color = _cerro;
+    pintura.color = p.cerro;
     for (var x = -periodoC; x < w + periodoC; x += periodoC) {
       final b = x - despC;
       canvas.drawPath(
@@ -185,7 +476,7 @@ class _PintorEscena extends CustomPainter {
     }
 
     // Pasto y árboles (más rápidos).
-    pintura.color = _pasto;
+    pintura.color = p.pasto;
     canvas.drawRect(Rect.fromLTWH(0, suelo, w, 12), pintura);
     const periodoA = 150.0;
     final despA = t * periodoA * 6;
@@ -197,7 +488,7 @@ class _PintorEscena extends CustomPainter {
     }
 
     // Carretera con las líneas del centro avanzando.
-    pintura.color = _pista;
+    pintura.color = p.pista;
     canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 40), pintura);
     pintura.color = const Color(0xFF3A474E);
     canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 3), pintura);
@@ -217,16 +508,16 @@ class _PintorEscena extends CustomPainter {
   }
 
   void _nube(Canvas canvas, Offset o, double e) {
-    final p = Paint()..color = Colors.white;
-    canvas.drawCircle(o + Offset(0, 8 * e), 14 * e, p);
-    canvas.drawCircle(o + Offset(18 * e, 0), 18 * e, p);
-    canvas.drawCircle(o + Offset(38 * e, 8 * e), 14 * e, p);
+    final blanco = Paint()..color = Colors.white.withValues(alpha: p.nubes);
+    canvas.drawCircle(o + Offset(0, 8 * e), 14 * e, blanco);
+    canvas.drawCircle(o + Offset(18 * e, 0), 18 * e, blanco);
+    canvas.drawCircle(o + Offset(38 * e, 8 * e), 14 * e, blanco);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(o.dx - 8 * e, o.dy + 6 * e, 58 * e, 16 * e),
         Radius.circular(8 * e),
       ),
-      p,
+      blanco,
     );
   }
 
@@ -267,9 +558,9 @@ class _PintorEscena extends CustomPainter {
   void _pinoEn(Canvas canvas, Offset base, double alto) {
     canvas.drawRect(
       Rect.fromLTWH(base.dx - 2.5, base.dy - 10, 5, 10),
-      Paint()..color = _tronco,
+      Paint()..color = p.tronco,
     );
-    final p = Paint()..color = _pino;
+    final hoja = Paint()..color = p.pino;
     for (var i = 0; i < 3; i++) {
       final y = base.dy - 8 - i * alto * 0.28;
       final ancho = alto * (0.5 - i * 0.1);
@@ -279,7 +570,7 @@ class _PintorEscena extends CustomPainter {
           ..lineTo(base.dx, y - alto * 0.42)
           ..lineTo(base.dx + ancho / 2, y)
           ..close(),
-        p,
+        hoja,
       );
     }
   }
@@ -287,17 +578,18 @@ class _PintorEscena extends CustomPainter {
   void _arbolEn(Canvas canvas, Offset base, double radio) {
     canvas.drawRect(
       Rect.fromLTWH(base.dx - 3, base.dy - 16, 6, 16),
-      Paint()..color = _tronco,
+      Paint()..color = p.tronco,
     );
     canvas.drawCircle(
       Offset(base.dx, base.dy - 16 - radio * 0.8),
       radio,
-      Paint()..color = _copa,
+      Paint()..color = p.copa,
     );
   }
 
   @override
-  bool shouldRepaint(_PintorEscena anterior) => anterior.t != t;
+  bool shouldRepaint(_PintorEscena anterior) =>
+      anterior.t != t || anterior.p.momento != p.momento;
 }
 
 /// Camión IPESA de costado: caja negra con el logo, cabina petróleo.

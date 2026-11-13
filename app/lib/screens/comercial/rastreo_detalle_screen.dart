@@ -57,65 +57,68 @@ class RastreoDetalleScreen extends StatelessWidget {
     final altoEscena = ancho < 600 ? 170.0 : 220.0;
 
     return VolverConEsc(
-      child: Scaffold(
-        backgroundColor: cieloEscena,
-        body: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: EscenaRuta(alto: altoEscena),
-                  ),
-                  Padding(
-                    // Solo se reserva el suelo del paisaje: el camión
-                    // queda siempre a la vista, debajo de la guía.
-                    padding: EdgeInsets.only(
-                      bottom: math.max(altoEscena - 56, 112),
+      child: FondoCielo(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: EscenaRuta(alto: altoEscena),
                     ),
-                    child: SafeArea(
-                      bottom: false,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const _BarraSuperior(),
-                          Center(
-                            child: ConstrainedBox(
-                              // Con comprobante de agencia (más datos), en la
-                              // PC la guía se abre a lo ancho (datos a la
-                              // izquierda, sello a la derecha) para que todo
-                              // entre en una sola vista; si no, como siempre.
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    ancho >= 900 &&
-                                        (guia?.tieneComprobanteAgencia ?? false)
-                                    ? 880
-                                    : 440,
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  4,
-                                  20,
-                                  16,
+                    Padding(
+                      // Solo se reserva el suelo del paisaje: el camión
+                      // queda siempre a la vista, debajo de la guía.
+                      padding: EdgeInsets.only(
+                        bottom: math.max(altoEscena - 56, 112),
+                      ),
+                      child: SafeArea(
+                        bottom: false,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const _BarraSuperior(),
+                            Center(
+                              child: ConstrainedBox(
+                                // Con comprobante de agencia (más datos), en la
+                                // PC la guía se abre a lo ancho (datos a la
+                                // izquierda, sello a la derecha) para que todo
+                                // entre en una sola vista; si no, como siempre.
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      ancho >= 900 &&
+                                          (guia?.tieneComprobanteAgencia ??
+                                              false)
+                                      ? 880
+                                      : 440,
                                 ),
-                                child: despacho != null
-                                    ? _Boleto.despacho(despacho)
-                                    : guia == null
-                                    ? const _NoEncontrada()
-                                    : _Boleto(guia: guia),
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    4,
+                                    20,
+                                    16,
+                                  ),
+                                  child: despacho != null
+                                      ? _Boleto.despacho(despacho)
+                                      : guia == null
+                                      ? const _NoEncontrada()
+                                      : _Boleto(guia: guia),
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -150,7 +153,10 @@ class _BarraSuperior extends StatelessWidget {
             child: Text(
               'Tu guía',
               textAlign: TextAlign.center,
-              style: Ipesa.titulo(17),
+              style: Ipesa.titulo(
+                17,
+                color: FondoCielo.paletaDe(context).texto,
+              ),
             ),
           ),
           const SizedBox(width: 44),
@@ -705,7 +711,10 @@ class _MediaLuna extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: 22,
     height: 22,
-    decoration: const BoxDecoration(color: cieloEscena, shape: BoxShape.circle),
+    decoration: BoxDecoration(
+      color: FondoCielo.paletaDe(context).medio,
+      shape: BoxShape.circle,
+    ),
   );
 }
 

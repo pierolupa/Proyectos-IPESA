@@ -12,6 +12,8 @@ import 'package:ipesa_guias/widgets/splash_ipesa.dart';
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   CarruselMarcas.animar = false;
   EscenaRuta.animar = false;
+  // El cielo de Rastrear depende de la hora: los tests lo ven de día.
+  PaletaEscena.reloj = () => DateTime(2026, 9, 15, 12);
   SplashIpesa.animar = false;
   CelebracionJornada.animar = false;
   await testMain();

@@ -61,101 +61,127 @@ class RastreoResultadosScreen extends StatelessWidget {
     final n = guias.length + despachos.length;
 
     return VolverConEsc(
-      child: Scaffold(
-        backgroundColor: cieloEscena,
-        body: Stack(
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: EscenaRuta(alto: altoEscena),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              // La lista termina sobre el suelo: el camión queda a la vista.
-              bottom: math.max(altoEscena - 56, 112),
-              child: SafeArea(
-                bottom: false,
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: ancho >= 1000 ? 1200 : 560,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                          child: Row(
+      child: FondoCielo(
+        child: Builder(
+          builder: (context) {
+            final cielo = FondoCielo.paletaDe(context);
+            return Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: EscenaRuta(alto: altoEscena),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    // La lista termina sobre el suelo: el camión queda a la vista.
+                    bottom: math.max(altoEscena - 56, 112),
+                    child: SafeArea(
+                      bottom: false,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: ancho >= 1000 ? 1200 : 560,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              IconButton.filled(
-                                tooltip: 'Nueva búsqueda',
-                                onPressed: () =>
-                                    Navigator.of(context).maybePop(),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Ipesa.petroleo,
-                                  fixedSize: const Size(44, 44),
-                                  elevation: 2,
-                                  shadowColor: const Color(0x330F4C5C),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  10,
+                                  16,
+                                  6,
                                 ),
-                                icon: const Icon(Icons.chevron_left, size: 26),
+                                child: Row(
+                                  children: [
+                                    IconButton.filled(
+                                      tooltip: 'Nueva búsqueda',
+                                      onPressed: () =>
+                                          Navigator.of(context).maybePop(),
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        foregroundColor: Ipesa.petroleo,
+                                        fixedSize: const Size(44, 44),
+                                        elevation: 2,
+                                        shadowColor: const Color(0x330F4C5C),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.chevron_left,
+                                        size: 26,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        'Resultados',
+                                        textAlign: TextAlign.center,
+                                        style: Ipesa.titulo(
+                                          17,
+                                          color: cielo.texto,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 44),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  22,
+                                  4,
+                                  22,
+                                  12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      n == 1
+                                          ? '1 guía encontrada'
+                                          : '$n guías encontradas',
+                                      style: Ipesa.titulo(
+                                        24,
+                                        color: cielo.texto,
+                                      ),
+                                    ),
+                                    if (_resumen.isNotEmpty)
+                                      Text(
+                                        _resumen,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: cielo.textoSuave,
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                               Expanded(
-                                child: Text(
-                                  'Resultados',
-                                  textAlign: TextAlign.center,
-                                  style: Ipesa.titulo(17),
+                                child: _Resultados(
+                                  guias: guias,
+                                  despachos: despachos,
+                                  total: n,
+                                  cargando:
+                                      appState.cargando &&
+                                      appState.todasLasGuias.isEmpty,
+                                  error: appState.error,
+                                  ancha: ancho >= 700,
                                 ),
                               ),
-                              const SizedBox(width: 44),
                             ],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                n == 1
-                                    ? '1 guía encontrada'
-                                    : '$n guías encontradas',
-                                style: Ipesa.titulo(24),
-                              ),
-                              if (_resumen.isNotEmpty)
-                                Text(
-                                  _resumen,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    color: Ipesa.textoSuave,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: _Resultados(
-                            guias: guias,
-                            despachos: despachos,
-                            total: n,
-                            cargando:
-                                appState.cargando &&
-                                appState.todasLasGuias.isEmpty,
-                            error: appState.error,
-                            ancha: ancho >= 700,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -275,22 +301,24 @@ class _Resultados extends StatelessWidget {
           child: Text(
             'No se pudieron cargar las guías: $error',
             textAlign: TextAlign.center,
+            style: TextStyle(color: FondoCielo.paletaDe(context).texto),
           ),
         ),
       );
     }
+    final cielo = FondoCielo.paletaDe(context);
     if (guias.isEmpty && despachos.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search_off, size: 40, color: Ipesa.textoSuave),
-              SizedBox(height: 8),
+              Icon(Icons.search_off, size: 40, color: cielo.textoSuave),
+              const SizedBox(height: 8),
               Text(
                 'Ninguna guía coincide con los filtros.',
-                style: TextStyle(color: Ipesa.textoSuave),
+                style: TextStyle(color: cielo.textoSuave),
               ),
             ],
           ),
@@ -336,19 +364,20 @@ class _Dia extends StatelessWidget {
         ? 'Hoy ${DateFormat('dd/MM').format(dia)}'
         : '${_dias[dia.weekday - 1]} ${DateFormat('dd/MM').format(dia)}'
               '${dia.year != hoy.year ? '/${dia.year}' : ''}';
+    final cielo = FondoCielo.paletaDe(context);
     final cabecera = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(titulo, style: Ipesa.titulo(16)),
+        Text(titulo, style: Ipesa.titulo(16, color: cielo.texto)),
         Text(
           eventos.length == 1 ? '1 guía' : '${eventos.length} guías',
-          style: const TextStyle(fontSize: 13, color: Ipesa.textoSuave),
+          style: TextStyle(fontSize: 13, color: cielo.textoSuave),
         ),
       ],
     );
     final lista = DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: Ipesa.mentaBorde, width: 2)),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: cielo.linea, width: 2)),
       ),
       child: Padding(
         padding: const EdgeInsets.only(left: 16),
@@ -424,7 +453,10 @@ class _FilaEvento extends StatelessWidget {
             decoration: BoxDecoration(
               color: e.color,
               shape: BoxShape.circle,
-              border: Border.all(color: cieloEscena, width: 2),
+              border: Border.all(
+                color: FondoCielo.paletaDe(context).medio,
+                width: 2,
+              ),
             ),
           ),
         ),

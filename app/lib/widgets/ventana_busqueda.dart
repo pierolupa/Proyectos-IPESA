@@ -33,7 +33,9 @@ class VentanaBusqueda extends StatelessWidget {
           const ModalBarrier(dismissible: false),
           BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-            child: ColoredBox(color: cieloEscena.withValues(alpha: 0.72)),
+            child: ColoredBox(
+              color: PaletaEscena.ahora().fondo.withValues(alpha: 0.72),
+            ),
           ),
           Center(
             child: Padding(
