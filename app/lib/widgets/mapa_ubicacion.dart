@@ -1,0 +1,99 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+import '../models/sucursal.dart';
+import '../theme.dart';
+
+const _tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const _userAgent = 'pe.ipesa.tracking_distribucion';
+
+/// Fondo del mapa mientras cargan los cuadros (oscuro, como el mapa).
+const fondoMapa = Color(0xFF1E2327);
+
+/// Capas base de OpenStreetMap (gratis, sin API key) en modo oscuro: los
+/// mismos cuadros de siempre con los colores invertidos en el celular.
+/// El filtro va sobre toda la capa (uno solo), no sobre cada cuadro.
+List<Widget> capasBaseMapa() => [
+  Builder(
+    builder: (context) => darkModeTilesContainerBuilder(
+      context,
+      TileLayer(urlTemplate: _tileUrl, userAgentPackageName: _userAgent),
+    ),
+  ),
+];
+
+/// Pin del mapa con un halo claro para que se vea sobre el fondo oscuro.
+Widget pinMapa(Color color) => Icon(
+  Icons.location_pin,
+  color: color,
+  size: 40,
+  shadows: const [Shadow(color: Colors.white, blurRadius: 6)],
+);
+
+const atribucionMapa = RichAttributionWidget(
+  attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+);
+
+CircleLayer capaPerimetro(Sucursal sucursal) => CircleLayer(
+  circles: [
+    CircleMarker(
+      point: LatLng(sucursal.lat, sucursal.lng),
+      radius: sucursal.radioM,
+      useRadiusInMeter: true,
+      color: Ipesa.turquesa.withValues(alpha: 0.15),
+      borderColor: Ipesa.turquesa,
+      borderStrokeWidth: 2,
+    ),
+  ],
+);
+
+Marker marcador(LatLng punto, Color color) => Marker(
+  point: punto,
+  width: 40,
+  height: 40,
+  alignment: Alignment.topCenter,
+  child: pinMapa(color),
+);
+
+/// Mapa con un marcador y, opcionalmente, el perímetro de una sucursal.
+class MapaUbicacion extends StatelessWidget {
+  const MapaUbicacion({
+    super.key,
+    required this.lat,
+    required this.lng,
+    this.color = const Color(0xFF1D6B41),
+    this.perimetro,
+    this.altura = 260,
+  });
+
+  final double lat;
+  final double lng;
+  final Color color;
+  final Sucursal? perimetro;
+  final double altura;
+
+  @override
+  Widget build(BuildContext context) {
+    final punto = LatLng(lat, lng);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: altura,
+        child: FlutterMap(
+          options: MapOptions(
+            initialCenter: punto,
+            initialZoom: 16,
+            backgroundColor: fondoMapa,
+          ),
+          children: [
+            ...capasBaseMapa(),
+            if (perimetro != null) capaPerimetro(perimetro!),
+            MarkerLayer(markers: [marcador(punto, color)]),
+            atribucionMapa,
+          ],
+        ),
+      ),
+    );
+  }
+}
