@@ -461,17 +461,17 @@ class _PintorEscena extends CustomPainter {
       final b = x - despA;
       _pinoEn(canvas, Offset(b + 10, base), 50);
       _pinoEn(canvas, Offset(b + 34, base + 1), 40);
-      _arbolEn(canvas, Offset(b + 64, base), 14);
+      _pinoEn(canvas, Offset(b + 64, base), 38);
       _pinoEn(canvas, Offset(b + 96, base), 54);
-      _arbusto(canvas, Offset(b + 122, base + 1), 9);
-      _arbolEn(canvas, Offset(b + 150, base), 12);
+      _pinoEn(canvas, Offset(b + 122, base + 1), 26);
+      _pinoEn(canvas, Offset(b + 150, base), 34);
       _pinoEn(canvas, Offset(b + 178, base), 44);
       _pinoEn(canvas, Offset(b + 200, base + 1), 36);
-      _arbolEn(canvas, Offset(b + 236, base), 15);
+      _pinoEn(canvas, Offset(b + 236, base), 46);
       _pinoEn(canvas, Offset(b + 270, base), 50);
-      _arbusto(canvas, Offset(b + 296, base + 1), 8);
+      _pinoEn(canvas, Offset(b + 296, base + 1), 24);
       _pinoEn(canvas, Offset(b + 320, base), 42);
-      _arbolEn(canvas, Offset(b + 346, base), 13);
+      _pinoEn(canvas, Offset(b + 346, base), 36);
     }
 
     if (tinte != null) {
@@ -782,54 +782,6 @@ class _PintorEscena extends CustomPainter {
           ..lineTo(base.dx + ancho / 2, y)
           ..close(),
         hojaSombra,
-      );
-    }
-  }
-
-  static const _copa = RadialGradient(
-    center: Alignment(-.35, -.4),
-    colors: [Color(0xFF9BE07A), Color(0xFF4FAE3E), Color(0xFF21702A)],
-    stops: [0, .6, 1],
-  );
-
-  void _arbolEn(Canvas canvas, Offset base, double radio) {
-    _sombra(canvas, base + const Offset(3, 0), radio * 1.8);
-    canvas.drawRect(
-      Rect.fromLTWH(base.dx - 3, base.dy - 16, 6, 16),
-      Paint()..color = const Color(0xFF7A5634),
-    );
-    final centro = Offset(base.dx, base.dy - 16 - radio * 0.8);
-    canvas.drawCircle(
-      centro,
-      radio,
-      Paint()
-        ..shader = _copa.createShader(
-          Rect.fromCircle(center: centro, radius: radio),
-        ),
-    );
-    canvas.drawCircle(
-      centro - Offset(radio * .38, radio * .42),
-      radio * .26,
-      Paint()..color = Colors.white.withValues(alpha: .3),
-    );
-  }
-
-  /// Arbusto: tres bolitas juntas.
-  void _arbusto(Canvas canvas, Offset base, double radio) {
-    _sombra(canvas, base + const Offset(2, 0), radio * 3);
-    for (final (dx, dy, r) in [
-      (-radio * .9, -radio * .7, radio * .8),
-      (radio * .9, -radio * .7, radio * .8),
-      (0.0, -radio, radio),
-    ]) {
-      final centro = base + Offset(dx, dy);
-      canvas.drawCircle(
-        centro,
-        r,
-        Paint()
-          ..shader = _copa.createShader(
-            Rect.fromCircle(center: centro, radius: r),
-          ),
       );
     }
   }
