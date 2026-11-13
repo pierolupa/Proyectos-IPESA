@@ -27,13 +27,7 @@ class PaletaEscena {
   const PaletaEscena._({
     required this.momento,
     required this.cielo,
-    required this.montana,
-    required this.cerro,
-    required this.pasto,
-    required this.pino,
-    required this.copa,
-    required this.tronco,
-    required this.nieve,
+    required this.tinte,
     required this.pista,
     required this.nubes,
   });
@@ -42,13 +36,10 @@ class PaletaEscena {
 
   /// De arriba (el tope de la pantalla) a abajo (detrás del paisaje).
   final List<Color> cielo;
-  final Color montana;
-  final Color cerro;
-  final Color pasto;
-  final Color pino;
-  final Color copa;
-  final Color tronco;
-  final Color nieve;
+
+  /// El paisaje se dibuja con sus colores de día; al atardecer y de noche
+  /// se le pone encima este tinte para oscurecerlo.
+  final Color? tinte;
   final Color pista;
 
   /// Cuánto se ven las nubes (de noche, casi nada).
@@ -85,13 +76,7 @@ class PaletaEscena {
   static const _dia = PaletaEscena._(
     momento: MomentoDia.dia,
     cielo: [Color(0xFFA9D8EE), Color(0xFFD3ECEF), Color(0xFFE3F1EE)],
-    montana: Color(0xFFA3D2C8),
-    cerro: Color(0xFF74B8AA),
-    pasto: Color(0xFFBFDCD3),
-    pino: Color(0xFF0E7A3A),
-    copa: Color(0xFF1B7F79),
-    tronco: Color(0xFF6B4F3A),
-    nieve: Colors.white,
+    tinte: null,
     pista: Color(0xFF1E272C),
     nubes: 1,
   );
@@ -99,13 +84,7 @@ class PaletaEscena {
   static const _tarde = PaletaEscena._(
     momento: MomentoDia.tarde,
     cielo: [Color(0xFF2A3170), Color(0xFF8E4A86), Color(0xFFEE8A5E)],
-    montana: Color(0xFF8C6A9E),
-    cerro: Color(0xFF5A4A80),
-    pasto: Color(0xFF52606A),
-    pino: Color(0xFF1F5B4F),
-    copa: Color(0xFF2D6B60),
-    tronco: Color(0xFF3A2A22),
-    nieve: Color(0xFFFFE2D0),
+    tinte: Color(0x423B2A66),
     pista: Color(0xFF1A1A24),
     nubes: .55,
   );
@@ -113,13 +92,7 @@ class PaletaEscena {
   static const _noche = PaletaEscena._(
     momento: MomentoDia.noche,
     cielo: [Color(0xFF0A1238), Color(0xFF16276B), Color(0xFF2A4890)],
-    montana: Color(0xFF30478A),
-    cerro: Color(0xFF1E3568),
-    pasto: Color(0xFF233F58),
-    pino: Color(0xFF12403F),
-    copa: Color(0xFF1A4F4C),
-    tronco: Color(0xFF1C1717),
-    nieve: Color(0xFFCAD8F5),
+    tinte: Color(0x5C0A1238),
     pista: Color(0xFF10141F),
     nubes: .15,
   );
@@ -416,114 +389,50 @@ class _PintorEscena extends CustomPainter {
     final xAvion = w + 80 - t * (w + 260);
     _avion(canvas, Offset(xAvion, 44));
 
-    // Montañas lejanas (lentas) con nieve.
-    const periodoM = 260.0;
-    final despM = t * periodoM;
-    pintura.color = p.montana;
-    for (var x = -periodoM; x < w + periodoM; x += periodoM) {
+    // Paisaje del Perú: la sierra al fondo y, adelante, la costa con el mar
+    // y el campo con la llama y la casita. Se dibuja con colores de día y,
+    // según la hora, se oscurece con el tinte de la paleta.
+    final tinte = p.tinte;
+    if (tinte != null) {
+      canvas.saveLayer(Rect.fromLTWH(0, 0, w, h - 40), Paint());
+    }
+    const periodo = 520.0;
+
+    // Sierra (lenta).
+    final despM = t * periodo;
+    for (var x = -periodo; x < w + periodo; x += periodo) {
       final b = x - despM;
-      final picos = [
-        (b, 0.0),
-        (b + 70, 88.0),
-        (b + 130, 40.0),
-        (b + 190, 104.0),
-        (b + 260, 0.0),
-      ];
-      final camino = Path()..moveTo(b, suelo);
-      for (final (px, alto) in picos) {
-        camino.lineTo(px, suelo - alto);
-      }
-      camino
-        ..lineTo(b + 260, suelo)
-        ..close();
-      canvas.drawPath(camino, pintura);
-      // La cara de la derecha de cada cerro, en sombra: les da volumen.
-      final sombra = Paint()
-        ..color = Colors.black.withValues(alpha: p.oscuro ? .24 : .12);
-      for (final (cima, sig) in [(picos[1], picos[2]), (picos[3], picos[4])]) {
-        canvas.drawPath(
-          Path()
-            ..moveTo(cima.$1, suelo - cima.$2)
-            ..lineTo(sig.$1, suelo - sig.$2)
-            ..lineTo(sig.$1, suelo)
-            ..lineTo(cima.$1 + 8, suelo)
-            ..close(),
-          sombra,
-        );
-      }
-      final nieve = Paint()..color = p.nieve;
-      canvas.drawPath(
-        Path()
-          ..moveTo(b + 172, suelo - 83)
-          ..lineTo(b + 190, suelo - 104)
-          ..lineTo(b + 208, suelo - 85)
-          ..lineTo(b + 196, suelo - 90)
-          ..lineTo(b + 188, suelo - 84)
-          ..close(),
-        nieve,
-      );
-      canvas.drawPath(
-        Path()
-          ..moveTo(b + 56, suelo - 72)
-          ..lineTo(b + 70, suelo - 88)
-          ..lineTo(b + 84, suelo - 74)
-          ..lineTo(b + 70, suelo - 78)
-          ..close(),
-        nieve,
-      );
+      _cerro(canvas, b + 120, suelo, 120, 60, _verdeLejos);
+      _cerro(canvas, b + 330, suelo, 135, 112, _tierra, nieve: true);
+      _cerro(canvas, b + 480, suelo, 90, 48, _verdeLejos);
     }
 
-    // Bruma al pie de las montañas: las aleja.
-    final bruma = Rect.fromLTWH(0, suelo - 56, w, 56);
+    // Bruma al pie de los cerros: los aleja.
+    final bruma = Rect.fromLTWH(0, suelo - 40, w, 40);
     canvas.drawRect(
       bruma,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            p.fondo.withValues(alpha: 0),
-            p.fondo.withValues(alpha: p.oscuro ? .35 : .55),
-          ],
+          colors: [const Color(0x00E3F1EE), const Color(0x8CE3F1EE)],
         ).createShader(bruma),
     );
 
-    // Cerros cercanos, con luz arriba y sombra abajo.
-    const periodoC = 220.0;
-    final despC = t * periodoC * 2;
-    final cerros = Rect.fromLTWH(0, suelo - 46, w, 46);
-    pintura.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Color.lerp(p.cerro, Colors.white, p.oscuro ? .06 : .14)!,
-        Color.lerp(p.cerro, Colors.black, .18)!,
-      ],
-    ).createShader(cerros);
-    for (var x = -periodoC; x < w + periodoC; x += periodoC) {
-      final b = x - despC;
-      canvas.drawPath(
-        Path()
-          ..moveTo(b, suelo)
-          ..quadraticBezierTo(b + 55, suelo - 46, b + 110, suelo - 10)
-          ..quadraticBezierTo(b + 165, suelo - 38, b + 220, suelo)
-          ..close(),
-        pintura,
-      );
+    // Costa y campo (más rápidos).
+    final despC = (t * periodo * 2) % periodo;
+    for (var x = -periodo; x < w + periodo; x += periodo) {
+      _costaYCampo(canvas, x - despC, suelo, h - 40);
     }
 
-    pintura.shader = null;
-
-    // Pasto y árboles (más rápidos).
-    pintura.color = p.pasto;
-    canvas.drawRect(Rect.fromLTWH(0, suelo, w, 12), pintura);
-    const periodoA = 150.0;
-    final despA = t * periodoA * 6;
-    for (var x = -periodoA; x < w + periodoA; x += periodoA) {
-      final b = _envolver(x - despA, w + 2 * periodoA) - periodoA;
-      _pinoEn(canvas, Offset(b + 18, suelo + 6), 46);
-      _arbolEn(canvas, Offset(b + 70, suelo + 6), 17);
-      _pinoEn(canvas, Offset(b + 112, suelo + 6), 34);
+    if (tinte != null) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h - 40),
+        Paint()
+          ..color = tinte
+          ..blendMode = BlendMode.srcATop,
+      );
+      canvas.restore();
     }
 
     // Carretera (más clara al fondo) con las líneas del centro avanzando.
@@ -612,13 +521,370 @@ class _PintorEscena extends CustomPainter {
     );
   }
 
+  static const _tierra = [
+    Color(0xFFE8B98A),
+    Color(0xFFC58B5E),
+    Color(0xFF8F5C3A),
+  ];
+  static const _verdeLejos = [
+    Color(0xFFC9DCC0),
+    Color(0xFF93B48A),
+    Color(0xFF5F8A5A),
+  ];
+
+  /// Un cerro redondo con luz arriba a la izquierda; con [nieve], la cumbre
+  /// nevada.
+  void _cerro(
+    Canvas canvas,
+    double cx,
+    double base,
+    double rx,
+    double ry,
+    List<Color> colores, {
+    bool nieve = false,
+  }) {
+    final camino = Path()
+      ..moveTo(cx - rx, base)
+      ..cubicTo(
+        cx - rx * .6,
+        base - ry * .55,
+        cx - rx * .3,
+        base - ry,
+        cx,
+        base - ry,
+      )
+      ..cubicTo(
+        cx + rx * .3,
+        base - ry,
+        cx + rx * .6,
+        base - ry * .55,
+        cx + rx,
+        base,
+      )
+      ..close();
+    final caja = Rect.fromLTRB(cx - rx, base - ry, cx + rx, base);
+    canvas.drawPath(
+      camino,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-.3, -.5),
+          radius: 1.3 * rx / ry,
+          colors: colores,
+          stops: const [0, .6, 1],
+        ).createShader(caja),
+    );
+    if (!nieve) return;
+    canvas
+      ..save()
+      ..clipPath(camino)
+      ..drawPath(
+        Path()
+          ..moveTo(cx - rx, base - ry * .74)
+          ..quadraticBezierTo(
+            cx - rx * .35,
+            base - ry * .64,
+            cx - rx * .15,
+            base - ry * .76,
+          )
+          ..quadraticBezierTo(
+            cx + rx * .02,
+            base - ry * .86,
+            cx + rx * .2,
+            base - ry * .73,
+          )
+          ..quadraticBezierTo(
+            cx + rx * .45,
+            base - ry * .62,
+            cx + rx,
+            base - ry * .76,
+          )
+          ..lineTo(cx + rx, base - ry - 4)
+          ..lineTo(cx - rx, base - ry - 4)
+          ..close(),
+        Paint()..color = const Color(0xFFF7FBFA),
+      )
+      ..restore();
+  }
+
+  /// Un tramo de [_PintorEscena.paint] que se repite: mar con velero, arena,
+  /// palmeras, y el campo con pinos, árboles, la llama y la casita.
+  void _costaYCampo(Canvas canvas, double b, double suelo, double piso) {
+    // Mar con olas.
+    final mar = Rect.fromLTWH(b, suelo - 18, 172, piso - suelo + 18);
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        mar,
+        topLeft: const Radius.circular(12),
+        topRight: const Radius.circular(12),
+      ),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF3FA9E0), Color(0xFF1C6FB8)],
+        ).createShader(mar),
+    );
+    final ola = Paint()
+      ..color = Colors.white.withValues(alpha: .55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    for (var i = 0; i < 2; i++) {
+      final camino = Path()..moveTo(b + 8 + i * 9, suelo - 9 + i * 6);
+      for (var k = 0; k < 7; k++) {
+        camino.relativeQuadraticBezierTo(5, -3, 10, 0);
+        camino.relativeQuadraticBezierTo(5, 3, 10, 0);
+      }
+      canvas.drawPath(camino, ola);
+    }
+    _velero(canvas, Offset(b + 62, suelo - 12));
+
+    // Arena.
+    final arena = Rect.fromLTWH(b - 20, suelo - 8, 240, piso - suelo + 8);
+    canvas.drawPath(
+      Path()
+        ..moveTo(b - 20, piso)
+        ..lineTo(b - 20, suelo + 4)
+        ..quadraticBezierTo(b + 60, suelo - 6, b + 150, suelo - 2)
+        ..quadraticBezierTo(b + 195, suelo, b + 220, piso)
+        ..close(),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFF6DFA8), Color(0xFFD9B675)],
+        ).createShader(arena),
+    );
+
+    // Campo.
+    final campo = Rect.fromLTWH(b + 150, suelo - 20, 380, piso - suelo + 20);
+    canvas.drawPath(
+      Path()
+        ..moveTo(b + 150, piso)
+        ..quadraticBezierTo(b + 200, suelo - 16, b + 270, suelo - 8)
+        ..quadraticBezierTo(b + 360, suelo - 20, b + 440, suelo - 8)
+        ..quadraticBezierTo(b + 495, suelo - 2, b + 530, piso)
+        ..close(),
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF9CCB6A), Color(0xFF6E9E45)],
+        ).createShader(campo),
+    );
+
+    final base = suelo + 8;
+    _palmera(canvas, Offset(b + 166, base), 50, -8);
+    _palmera(canvas, Offset(b + 194, base + 1), 40, 10);
+    _pinoEn(canvas, Offset(b + 234, base), 44);
+    _arbolEn(canvas, Offset(b + 264, base), 12);
+    _llama(canvas, Offset(b + 302, base));
+    _pinoEn(canvas, Offset(b + 346, base - 2), 32);
+    _casita(canvas, Offset(b + 400, base));
+    _arbolEn(canvas, Offset(b + 450, base), 14);
+    _pinoEn(canvas, Offset(b + 488, base), 46);
+  }
+
+  void _sombra(Canvas canvas, Offset centro, double ancho) {
+    canvas.drawOval(
+      Rect.fromCenter(center: centro, width: ancho, height: ancho * .18),
+      Paint()
+        ..color = const Color(0x4D0B3D24)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+  }
+
+  void _velero(Canvas canvas, Offset o) {
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 14, o.dy)
+        ..lineTo(o.dx + 14, o.dy)
+        ..lineTo(o.dx + 10, o.dy + 6)
+        ..lineTo(o.dx - 10, o.dy + 6)
+        ..close(),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(o.dx - 13, o.dy, 26, 2.5),
+      Paint()..color = const Color(0xFFE2453C),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(o.dx - .8, o.dy - 26, 1.6, 26),
+      Paint()..color = const Color(0xFF6B6B6B),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 1, o.dy - 25)
+        ..lineTo(o.dx + 13, o.dy - 3)
+        ..lineTo(o.dx + 1, o.dy - 3)
+        ..close(),
+      Paint()..color = Colors.white,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 1, o.dy - 20)
+        ..lineTo(o.dx - 10, o.dy - 3)
+        ..lineTo(o.dx - 1, o.dy - 3)
+        ..close(),
+      Paint()..color = const Color(0xFFE9EEF0),
+    );
+  }
+
+  void _palmera(Canvas canvas, Offset base, double alto, double inclina) {
+    final cima = Offset(base.dx + inclina, base.dy - alto);
+    _sombra(canvas, base + const Offset(3, 0), 26);
+    canvas.drawPath(
+      Path()
+        ..moveTo(base.dx, base.dy)
+        ..quadraticBezierTo(
+          base.dx + inclina * .2,
+          base.dy - alto * .6,
+          cima.dx,
+          cima.dy,
+        ),
+      Paint()
+        ..color = const Color(0xFF9A6A3E)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
+    final largo = alto * .8;
+    for (final (angulo, color) in const [
+      (-150.0, Color(0xFF3E9A3A)),
+      (-30.0, Color(0xFF3E9A3A)),
+      (-115.0, Color(0xFF6CC24A)),
+      (10.0, Color(0xFF5CB847)),
+      (-70.0, Color(0xFF7BD155)),
+    ]) {
+      canvas
+        ..save()
+        ..translate(cima.dx, cima.dy)
+        ..rotate(angulo * math.pi / 180)
+        ..drawOval(
+          Rect.fromLTWH(-2, -largo * .12, largo, largo * .24),
+          Paint()..color = color,
+        )
+        ..restore();
+    }
+    final coco = Paint()..color = const Color(0xFF6B4A2A);
+    canvas.drawCircle(cima + const Offset(-1, 3), 2.6, coco);
+    canvas.drawCircle(cima + const Offset(3, 3), 2.6, coco);
+  }
+
+  void _llama(Canvas canvas, Offset o) {
+    _sombra(canvas, o + const Offset(2, 0), 30);
+    final lana = Paint()..color = const Color(0xFFF7F3EC);
+    final pata = Paint()..color = const Color(0xFFE2DACB);
+    for (final x in const [-8.0, -4.0, 5.0, 9.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(o.dx + x, o.dy - 11, 2.6, 11),
+          const Radius.circular(1.2),
+        ),
+        pata,
+      );
+    }
+    canvas.drawOval(
+      Rect.fromCenter(center: o + const Offset(0, -14), width: 24, height: 14),
+      lana,
+    );
+    // La mantita de colores.
+    for (final (y, alto, color) in const [
+      (-21.0, 9.0, Color(0xFFE2453C)),
+      (-17.0, 2.0, Color(0xFFF6C343)),
+      (-14.0, 1.6, Color(0xFF2E9A5C)),
+    ]) {
+      canvas.drawRect(
+        Rect.fromLTWH(o.dx - 6, o.dy + y, 11, alto),
+        Paint()..color = color,
+      );
+    }
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 8, o.dy - 16)
+        ..quadraticBezierTo(o.dx + 11, o.dy - 26, o.dx + 10, o.dy - 34)
+        ..lineTo(o.dx + 15, o.dy - 34)
+        ..quadraticBezierTo(o.dx + 16, o.dy - 24, o.dx + 13, o.dy - 15)
+        ..close(),
+      lana,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: o + const Offset(14, -35), width: 11, height: 7),
+      lana,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx + 10, o.dy - 37)
+        ..lineTo(o.dx + 9, o.dy - 43)
+        ..lineTo(o.dx + 12, o.dy - 39)
+        ..close()
+        ..moveTo(o.dx + 13, o.dy - 38)
+        ..lineTo(o.dx + 13, o.dy - 44)
+        ..lineTo(o.dx + 15.5, o.dy - 39)
+        ..close(),
+      pata,
+    );
+    canvas.drawCircle(
+      o + const Offset(15.5, -36),
+      .9,
+      Paint()..color = const Color(0xFF222222),
+    );
+  }
+
+  void _casita(Canvas canvas, Offset o) {
+    _sombra(canvas, o, 52);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(o.dx - 20, o.dy - 26, 40, 26),
+        const Radius.circular(2),
+      ),
+      Paint()..color = const Color(0xFFE8C48A),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx - 26, o.dy - 24)
+        ..lineTo(o.dx, o.dy - 44)
+        ..lineTo(o.dx + 26, o.dy - 24)
+        ..close(),
+      Paint()..color = const Color(0xFFB5532E),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(o.dx, o.dy - 44)
+        ..lineTo(o.dx + 26, o.dy - 24)
+        ..lineTo(o.dx + 20, o.dy - 24)
+        ..lineTo(o.dx, o.dy - 40)
+        ..close(),
+      Paint()..color = const Color(0xFF8C3B1E),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        Rect.fromLTWH(o.dx - 5, o.dy - 15, 10, 15),
+        topLeft: const Radius.circular(4),
+        topRight: const Radius.circular(4),
+      ),
+      Paint()..color = const Color(0xFF7A4A2A),
+    );
+    final ventana = Paint()..color = const Color(0xFF8FC7E0);
+    for (final x in const [-16.0, 9.0]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(o.dx + x, o.dy - 19, 7, 7),
+          const Radius.circular(1.5),
+        ),
+        ventana,
+      );
+    }
+  }
+
   void _pinoEn(Canvas canvas, Offset base, double alto) {
+    _sombra(canvas, base + const Offset(3, 0), alto * .55);
     canvas.drawRect(
       Rect.fromLTWH(base.dx - 2.5, base.dy - 10, 5, 10),
-      Paint()..color = p.tronco,
+      Paint()..color = const Color(0xFF7A5634),
     );
-    final hoja = Paint()..color = p.pino;
-    final hojaSombra = Paint()..color = Color.lerp(p.pino, Colors.black, .32)!;
+    const verde = Color(0xFF2E9A55);
+    final hoja = Paint()..color = verde;
+    final hojaSombra = Paint()..color = Color.lerp(verde, Colors.black, .32)!;
     for (var i = 0; i < 3; i++) {
       final y = base.dy - 8 - i * alto * 0.28;
       final ancho = alto * (0.5 - i * 0.1);
@@ -644,25 +910,26 @@ class _PintorEscena extends CustomPainter {
   }
 
   void _arbolEn(Canvas canvas, Offset base, double radio) {
+    _sombra(canvas, base + const Offset(3, 0), radio * 1.8);
     canvas.drawRect(
       Rect.fromLTWH(base.dx - 3, base.dy - 16, 6, 16),
-      Paint()..color = p.tronco,
+      Paint()..color = const Color(0xFF7A5634),
     );
     final centro = Offset(base.dx, base.dy - 16 - radio * 0.8);
     canvas.drawCircle(
       centro,
       radio,
-      Paint()..color = Color.lerp(p.copa, Colors.black, .28)!,
-    );
-    canvas.drawCircle(
-      centro - Offset(radio * .2, radio * .18),
-      radio * .8,
-      Paint()..color = p.copa,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-.35, -.4),
+          colors: [Color(0xFF9BE07A), Color(0xFF4FAE3E), Color(0xFF21702A)],
+          stops: [0, .6, 1],
+        ).createShader(Rect.fromCircle(center: centro, radius: radio)),
     );
     canvas.drawCircle(
       centro - Offset(radio * .38, radio * .42),
-      radio * .28,
-      Paint()..color = Colors.white.withValues(alpha: .16),
+      radio * .26,
+      Paint()..color = Colors.white.withValues(alpha: .3),
     );
   }
 
