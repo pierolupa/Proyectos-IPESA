@@ -437,6 +437,20 @@ class _PintorEscena extends CustomPainter {
         ..lineTo(b + 260, suelo)
         ..close();
       canvas.drawPath(camino, pintura);
+      // La cara de la derecha de cada cerro, en sombra: les da volumen.
+      final sombra = Paint()
+        ..color = Colors.black.withValues(alpha: p.oscuro ? .24 : .12);
+      for (final (cima, sig) in [(picos[1], picos[2]), (picos[3], picos[4])]) {
+        canvas.drawPath(
+          Path()
+            ..moveTo(cima.$1, suelo - cima.$2)
+            ..lineTo(sig.$1, suelo - sig.$2)
+            ..lineTo(sig.$1, suelo)
+            ..lineTo(cima.$1 + 8, suelo)
+            ..close(),
+          sombra,
+        );
+      }
       final nieve = Paint()..color = p.nieve;
       canvas.drawPath(
         Path()
@@ -459,10 +473,33 @@ class _PintorEscena extends CustomPainter {
       );
     }
 
-    // Cerros cercanos.
+    // Bruma al pie de las montañas: las aleja.
+    final bruma = Rect.fromLTWH(0, suelo - 56, w, 56);
+    canvas.drawRect(
+      bruma,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            p.fondo.withValues(alpha: 0),
+            p.fondo.withValues(alpha: p.oscuro ? .35 : .55),
+          ],
+        ).createShader(bruma),
+    );
+
+    // Cerros cercanos, con luz arriba y sombra abajo.
     const periodoC = 220.0;
     final despC = t * periodoC * 2;
-    pintura.color = p.cerro;
+    final cerros = Rect.fromLTWH(0, suelo - 46, w, 46);
+    pintura.shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color.lerp(p.cerro, Colors.white, p.oscuro ? .06 : .14)!,
+        Color.lerp(p.cerro, Colors.black, .18)!,
+      ],
+    ).createShader(cerros);
     for (var x = -periodoC; x < w + periodoC; x += periodoC) {
       final b = x - despC;
       canvas.drawPath(
@@ -474,6 +511,8 @@ class _PintorEscena extends CustomPainter {
         pintura,
       );
     }
+
+    pintura.shader = null;
 
     // Pasto y árboles (más rápidos).
     pintura.color = p.pasto;
@@ -487,11 +526,28 @@ class _PintorEscena extends CustomPainter {
       _pinoEn(canvas, Offset(b + 112, suelo + 6), 34);
     }
 
-    // Carretera con las líneas del centro avanzando.
-    pintura.color = p.pista;
-    canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 40), pintura);
-    pintura.color = const Color(0xFF3A474E);
-    canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 3), pintura);
+    // Carretera (más clara al fondo) con las líneas del centro avanzando.
+    final pista = Rect.fromLTWH(0, h - 40, w, 40);
+    pintura.shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color.lerp(p.pista, Colors.white, .14)!, p.pista],
+    ).createShader(pista);
+    canvas.drawRect(pista, pintura);
+    pintura.shader = null;
+    pintura.color = Colors.white.withValues(alpha: .22);
+    canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 2), pintura);
+    // La sombra del camión sobre la pista.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(w / 2 + 4, h - 15),
+        width: 186,
+        height: 10,
+      ),
+      Paint()
+        ..color = Colors.black.withValues(alpha: .38)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
     const periodoL = 40.0;
     final despL = t * periodoL * 60;
     pintura.color = Colors.white.withValues(alpha: 0.85);
@@ -561,16 +617,27 @@ class _PintorEscena extends CustomPainter {
       Paint()..color = p.tronco,
     );
     final hoja = Paint()..color = p.pino;
+    final hojaSombra = Paint()..color = Color.lerp(p.pino, Colors.black, .32)!;
     for (var i = 0; i < 3; i++) {
       final y = base.dy - 8 - i * alto * 0.28;
       final ancho = alto * (0.5 - i * 0.1);
+      final cima = Offset(base.dx, y - alto * 0.42);
+      // Mitad con luz y mitad en sombra.
       canvas.drawPath(
         Path()
           ..moveTo(base.dx - ancho / 2, y)
-          ..lineTo(base.dx, y - alto * 0.42)
-          ..lineTo(base.dx + ancho / 2, y)
+          ..lineTo(cima.dx, cima.dy)
+          ..lineTo(base.dx, y)
           ..close(),
         hoja,
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(base.dx, y)
+          ..lineTo(cima.dx, cima.dy)
+          ..lineTo(base.dx + ancho / 2, y)
+          ..close(),
+        hojaSombra,
       );
     }
   }
@@ -580,10 +647,21 @@ class _PintorEscena extends CustomPainter {
       Rect.fromLTWH(base.dx - 3, base.dy - 16, 6, 16),
       Paint()..color = p.tronco,
     );
+    final centro = Offset(base.dx, base.dy - 16 - radio * 0.8);
     canvas.drawCircle(
-      Offset(base.dx, base.dy - 16 - radio * 0.8),
+      centro,
       radio,
+      Paint()..color = Color.lerp(p.copa, Colors.black, .28)!,
+    );
+    canvas.drawCircle(
+      centro - Offset(radio * .2, radio * .18),
+      radio * .8,
       Paint()..color = p.copa,
+    );
+    canvas.drawCircle(
+      centro - Offset(radio * .38, radio * .42),
+      radio * .28,
+      Paint()..color = Colors.white.withValues(alpha: .16),
     );
   }
 
@@ -592,7 +670,9 @@ class _PintorEscena extends CustomPainter {
       anterior.t != t || anterior.p.momento != p.momento;
 }
 
-/// Camión IPESA de costado: caja negra con el logo, cabina petróleo.
+/// Camión IPESA de costado, con volumen: la caja negra con el logo (con su
+/// cara de arriba y la del costado), la cabina petróleo con reflejo en la
+/// ventana y ruedas con aro. De noche, con el faro encendido.
 class _Camion extends StatelessWidget {
   const _Camion({required this.giroRuedas});
 
@@ -608,25 +688,16 @@ class _Camion extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Caja de carga.
+          Positioned.fill(
+            child: CustomPaint(painter: _PintorCamion(giroRuedas)),
+          ),
+          // El logo sobre el costado de la caja.
           Positioned(
             left: 0,
-            top: 0,
+            top: 6,
             width: 118,
-            height: 64,
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
+            height: 58,
+            child: Center(
               child: Image.asset(
                 'assets/brand/ipesa_blanco.png',
                 width: 82,
@@ -634,100 +705,181 @@ class _Camion extends StatelessWidget {
               ),
             ),
           ),
-          // Franja verde bajo la caja.
-          Positioned(
-            left: 0,
-            top: 64,
-            width: 124,
-            height: 6,
-            child: Container(color: const Color(0xFF0E7A3A)),
-          ),
-          // Cabina.
-          Positioned(
-            left: 122,
-            top: 18,
-            width: 50,
-            height: 52,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Ipesa.petroleo,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(6),
-                  topRight: Radius.circular(16),
-                  bottomRight: Radius.circular(6),
-                ),
-              ),
-            ),
-          ),
-          // Ventana de la cabina.
-          Positioned(
-            left: 134,
-            top: 25,
-            width: 30,
-            height: 18,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFBFE6DE),
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(10),
-                  topLeft: Radius.circular(3),
-                  bottomLeft: Radius.circular(3),
-                  bottomRight: Radius.circular(3),
-                ),
-              ),
-            ),
-          ),
-          // Faro.
-          Positioned(
-            left: 166,
-            top: 54,
-            width: 8,
-            height: 6,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF2C14E),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Positioned(left: 16, top: 60, child: _Rueda(giro: giroRuedas)),
-          Positioned(left: 76, top: 60, child: _Rueda(giro: giroRuedas)),
-          Positioned(left: 136, top: 60, child: _Rueda(giro: giroRuedas)),
         ],
       ),
     );
   }
 }
 
-class _Rueda extends StatelessWidget {
-  const _Rueda({required this.giro});
+class _PintorCamion extends CustomPainter {
+  _PintorCamion(this.giro);
 
   final double giro;
 
+  static Paint _degradado(Rect r, List<Color> colores) => Paint()
+    ..shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: colores,
+    ).createShader(r);
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: const BoxDecoration(
-        color: Color(0xFF111111),
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Transform.rotate(
-        angle: giro,
-        child: Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: const Color(0xFFB9C6CA),
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF6B7A80), width: 2),
-          ),
-          alignment: Alignment.topCenter,
-          child: Container(width: 2, height: 5, color: const Color(0xFF6B7A80)),
-        ),
-      ),
+  void paint(Canvas canvas, Size size) {
+    // Caja: costado con degradado, cara de arriba y cara de atrás.
+    const costado = Rect.fromLTWH(0, 6, 118, 58);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(costado, const Radius.circular(4)),
+      _degradado(costado, const [Color(0xFF34393C), Color(0xFF050505)]),
     );
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, 6)
+        ..lineTo(8, 0)
+        ..lineTo(126, 0)
+        ..lineTo(118, 6)
+        ..close(),
+      Paint()..color = const Color(0xFF4A5054),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(118, 6)
+        ..lineTo(126, 0)
+        ..lineTo(126, 58)
+        ..lineTo(118, 64)
+        ..close(),
+      Paint()..color = const Color(0xFF0B0D0E),
+    );
+    canvas.drawLine(
+      const Offset(4, 10),
+      const Offset(114, 10),
+      Paint()
+        ..color = Colors.white.withValues(alpha: .14)
+        ..strokeWidth = 1,
+    );
+    // Franja verde y chasis.
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 64, 124, 6),
+      Paint()..color = const Color(0xFF0E7A3A),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 64, 124, 1.5),
+      Paint()..color = const Color(0xFF4ADE80).withValues(alpha: .6),
+    );
+    canvas.drawRect(
+      const Rect.fromLTWH(0, 70, 172, 4),
+      Paint()..color = const Color(0xFF15191B),
+    );
+    // Cabina.
+    final cabina = Path()
+      ..moveTo(128, 24)
+      ..lineTo(150, 24)
+      ..quadraticBezierTo(160, 24, 165, 32)
+      ..lineTo(174, 50)
+      ..lineTo(174, 72)
+      ..lineTo(128, 72)
+      ..close();
+    canvas.drawPath(
+      cabina,
+      _degradado(const Rect.fromLTWH(128, 24, 46, 48), const [
+        Color(0xFF1F8098),
+        Ipesa.petroleo,
+        Color(0xFF0A3644),
+      ]),
+    );
+    // Ventana con reflejo.
+    final ventana = Path()
+      ..moveTo(134, 30)
+      ..lineTo(151, 30)
+      ..quadraticBezierTo(156, 30, 159, 36)
+      ..lineTo(164, 46)
+      ..lineTo(134, 46)
+      ..close();
+    canvas.drawPath(
+      ventana,
+      _degradado(const Rect.fromLTWH(134, 30, 30, 16), const [
+        Color(0xFFDDF2F6),
+        Color(0xFF9CCFDB),
+      ]),
+    );
+    canvas.save();
+    canvas.clipPath(ventana);
+    canvas.drawPath(
+      Path()
+        ..moveTo(140, 30)
+        ..lineTo(147, 30)
+        ..lineTo(141, 46)
+        ..lineTo(134, 46)
+        ..close(),
+      Paint()..color = Colors.white.withValues(alpha: .55),
+    );
+    canvas.restore();
+    // Puerta, parachoques y faro.
+    canvas.drawLine(
+      const Offset(147, 50),
+      const Offset(147, 70),
+      Paint()
+        ..color = Colors.black.withValues(alpha: .28)
+        ..strokeWidth = 1.2,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(166, 64, 10, 7),
+        const Radius.circular(2),
+      ),
+      Paint()..color = const Color(0xFFAEB8BC),
+    );
+    canvas.drawCircle(
+      const Offset(171, 57),
+      6,
+      Paint()
+        ..color = const Color(0xFFFFD54A).withValues(alpha: .35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+    canvas.drawCircle(
+      const Offset(171, 57),
+      3,
+      Paint()..color = const Color(0xFFFFD54A),
+    );
+    // Ruedas.
+    for (final x in const [29.0, 89.0, 149.0]) {
+      _rueda(canvas, Offset(x, 74));
+    }
   }
+
+  void _rueda(Canvas canvas, Offset c) {
+    canvas.drawCircle(c, 13, Paint()..color = const Color(0xFF0C0F10));
+    canvas.drawCircle(
+      c,
+      11.5,
+      Paint()
+        ..color = const Color(0xFF2A3033)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(
+      c,
+      6.5,
+      Paint()
+        ..shader = const RadialGradient(
+          center: Alignment(-.35, -.35),
+          colors: [Color(0xFFE6ECEE), Color(0xFF8A979B)],
+        ).createShader(Rect.fromCircle(center: c, radius: 6.5)),
+    );
+    final rayo = Paint()
+      ..color = const Color(0xFF5F6B6F)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 5; i++) {
+      final a = giro + i * 2 * math.pi / 5;
+      canvas.drawLine(
+        c + Offset(math.cos(a), math.sin(a)) * 2.4,
+        c + Offset(math.cos(a), math.sin(a)) * 5.6,
+        rayo,
+      );
+    }
+    canvas.drawCircle(c, 2.2, Paint()..color = const Color(0xFF4F5B5F));
+  }
+
+  @override
+  bool shouldRepaint(_PintorCamion anterior) => anterior.giro != giro;
 }
