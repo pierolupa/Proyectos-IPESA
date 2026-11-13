@@ -564,7 +564,8 @@ class _PintorEscena extends CustomPainter {
   }
 
   void _nube(Canvas canvas, Offset o, double e) {
-    final blanco = Paint()..color = Colors.white.withValues(alpha: p.nubes);
+    // Color sólido (no transparente): así los círculos no se ven encimados.
+    final blanco = Paint()..color = Color.lerp(p.medio, Colors.white, p.nubes)!;
     canvas.drawCircle(o + Offset(0, 8 * e), 14 * e, blanco);
     canvas.drawCircle(o + Offset(18 * e, 0), 18 * e, blanco);
     canvas.drawCircle(o + Offset(38 * e, 8 * e), 14 * e, blanco);
