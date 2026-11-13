@@ -426,18 +426,18 @@ class _PintorEscena extends CustomPainter {
       _cerro(canvas, b + 90, suelo + 2, 135, 54, _verdeCerro);
       _cerro(canvas, b + 300, suelo + 2, 150, 66, _verdeCerro);
       for (final (dx, alto) in const [
-        (12.0, 24.0),
-        (26.0, 30.0),
-        (40.0, 22.0),
-        (150.0, 26.0),
-        (164.0, 32.0),
-        (178.0, 24.0),
-        (232.0, 22.0),
-        (246.0, 28.0),
-        (330.0, 30.0),
-        (344.0, 24.0),
-        (358.0, 34.0),
-        (372.0, 26.0),
+        (12.0, 29.0),
+        (26.0, 36.0),
+        (40.0, 26.0),
+        (150.0, 31.0),
+        (164.0, 38.0),
+        (178.0, 29.0),
+        (232.0, 26.0),
+        (246.0, 34.0),
+        (330.0, 36.0),
+        (344.0, 29.0),
+        (358.0, 41.0),
+        (372.0, 31.0),
       ]) {
         _pinoEn(canvas, Offset(b + dx, suelo + 2), alto, lejos: true);
       }
@@ -459,19 +459,19 @@ class _PintorEscena extends CustomPainter {
     final base = suelo + 8;
     for (var x = -periodoA; x < w + periodoA; x += periodoA) {
       final b = x - despA;
-      _pinoEn(canvas, Offset(b + 10, base), 50);
-      _pinoEn(canvas, Offset(b + 34, base + 1), 40);
-      _pinoEn(canvas, Offset(b + 64, base), 38);
-      _pinoEn(canvas, Offset(b + 96, base), 54);
-      _pinoEn(canvas, Offset(b + 122, base + 1), 26);
-      _pinoEn(canvas, Offset(b + 150, base), 34);
-      _pinoEn(canvas, Offset(b + 178, base), 44);
-      _pinoEn(canvas, Offset(b + 200, base + 1), 36);
-      _pinoEn(canvas, Offset(b + 236, base), 46);
-      _pinoEn(canvas, Offset(b + 270, base), 50);
-      _pinoEn(canvas, Offset(b + 296, base + 1), 24);
-      _pinoEn(canvas, Offset(b + 320, base), 42);
-      _pinoEn(canvas, Offset(b + 346, base), 36);
+      _pinoEn(canvas, Offset(b + 10, base), 65);
+      _pinoEn(canvas, Offset(b + 34, base + 1), 52);
+      _pinoEn(canvas, Offset(b + 64, base), 49);
+      _pinoEn(canvas, Offset(b + 96, base), 70);
+      _pinoEn(canvas, Offset(b + 122, base + 1), 34);
+      _pinoEn(canvas, Offset(b + 150, base), 44);
+      _pinoEn(canvas, Offset(b + 178, base), 57);
+      _pinoEn(canvas, Offset(b + 200, base + 1), 47);
+      _pinoEn(canvas, Offset(b + 236, base), 60);
+      _pinoEn(canvas, Offset(b + 270, base), 65);
+      _pinoEn(canvas, Offset(b + 296, base + 1), 31);
+      _pinoEn(canvas, Offset(b + 320, base), 55);
+      _pinoEn(canvas, Offset(b + 346, base), 47);
     }
 
     if (tinte != null) {
