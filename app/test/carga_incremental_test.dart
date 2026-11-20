@@ -34,6 +34,7 @@ Map<String, dynamic> _guia(
 void main() {
   late List<Uri> pedidos;
   late List<Map<String, dynamic>> respuesta;
+  late int recuperarFotos;
 
   Future<AppState> abrir(String rol) async {
     SharedPreferences.setMockInitialValues({
@@ -41,9 +42,14 @@ void main() {
       'sesion_rol': rol,
     });
     pedidos = [];
+    recuperarFotos = 0;
     final client = MockClient((request) async {
       if (request.url.path.endsWith('/sucursales')) {
         return http.Response('[]', 200);
+      }
+      if (request.url.path.endsWith('/fotos/recuperar')) {
+        recuperarFotos++;
+        return http.Response('{"revisadas":0,"recuperadas":0}', 200);
       }
       pedidos.add(request.url);
       return http.Response(jsonEncode(respuesta), 200);
@@ -58,6 +64,8 @@ void main() {
     () async {
       respuesta = [_guia('T1', 'en_ruta')];
       await abrir('administrador');
+      // Al entrar, el admin pide recuperar las fotos que Drive guardó tarde.
+      expect(recuperarFotos, 1);
       final consulta = pedidos.single.queryParameters;
       expect(consulta.keys, ['vigentes']);
       final desde = DateTime.parse(consulta['vigentes']!).toLocal();
@@ -74,6 +82,7 @@ void main() {
   test('El transportista carga solo lo de hoy y sus abiertas', () async {
     respuesta = [];
     await abrir('transportista');
+    expect(recuperarFotos, 0);
     final desde = DateTime.parse(pedidos.single.queryParameters['vigentes']!)
         .toLocal();
     final hoy = DateTime.now();

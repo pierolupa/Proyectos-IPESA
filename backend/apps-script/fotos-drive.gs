@@ -14,6 +14,10 @@
  *  4. Implementar → Nueva implementación → Aplicación web:
  *     Ejecutar como "Yo", Quién tiene acceso "Cualquier persona".
  *     Copia la URL (termina en /exec) → Vercel: DRIVE_FOTOS_URL.
+ *
+ * Para actualizarlo (cuando cambie este archivo): pega el código nuevo,
+ * deja tu CLAVE, guarda y ve a Implementar → Gestionar implementaciones →
+ * lápiz → Versión: "Nueva versión" → Implementar. Así la URL no cambia.
  */
 
 const CLAVE = 'ESCRIBE_AQUI_TU_CLAVE';
@@ -28,6 +32,7 @@ function doPost(e) {
     if (datos.accion === 'guardar') return responder({ id: guardar(datos) });
     if (datos.accion === 'leer') return responder(leer(datos.id));
     if (datos.accion === 'eliminar') return responder(eliminar(datos.id));
+    if (datos.accion === 'buscar') return responder(buscar(datos));
     return responder({ error: 'Acción desconocida.' });
   } catch (err) {
     return responder({ error: String((err && err.message) || err) });
@@ -75,6 +80,31 @@ function leer(id) {
     tipo: contenido.getContentType(),
     base64: Utilities.base64Encode(contenido.getBytes()),
   };
+}
+
+/**
+ * La foto más reciente de la carpeta cuyo nombre empieza con `prefijo`,
+ * creada entre `desde` y `hasta` (fechas ISO, opcionales). Sirve para
+ * encontrar una foto que se guardó cuando el backend ya no esperaba la
+ * respuesta. Devuelve { id } o { id: null }.
+ */
+function buscar(datos) {
+  const prefijo = String(datos.prefijo || '');
+  if (prefijo.length < 6) return { error: 'Falta el nombre a buscar.' };
+  const desde = datos.desde ? new Date(datos.desde).getTime() : 0;
+  const hasta = datos.hasta ? new Date(datos.hasta).getTime() : Infinity;
+  const archivos = carpeta().searchFiles(
+    'title contains "' + prefijo.replace(/["\\]/g, '') + '" and trashed = false',
+  );
+  let mejor = null;
+  while (archivos.hasNext()) {
+    const archivo = archivos.next();
+    const creado = archivo.getDateCreated().getTime();
+    if (archivo.getName().indexOf(prefijo) !== 0) continue;
+    if (creado < desde || creado > hasta) continue;
+    if (!mejor || creado > mejor.getDateCreated().getTime()) mejor = archivo;
+  }
+  return { id: mejor ? mejor.getId() : null };
 }
 
 /** La manda a la papelera de Drive (se puede recuperar 30 días). */

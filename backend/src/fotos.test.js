@@ -66,6 +66,36 @@ describe('fotos en Google Drive', () => {
     await expect(fotos.guardarFoto('T1', foto)).rejects.toThrow(/Cualquier persona/);
   });
 
+  it('si Drive no responde a tiempo, busca la foto que guardó igual', async () => {
+    global.fetch
+      .mockRejectedValueOnce(new Error('The operation was aborted due to timeout'))
+      .mockResolvedValueOnce(respuestaJson({ id: 'tarde1' }));
+
+    expect(await fotos.guardarFoto('T001-98390', foto)).toBe('drive:tarde1');
+
+    const guardado = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const busqueda = JSON.parse(global.fetch.mock.calls[1][1].body);
+    expect(busqueda).toMatchObject({ accion: 'buscar', prefijo: guardado.nombre });
+    expect(Date.parse(busqueda.desde)).toBeLessThan(Date.now());
+  });
+
+  it('si tampoco aparece (o el Apps Script es viejo), avisa el error', async () => {
+    global.fetch
+      .mockRejectedValueOnce(new Error('The operation was aborted due to timeout'))
+      .mockResolvedValueOnce(respuestaJson({ id: null }));
+    await expect(fotos.guardarFoto('T1', foto)).rejects.toThrow(/No se pudo conectar/);
+
+    global.fetch
+      .mockRejectedValueOnce(new Error('The operation was aborted due to timeout'))
+      .mockResolvedValueOnce(respuestaJson({ error: 'Acción desconocida.' }));
+    await expect(fotos.guardarFoto('T1', foto)).rejects.toThrow(/No se pudo conectar/);
+  });
+
+  it('el nombre de la foto de entrega no choca con el del documento', () => {
+    expect(fotos.prefijoFoto('T001-98390', '2026-11-19T15:27:15.910Z'))
+      .toBe('T001-98390_2026-11-19.');
+  });
+
   it('sirve una foto de Drive como imagen', async () => {
     global.fetch.mockResolvedValue(
       respuestaJson({ tipo: 'image/png', base64: Buffer.from('png').toString('base64') }),

@@ -343,6 +343,7 @@ class AppState extends ChangeNotifier {
     await prefs.setString(_prefRol, sesion.rol.name);
     await _guardarToken(sesion.token);
     _renovarRecordatorio();
+    _recuperarFotos();
     await cargarGuias();
   }
 
@@ -372,6 +373,19 @@ class AppState extends ChangeNotifier {
         Notificador.permitido) {
       unawaited(_suscribirRecordatorio());
     }
+  }
+
+  /// Al entrar el administrador, el servidor busca en Drive las fotos que
+  /// se guardaron tarde y las anota; si recuperó alguna, se recarga.
+  void _recuperarFotos() {
+    if (_rolActual != RolUsuario.administrador) return;
+    unawaited(() async {
+      try {
+        if (await _api.recuperarFotos() > 0) await cargarGuias();
+      } catch (_) {
+        // Si falla, lo intenta de nuevo el archivo de cada madrugada.
+      }
+    }());
   }
 
   Future<bool> _suscribirRecordatorio() async {
@@ -458,6 +472,7 @@ class AppState extends ChangeNotifier {
     _rangoPorDefecto();
     notifyListeners();
     _renovarRecordatorio();
+    _recuperarFotos();
     await cargarGuias();
   }
 

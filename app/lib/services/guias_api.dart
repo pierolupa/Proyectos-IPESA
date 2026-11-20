@@ -664,6 +664,14 @@ class GuiasApi {
     );
   }
 
+  /// Busca en Drive las fotos que se guardaron tarde (la tarea se cerró
+  /// sin foto) y las anota en su guía. Devuelve cuántas recuperó.
+  Future<int> recuperarFotos() async {
+    final res = await _client.post(Uri.parse('$apiBaseUrl/fotos/recuperar'));
+    if (res.statusCode != 200) _lanzarError(res);
+    return (_decodeBody(res)['recuperadas'] as num?)?.toInt() ?? 0;
+  }
+
   /// Si el backend tiene conectado el almacenamiento de fotos.
   Future<bool> almacenamientoFotosConfigurado() async {
     final res = await _client.get(Uri.parse('$apiBaseUrl/fotos/estado'));

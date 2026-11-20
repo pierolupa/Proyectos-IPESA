@@ -1889,6 +1889,59 @@ it('un transportista no se salta el MIGO haciéndose pasar por administrador', a
   expect(repo.actualizarGuia).not.toHaveBeenCalled();
 });
 
+describe('POST /fotos/recuperar (fotos que Drive guardó tarde)', () => {
+  const hace = (horas) => new Date(Date.now() - horas * 3600e3).toISOString();
+
+  beforeEach(() => {
+    jest.spyOn(fotos, 'driveConfigurado').mockReturnValue(true);
+    repo.actualizarGuias.mockResolvedValue();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('anota la foto hallada en las entregas del transportista sin foto', async () => {
+    const cierre = hace(40);
+    repo.listarGuias.mockResolvedValue([
+      guia({ numero_guia: 'T001-98390', estado: ESTADOS.FINALIZADO, fecha_cierre: cierre, _row: 2 }),
+      guia({ numero_guia: 'T2', estado: ESTADOS.ENTREGADO, fecha_cierre: cierre, foto_entrega_url: 'drive:ya', _row: 3 }),
+      guia({ numero_guia: 'T3', estado: ESTADOS.ENTREGADO, fecha_cierre: cierre, corregido_por_admin: true, _row: 4 }),
+      guia({ numero_guia: 'T4', estado: ESTADOS.ENTREGADO, fecha_cierre: hace(24 * 30), _row: 5 }),
+      guia({ numero_guia: 'T5', estado: ESTADOS.EN_RUTA, _row: 6 }),
+    ]);
+    const buscar = jest.spyOn(fotos, 'buscarFoto').mockResolvedValue('drive:hallada');
+
+    const res = await request(app).post('/fotos/recuperar');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ revisadas: 1, recuperadas: 1 });
+    expect(buscar).toHaveBeenCalledTimes(1);
+    const [prefijo, { desde, hasta }] = buscar.mock.calls[0];
+    expect(prefijo).toMatch(/^T001-98390_\d{4}-\d{2}-\d{2}\.$/);
+    expect(Date.parse(desde)).toBeLessThan(Date.parse(cierre));
+    expect(Date.parse(hasta)).toBeGreaterThan(Date.parse(cierre));
+    expect(repo.actualizarGuias).toHaveBeenCalledWith([
+      expect.objectContaining({ numero_guia: 'T001-98390', foto_entrega_url: 'drive:hallada' }),
+    ]);
+  });
+
+  it('si no la encuentra, no escribe', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ estado: ESTADOS.ENTREGADO, fecha_cierre: hace(2) }),
+    ]);
+    jest.spyOn(fotos, 'buscarFoto').mockResolvedValue(null);
+    const res = await request(app).post('/fotos/recuperar');
+    expect(res.body).toEqual({ revisadas: 1, recuperadas: 0 });
+    expect(repo.actualizarGuias).not.toHaveBeenCalled();
+  });
+
+  it('solo el administrador la dispara', async () => {
+    const res = await como({ nombre: 'Juan Pérez', rol: ROLES.TRANSPORTISTA }).post('/fotos/recuperar');
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('POST /fotos/migrar (fotos de Blob a Drive)', () => {
   const BLOB = 'https://abc.private.blob.vercel-storage.com/entregas/T1-x.jpg';
   const BLOB_DOC = 'https://abc.private.blob.vercel-storage.com/entregas/T2_MIGO-y.jpg';

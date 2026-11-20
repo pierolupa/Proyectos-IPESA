@@ -28,7 +28,7 @@ function blobConfigurado() {
 }
 
 /** Llama al Apps Script de Drive y devuelve su respuesta JSON. */
-async function llamarDrive(datos) {
+async function llamarDrive(datos, esperaMs = 25000) {
   let respuesta;
   try {
     respuesta = await fetch(process.env.DRIVE_FOTOS_URL, {
@@ -36,7 +36,7 @@ async function llamarDrive(datos) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...datos, clave: process.env.DRIVE_FOTOS_CLAVE }),
       redirect: 'follow',
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(esperaMs),
     });
   } catch (err) {
     throw new Error(`No se pudo conectar con Google Drive (${err.message}).`);
@@ -55,6 +55,12 @@ async function llamarDrive(datos) {
   if (json.error) throw new Error(`Google Drive: ${json.error}`);
   return json;
 }
+
+// Guardar en Drive a veces tarda: se espera bastante (la función de
+// Vercel tiene 60 s y la IA corre a la vez) y, si aun así no responde, se
+// busca la foto, porque el Apps Script suele terminar de guardarla igual.
+const ESPERA_GUARDAR_MS = 35 * 1000;
+const ESPERA_BUSCAR_MS = 10 * 1000;
 
 const MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -81,15 +87,25 @@ async function guardarFoto(numeroGuia, foto) {
   if (datos.length === 0) throw new Error('La foto llegó vacía.');
 
   if (driveConfigurado()) {
-    const fecha = new Date().toISOString().slice(0, 10);
-    const { id } = await llamarDrive({
-      accion: 'guardar',
-      nombre: `${nombreSeguro(numeroGuia)}_${fecha}.${extension}`,
-      tipo: mediaType,
-      base64: datos.toString('base64'),
-    });
-    if (!id) throw new Error('Google Drive no devolvió el archivo guardado.');
-    return `${PREFIJO_DRIVE}${id}`;
+    const inicio = new Date();
+    const nombre = `${prefijoFoto(numeroGuia, inicio.toISOString())}${extension}`;
+    try {
+      const { id } = await llamarDrive({
+        accion: 'guardar',
+        nombre,
+        tipo: mediaType,
+        base64: datos.toString('base64'),
+      }, ESPERA_GUARDAR_MS);
+      if (!id) throw new Error('Google Drive no devolvió el archivo guardado.');
+      return `${PREFIJO_DRIVE}${id}`;
+    } catch (err) {
+      // No respondió a tiempo, pero puede haberla guardado igual.
+      const hallada = await buscarFoto(nombre, {
+        desde: new Date(inicio.getTime() - 60 * 1000).toISOString(),
+      }).catch(() => null);
+      if (hallada) return hallada;
+      throw err;
+    }
   }
 
   const blob = await put(
@@ -98,6 +114,30 @@ async function guardarFoto(numeroGuia, foto) {
     { access: 'private', contentType: mediaType, addRandomSuffix: true },
   );
   return blob.url;
+}
+
+/**
+ * Cómo empieza el nombre de la foto de entrega de [numeroGuia] subida en
+ * [fechaIso] (`T001-98390_2026-11-19.`; sigue la extensión). El documento
+ * del cliente lleva otro nombre (`T001-98390_MIGO_…`), así no se confunden.
+ */
+function prefijoFoto(numeroGuia, fechaIso) {
+  return `${nombreSeguro(numeroGuia)}_${String(fechaIso).slice(0, 10)}.`;
+}
+
+/**
+ * Busca en la carpeta de Drive la foto más reciente cuyo nombre empieza
+ * con [prefijo] y que se creó entre [desde] y [hasta] (ISO, opcionales).
+ * Devuelve `drive:<id>` o null si no hay. Necesita la acción `buscar` del
+ * Apps Script (apps-script/fotos-drive.gs).
+ */
+async function buscarFoto(prefijo, { desde, hasta } = {}) {
+  if (!driveConfigurado()) return null;
+  const { id } = await llamarDrive(
+    { accion: 'buscar', prefijo, desde, hasta },
+    ESPERA_BUSCAR_MS,
+  );
+  return id ? `${PREFIJO_DRIVE}${id}` : null;
 }
 
 /** Envía la foto guardada en `url` como respuesta HTTP. */
@@ -173,6 +213,8 @@ module.exports = {
   estaEnBlob,
   copiarADrive,
   guardarFoto,
+  buscarFoto,
+  prefijoFoto,
   enviarFoto,
   eliminarFoto,
   esFotoValida,

@@ -590,10 +590,19 @@ app.get('/cron/archivo', async (req, res, next) => {
     }
     const corte = corteMaximo();
     const plan = await repo.archivarGuias(corte, { ejecutar: false });
-    if (plan.total === 0) return res.json({ hasta: corte, ...plan });
-    const resultado = await repo.archivarGuias(corte, { ejecutar: true });
-    console.log(`Archivo automático: ${resultado.total} guías antes de ${corte}.`);
-    res.json({ hasta: corte, ...resultado });
+    let resultado = plan;
+    if (plan.total > 0) {
+      resultado = await repo.archivarGuias(corte, { ejecutar: true });
+      console.log(`Archivo automático: ${resultado.total} guías antes de ${corte}.`);
+    }
+    // De paso, las fotos que Drive guardó tarde y quedaron sin anotar.
+    let fotosRecuperadas = 0;
+    try {
+      fotosRecuperadas = (await recuperarFotosPerdidas()).recuperadas;
+    } catch (err) {
+      console.error(err);
+    }
+    res.json({ hasta: corte, ...resultado, fotosRecuperadas });
   } catch (err) {
     next(err);
   }
@@ -1485,6 +1494,69 @@ app.post('/fotos/migrar', soloAdministrador, async (req, res, next) => {
     // espacio (la guía ya no la usa).
     await Promise.all(movidas.map((c) => fotos.eliminarFoto(c.anterior).catch((err) => console.error(err))));
     res.json({ movidas: movidas.length, pendientes: pendientes.length - movidas.length, errores });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Fotos que Drive guardó tarde ───────────────────────────────────────
+// Si el Apps Script tarda más de lo que espera el backend, la tarea se
+// cierra sin foto pero Drive termina de guardarla. Esto la busca por su
+// nombre (número de guía y día) y hora, y la anota en la guía. Solo
+// tareas que cerró el transportista (las del admin no llevan foto) en los
+// últimos días, de a pocas para no pasar el tiempo de Vercel.
+const RECUPERAR_DIAS = 10;
+const RECUPERAR_POR_LLAMADA = 30;
+const RECUPERAR_A_LA_VEZ = 4;
+const RECUPERAR_TIEMPO_MS = 30 * 1000;
+
+async function recuperarFotosPerdidas() {
+  if (!fotos.driveConfigurado()) return { revisadas: 0, recuperadas: 0 };
+  const limite = Date.now() - RECUPERAR_DIAS * 24 * 3600 * 1000;
+  const candidatas = (await repo.listarGuias({ fresco: true }))
+    .filter((g) => {
+      const cierre = Date.parse(g.fecha_cierre);
+      return ESTADOS_FINALES.has(g.estado)
+        && !g.foto_entrega_url
+        && !g.corregido_por_admin
+        && Number.isFinite(cierre)
+        && cierre >= limite;
+    })
+    .slice(0, RECUPERAR_POR_LLAMADA);
+  const inicio = Date.now();
+  const halladas = [];
+  let siguiente = 0;
+  const buscar = async () => {
+    while (siguiente < candidatas.length && Date.now() - inicio < RECUPERAR_TIEMPO_MS) {
+      const guia = candidatas[siguiente++];
+      const cierre = Date.parse(guia.fecha_cierre);
+      // La subida empezó antes del cierre y Drive pudo terminar después.
+      const desde = new Date(cierre - 3 * 60 * 1000).toISOString();
+      const hasta = new Date(cierre + 15 * 60 * 1000).toISOString();
+      try {
+        const url = await fotos.buscarFoto(fotos.prefijoFoto(guia.numero_guia, desde), { desde, hasta })
+          || await fotos.buscarFoto(fotos.prefijoFoto(guia.numero_guia, guia.fecha_cierre), { desde, hasta });
+        if (url) {
+          guia.foto_entrega_url = url;
+          halladas.push(guia);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: RECUPERAR_A_LA_VEZ }, buscar));
+  if (halladas.length > 0) {
+    await repo.actualizarGuias(halladas);
+    console.log(`Fotos recuperadas de Drive: ${halladas.map((g) => g.numero_guia).join(', ')}.`);
+  }
+  return { revisadas: candidatas.length, recuperadas: halladas.length };
+}
+
+// El admin la dispara al entrar (además del archivo de cada madrugada).
+app.post('/fotos/recuperar', soloAdministrador, async (_req, res, next) => {
+  try {
+    res.json(await recuperarFotosPerdidas());
   } catch (err) {
     next(err);
   }
