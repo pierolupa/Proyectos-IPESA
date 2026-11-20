@@ -1304,6 +1304,12 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     // Solo se guarda la foto de la entrega final (guía firmada por el
     // cliente, o comprobante de agencia) — no la de pasos intermedios.
     const entregaFinal = !porAdmin && ESTADOS_FINALES.has(estado);
+    // Una entrega del transportista nunca se cierra sin su foto guardada
+    // (salvo la llegada de un trasbordo, que se marca con el GPS).
+    const pideFoto = entregaFinal && guia.estado !== ESTADOS.EN_PROCESO_TRASBORDO;
+    if (pideFoto && !fotos.esFotoValida(foto)) {
+      return res.status(400).json({ error: 'Falta la foto de la entrega.' });
+    }
     // La foto se guarda y, a la vez, la IA busca un comprobante de agencia.
     // La del documento del cliente se guarda tal cual (sin IA).
     const [fotoEntrega, comprobante, fotoDocumento] = entregaFinal
@@ -1315,6 +1321,17 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
             : { url: null, aviso: null },
         ])
       : [{ url: null, aviso: null }, null, { url: null, aviso: null }];
+    // Si Drive no la guardó, la tarea sigue abierta: la app reintenta sola
+    // (503) y, si no puede, pide volver a entregarla. Nunca queda una
+    // entrega cerrada sin su foto.
+    const sinGuardar = (pideFoto && !fotoEntrega.url)
+      || (documento && !docPorCorreo && !fotoDocumento.url);
+    if (sinGuardar) {
+      return res.status(503).json({
+        error: 'No se pudo guardar la foto en Google Drive, así que la entrega '
+          + 'todavía no se registró. Se volverá a intentar.',
+      });
+    }
     if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
     if (documento) guia.doc_cliente = docPorCorreo ? DOC_POR_CORREO : fotoDocumento.url || '';
     const avisoFoto = [

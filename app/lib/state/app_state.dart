@@ -930,12 +930,15 @@ class AppState extends ChangeNotifier {
   /// Muestra un aviso en la pantalla que esté abierta (lo conecta la app).
   void Function(String mensaje)? avisar;
 
-  /// Esperas entre reintentos cuando falla la señal.
+  /// Esperas entre reintentos cuando falla la señal o Google Drive no
+  /// guardó la foto (el servidor no cierra la entrega sin foto).
   @visibleForTesting
   static List<Duration> esperasReintento = const [
     Duration(seconds: 2),
     Duration(seconds: 5),
-    Duration(seconds: 10),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+    Duration(seconds: 60),
   ];
 
   /// Registra la entrega al instante en el celular y la envía al servidor

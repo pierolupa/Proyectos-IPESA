@@ -45,6 +45,8 @@ const como = (sesion) => conToken(auth.crearToken(sesion).token);
 const sinSesion = () => conToken(null);
 const TOKEN_ADMIN = auth.crearToken({ nombre: 'Admin Pruebas', rol: ROLES.ADMINISTRADOR }).token;
 const request = () => conToken(TOKEN_ADMIN);
+// Toda entrega del transportista lleva su foto.
+const FOTO_PRUEBA = { base64: 'AAAA', mediaType: 'image/jpeg' };
 
 function guia(overrides = {}) {
   return {
@@ -68,6 +70,7 @@ function guia(overrides = {}) {
 beforeEach(() => {
   jest.resetAllMocks();
   auth.olvidarFallos();
+  fotos.guardarFoto.mockResolvedValue('drive:foto');
   repo.listarGuias.mockResolvedValue([]);
   repo.listarSucursales.mockResolvedValue([]);
   repo.infoArchivo.mockResolvedValue({ pestanas: [], ultima: null });
@@ -402,7 +405,7 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     repo.buscarPorNumero.mockResolvedValue(guia());
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto: FOTO_PRUEBA });
     expect(res.status).toBe(200);
     expect(res.body.cierre_lat).toBe(-12.1);
     expect(res.body.cierre_lng).toBe(-77.02);
@@ -417,6 +420,7 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
       .patch('/guias/IPE-2026-000123/estado')
       .send({
         estado: ESTADOS.ENTREGADO,
+        foto: FOTO_PRUEBA,
         geo: { lat: -12.1, lng: -77.02 },
         observacion: '  Caja con la esquina golpeada  ',
       });
@@ -426,7 +430,7 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
     repo.buscarPorNumero.mockResolvedValue(guia());
     const sinObs = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto: FOTO_PRUEBA });
     expect(sinObs.status).toBe(200);
     expect(sinObs.body.observacion_entrega).toBeUndefined();
 
@@ -449,6 +453,7 @@ describe('PATCH /guias/:numeroGuia/estado', () => {
       .patch('/guias/IPE-2026-000123/estado')
       .send({
         estado: ESTADOS.ENTREGADO,
+        foto: FOTO_PRUEBA,
         geo: { lat: -12.1, lng: -77.02 },
         fechaCreacion: '2026-10-01T14:10:00.000Z',
       });
@@ -1010,16 +1015,25 @@ describe('foto de la entrega', () => {
     expect(fotos.guardarFoto).not.toHaveBeenCalled();
   });
 
-  it('registra la entrega aunque la foto no se pueda guardar, y avisa', async () => {
+  it('si la foto no se pudo guardar, no cierra la tarea (la app reintenta)', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia());
-    fotos.guardarFoto.mockRejectedValue(new Error('sin almacenamiento'));
+    fotos.guardarFoto.mockRejectedValue(new Error('No se pudo conectar con Google Drive'));
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
       .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
-    expect(res.status).toBe(200);
-    expect(repo.actualizarGuia).toHaveBeenCalled();
-    expect(res.body.estado).toBe(ESTADOS.ENTREGADO);
-    expect(res.body.aviso_foto).toMatch(/sin almacenamiento/);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/no se registró/);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('sin foto, el transportista no puede cerrar la entrega', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Falta la foto/);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
   });
 
   it('guarda la foto de la entrega al cliente en la guía', async () => {
@@ -1327,7 +1341,7 @@ describe('Sucursal por GPS', () => {
     repo.listarSucursales.mockResolvedValue([sanLuis]);
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.0751, lng: -77.0001 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.0751, lng: -77.0001 }, foto: FOTO_PRUEBA });
     expect(res.status).toBe(200);
     expect(res.body.destino).toBe('Trp San Luis');
   });
@@ -1337,7 +1351,7 @@ describe('Sucursal por GPS', () => {
     repo.listarSucursales.mockResolvedValue([sanLuis]);
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 }, foto: FOTO_PRUEBA });
     expect(res.body.destino).toBe('Av. Siempre Viva 742');
   });
 });
@@ -1458,7 +1472,7 @@ describe('Transbordo entre transportistas', () => {
     repo.listarSucursales.mockResolvedValue([]);
     const res = await request(app)
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.05, lng: -77.04 }, foto: FOTO_PRUEBA });
     expect(res.body.transbordo_estado).toBe('');
     expect(res.body.transportista).toBe('Juan Pérez');
   });
@@ -2232,7 +2246,7 @@ describe('Seguridad: un transportista no puede tocar lo que no es suyo', () => {
     repo.buscarPorNumero.mockResolvedValue(guia({ transportista: 'Juan Pérez' }));
     const res = await juan()
       .patch('/guias/IPE-2026-000123/estado')
-      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto: FOTO_PRUEBA });
     expect(res.status).toBe(200);
   });
 });
