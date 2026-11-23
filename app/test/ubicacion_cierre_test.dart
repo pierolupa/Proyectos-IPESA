@@ -98,4 +98,27 @@ void main() {
     expect(find.textContaining('Sin ubicación de cierre'), findsOneWidget);
     expect(find.byType(MapaUbicacion), findsNothing);
   });
+
+  testWidgets('El admin ve dónde se cargó y dónde se cerró, unidos', (
+    tester,
+  ) async {
+    await _abrirDetalleAdmin(
+      tester,
+      _guiaJson({
+        'fecha_creacion': '2026-09-01T13:00:00.000Z',
+        'geo_lat': -12.0396,
+        'geo_lng': -76.9655,
+        'cierre_lat': -12.0721,
+        'cierre_lng': -77.0001,
+        'fecha_cierre': '2026-09-01T15:30:00.000Z',
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Dónde se cargó y dónde se cerró'), findsOneWidget);
+    expect(find.textContaining('Cargada el'), findsOneWidget);
+    expect(find.textContaining('Cerrada por Juan Pérez'), findsOneWidget);
+    expect(find.byType(PuntoCarga), findsWidgets);
+    final mapa = tester.widget<MapaUbicacion>(find.byType(MapaUbicacion));
+    expect(mapa.carga?.latitude, -12.0396);
+  });
 }

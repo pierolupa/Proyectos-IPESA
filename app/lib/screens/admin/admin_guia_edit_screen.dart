@@ -249,6 +249,7 @@ class _AdminGuiaEditScreenState extends State<AdminGuiaEditScreen> {
             perimetro: guia.tipoEntrega == TipoEntrega.entreSucursales
                 ? appState.sucursalPorNombre(guia.destino)
                 : null,
+            sucursalOrigen: appState.sucursalPorNombre(guia.origen),
           ),
         ],
       ),

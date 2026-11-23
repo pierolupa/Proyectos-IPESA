@@ -279,6 +279,7 @@ class _BoletoState extends State<_Boleto> with SingleTickerProviderStateMixin {
         perimetro: guia.tipoEntrega == TipoEntrega.entreSucursales
             ? context.read<AppState>().sucursalPorNombre(guia.destino)
             : null,
+        sucursalOrigen: context.read<AppState>().sucursalPorNombre(guia.origen),
       ),
     );
   }

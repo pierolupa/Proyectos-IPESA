@@ -17,6 +17,7 @@ import '../../widgets/custodia.dart';
 import '../../widgets/estado_badge.dart';
 import '../../widgets/lugares_sucursal.dart';
 import '../../widgets/mapa_ubicacion.dart';
+import '../../widgets/seccion_ubicacion.dart';
 import '../../widgets/migrar_fotos.dart';
 import '../comercial/rastreo_screen.dart';
 import 'admin_guia_edit_screen.dart';
@@ -1149,21 +1150,9 @@ class MapaGuias extends StatelessWidget {
     return null;
   }
 
-  /// Dónde se recogió una guía ya entregada: geo_* (que al entregar ya no
-  /// se pisa). En las entregadas antes de eso geo_* es el mismo punto de
-  /// la entrega; si salió de una de nuestras sucursales, se usa esa.
-  static LatLng? _recojo(Guia g, AppState app) {
-    if (!g.tieneUbicacionCierre) return null;
-    final lat = g.ultimaLat, lng = g.ultimaLng;
-    final mismoQueCierre =
-        lat != null &&
-        lng != null &&
-        (lat - g.cierreLat!).abs() < 0.0002 &&
-        (lng - g.cierreLng!).abs() < 0.0002;
-    if (lat != null && lng != null && !mismoQueCierre) return LatLng(lat, lng);
-    final sucursal = app.sucursalPorNombre(g.origen);
-    return sucursal == null ? null : LatLng(sucursal.lat, sucursal.lng);
-  }
+  /// Dónde se recogió una guía ya entregada (ver [puntoDeCarga]).
+  static LatLng? _recojo(Guia g, AppState app) =>
+      puntoDeCarga(g, app.sucursalPorNombre(g.origen));
 
   @override
   Widget build(BuildContext context) {
