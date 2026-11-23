@@ -13,8 +13,9 @@ const { put, get, del } = require('@vercel/blob');
  * - Vercel Blob (BLOB_READ_WRITE_TOKEN, que Vercel pone solo al conectar
  *   el Blob store). En la hoja queda la URL privada del blob.
  *
- * Sin ninguno las fotos no se guardan, pero la guía se registra igual:
- * una entrega nunca debe bloquearse por el almacenamiento de la foto.
+ * Sin ninguno (o si Drive falla) la foto no se guarda y la entrega del
+ * transportista NO se cierra: el backend responde 503 y la app la reintenta
+ * sola. Nunca queda una entrega cerrada sin su foto.
  */
 
 const PREFIJO_DRIVE = 'drive:';

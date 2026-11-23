@@ -35,6 +35,7 @@ void main() {
   late List<Uri> pedidos;
   late List<Map<String, dynamic>> respuesta;
   late int recuperarFotos;
+  String respuestaRecuperar = '{"revisadas":0,"recuperadas":0}';
 
   Future<AppState> abrir(String rol) async {
     SharedPreferences.setMockInitialValues({
@@ -49,7 +50,7 @@ void main() {
       }
       if (request.url.path.endsWith('/fotos/recuperar')) {
         recuperarFotos++;
-        return http.Response('{"revisadas":0,"recuperadas":0}', 200);
+        return http.Response(respuestaRecuperar, 200);
       }
       pedidos.add(request.url);
       return http.Response(jsonEncode(respuesta), 200);
@@ -157,4 +158,21 @@ void main() {
       unorderedEquals(['desde', 'hasta']),
     );
   });
+
+  test(
+    'Si Google Drive no responde, el administrador lo ve en el panel',
+    () async {
+      respuestaRecuperar = jsonEncode({
+        'revisadas': 0,
+        'recuperadas': 0,
+        'errorDrive': 'Google Drive: Clave incorrecta.',
+      });
+      addTearDown(() => respuestaRecuperar = '{"revisadas":0,"recuperadas":0}');
+      respuesta = [];
+      final app = await abrir('administrador');
+      await Future<void>.delayed(Duration.zero);
+      expect(app.avisoDrive, contains('Clave incorrecta'));
+      expect(app.avisoDrive, contains('no pueden cerrar entregas'));
+    },
+  );
 }

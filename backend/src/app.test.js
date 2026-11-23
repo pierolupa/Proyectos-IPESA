@@ -989,6 +989,8 @@ describe('comprobante de agencia', () => {
 });
 
 describe('foto de la entrega', () => {
+  afterEach(() => jest.restoreAllMocks());
+
   const foto = { base64: Buffer.from('jpg').toString('base64'), mediaType: 'image/jpeg' };
 
   it('no guarda ninguna foto al asignar la guía', async () => {
@@ -1016,6 +1018,7 @@ describe('foto de la entrega', () => {
   });
 
   it('si la foto no se pudo guardar, no cierra la tarea (la app reintenta)', async () => {
+    jest.spyOn(fotos, 'almacenamientoConfigurado').mockReturnValue(true);
     repo.buscarPorNumero.mockResolvedValue(guia());
     fotos.guardarFoto.mockRejectedValue(new Error('No se pudo conectar con Google Drive'));
     const res = await request(app)
@@ -1024,6 +1027,44 @@ describe('foto de la entrega', () => {
     expect(res.status).toBe(503);
     expect(res.body.error).toMatch(/no se registró/);
     expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('si Drive no está conectado, pide avisar al administrador', async () => {
+    jest.spyOn(fotos, 'almacenamientoConfigurado').mockReturnValue(false);
+    repo.buscarPorNumero.mockResolvedValue(guia());
+    fotos.guardarFoto.mockRejectedValue(new Error('El almacenamiento de fotos no está configurado.'));
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/Avisa al administrador/);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('un reintento de una entrega ya registrada no la vuelve a guardar', async () => {
+    const cerrada = guia({
+      estado: ESTADOS.ENTREGADO,
+      foto_entrega_url: 'drive:ya',
+      fecha_cierre: '2026-11-20T15:00:00.000Z',
+    });
+    repo.buscarPorNumero.mockResolvedValue(cerrada);
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 }, foto });
+    expect(res.status).toBe(200);
+    expect(res.body.foto_entrega_url).toBe('drive:ya');
+    expect(res.body.fecha_cierre).toBe('2026-11-20T15:00:00.000Z');
+    expect(fotos.guardarFoto).not.toHaveBeenCalled();
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
+  it('la llegada de un trasbordo se cierra sin foto (se marca con el GPS)', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.EN_PROCESO_TRASBORDO }));
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/estado')
+      .send({ estado: ESTADOS.ENTREGADO, geo: { lat: -12.1, lng: -77.02 } });
+    expect(res.status).toBe(200);
+    expect(fotos.guardarFoto).not.toHaveBeenCalled();
   });
 
   it('sin foto, el transportista no puede cerrar la entrega', async () => {
@@ -1854,6 +1895,17 @@ describe('documento del cliente (MIGO, H.E.S)', () => {
     expect(res.body.doc_cliente).toBe('drive:IPE-2026-000123_MIGO');
   });
 
+  it('si la foto del MIGO no se pudo guardar, no cierra la tarea', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'Mota Engil Perú S.A.' }));
+    fotos.guardarFoto.mockImplementation(async (nombre) => {
+      if (nombre.endsWith('_MIGO')) throw new Error('Google Drive no respondió');
+      return `drive:${nombre}`;
+    });
+    const res = await entregar({ docCliente: migo });
+    expect(res.status).toBe(503);
+    expect(repo.actualizarGuia).not.toHaveBeenCalled();
+  });
+
   it('sin el documento en físico se cierra marcando que va por correo', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia({ destinatario: 'SK RENTAL S.A.C.' }));
     const sinNada = await entregar();
@@ -1930,8 +1982,9 @@ describe('POST /fotos/recuperar (fotos que Drive guardó tarde)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ revisadas: 1, recuperadas: 1 });
-    expect(buscar).toHaveBeenCalledTimes(1);
-    const [prefijo, { desde, hasta }] = buscar.mock.calls[0];
+    // La primera búsqueda solo prueba que Drive responde.
+    expect(buscar).toHaveBeenCalledTimes(2);
+    const [prefijo, { desde, hasta }] = buscar.mock.calls[1];
     expect(prefijo).toMatch(/^T001-98390_\d{4}-\d{2}-\d{2}\.$/);
     expect(Date.parse(desde)).toBeLessThan(Date.parse(cierre));
     expect(Date.parse(hasta)).toBeGreaterThan(Date.parse(cierre));
@@ -1947,6 +2000,17 @@ describe('POST /fotos/recuperar (fotos que Drive guardó tarde)', () => {
     jest.spyOn(fotos, 'buscarFoto').mockResolvedValue(null);
     const res = await request(app).post('/fotos/recuperar');
     expect(res.body).toEqual({ revisadas: 1, recuperadas: 0 });
+    expect(repo.actualizarGuias).not.toHaveBeenCalled();
+  });
+
+  it('si Drive no responde, lo avisa (los choferes no podrían cerrar)', async () => {
+    repo.listarGuias.mockResolvedValue([
+      guia({ estado: ESTADOS.ENTREGADO, fecha_cierre: hace(2) }),
+    ]);
+    jest.spyOn(fotos, 'buscarFoto').mockRejectedValue(new Error('Google Drive: Clave incorrecta.'));
+    const res = await request(app).post('/fotos/recuperar');
+    expect(res.status).toBe(200);
+    expect(res.body.errorDrive).toMatch(/Clave incorrecta/);
     expect(repo.actualizarGuias).not.toHaveBeenCalled();
   });
 

@@ -1272,6 +1272,18 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
     }
     if (!puedeTocar(req, guia)) return res.status(403).json(NO_ES_TUYA);
 
+    // Reintento de una entrega que ya quedó registrada (la respuesta no
+    // llegó al celular): se responde lo que hay, sin volver a subir la foto
+    // ni mover la hora de cierre.
+    if (
+      !porAdmin
+      && ESTADOS_FINALES.has(estado)
+      && ESTADOS_FINALES.has(guia.estado)
+      && guia.foto_entrega_url
+    ) {
+      return res.json(sinCamposInternos(guia));
+    }
+
     // Geocerca: la llegada a la sucursal solo cuenta dentro de su perímetro.
     if (!porAdmin && estado === ESTADOS.RECEPCION_SUCURSAL) {
       const sucursal = buscarSucursal(await repo.listarSucursales(), guia.destino);
@@ -1328,8 +1340,11 @@ app.patch('/guias/:numeroGuia/estado', async (req, res, next) => {
       || (documento && !docPorCorreo && !fotoDocumento.url);
     if (sinGuardar) {
       return res.status(503).json({
-        error: 'No se pudo guardar la foto en Google Drive, así que la entrega '
-          + 'todavía no se registró. Se volverá a intentar.',
+        error: fotos.almacenamientoConfigurado()
+          ? 'No se pudo guardar la foto en Google Drive, así que la entrega '
+            + 'todavía no se registró. Se volverá a intentar.'
+          : 'Las fotos no se pueden guardar porque Google Drive no está '
+            + 'conectado. Avisa al administrador.',
       });
     }
     if (fotoEntrega.url) guia.foto_entrega_url = fotoEntrega.url;
@@ -1528,7 +1543,20 @@ const RECUPERAR_A_LA_VEZ = 4;
 const RECUPERAR_TIEMPO_MS = 30 * 1000;
 
 async function recuperarFotosPerdidas() {
-  if (!fotos.driveConfigurado()) return { revisadas: 0, recuperadas: 0 };
+  if (!fotos.driveConfigurado()) {
+    return {
+      revisadas: 0,
+      recuperadas: 0,
+      errorDrive: 'Google Drive no está conectado (faltan DRIVE_FOTOS_URL o DRIVE_FOTOS_CLAVE en Vercel).',
+    };
+  }
+  // ¿Drive responde? Si no, los transportistas no pueden cerrar entregas
+  // (la foto es obligatoria): el admin tiene que enterarse ya.
+  try {
+    await fotos.buscarFoto('prueba-de-conexion.');
+  } catch (err) {
+    return { revisadas: 0, recuperadas: 0, errorDrive: err.message };
+  }
   const limite = Date.now() - RECUPERAR_DIAS * 24 * 3600 * 1000;
   const candidatas = (await repo.listarGuias({ fresco: true }))
     .filter((g) => {

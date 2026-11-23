@@ -146,8 +146,8 @@ void main() {
     expect(avisos, isEmpty);
   });
 
-  testWidgets('Si no se puede enviar, reintenta y luego vuelve a "En ruta" '
-      'con aviso', (tester) async {
+  testWidgets('Si es la señal o Drive, no la pierde: queda guardada en el '
+      'celular y se envía después', (tester) async {
     respuestaEntrega = () =>
         Completer()..complete(http.Response('{"error":"caído"}', 503));
     final appState = await abrir(tester);
@@ -156,9 +156,93 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(EntregaFlowScreen), findsNothing);
 
+    // Reintentó, sigue entregada en el celular y avisa que se enviará sola.
     expect(envios, 3);
+    expect(appState.entregasEnviando, 1);
+    expect(appState.buscarPorNumero('T500')!.estado, EstadoGuia.entregado);
+    expect(avisos.single, contains('se enviará sola'));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('entregas_pendientes'), contains('T500'));
+
+    // Vuelve la señal: en la siguiente actualización se envía.
+    respuestaEntrega = () => Completer()
+      ..complete(
+        http.Response(
+          jsonEncode({..._guia('T500'), 'estado': 'entregado'}),
+          200,
+        ),
+      );
+    await appState.actualizarEnSegundoPlano();
+    await tester.pumpAndSettle();
+    expect(appState.entregasEnviando, 0);
+    expect(prefs.getString('entregas_pendientes'), isNull);
+  });
+
+  testWidgets('Si el servidor la rechaza, vuelve a "En ruta" con aviso', (
+    tester,
+  ) async {
+    respuestaEntrega = () => Completer()
+      ..complete(
+        http.Response('{"error":"Falta la foto de la entrega."}', 400),
+      );
+    final appState = await abrir(tester);
+
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
+
+    expect(envios, 1);
     expect(appState.entregasEnviando, 0);
     expect(appState.buscarPorNumero('T500')!.estado, EstadoGuia.enRuta);
     expect(avisos.single, contains('No se pudo registrar la entrega de T500'));
   });
+
+  test(
+    'Al volver a abrir la app, envía las entregas que quedaron guardadas',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'sesion_nombre': 'Juan Pérez',
+        'sesion_rol': 'transportista',
+        'entregas_pendientes': jsonEncode([
+          {
+            'usuario': 'Juan Pérez',
+            'clave': 'T500|2026-10-03T14:00:00.000Z',
+            'numero': 'T500',
+            'cuerpo': {
+              'estado': 'entregado',
+              'foto': {'base64': 'AAAA'},
+            },
+          },
+          {
+            'usuario': 'Otro Chofer',
+            'clave': 'T501|2026-10-03T14:00:00.000Z',
+            'numero': 'T501',
+            'cuerpo': {'estado': 'entregado'},
+          },
+        ]),
+      });
+      final enviados = <String>[];
+      final client = MockClient((request) async {
+        if (request.method == 'PATCH') {
+          enviados.add(request.url.path);
+          return http.Response(
+            jsonEncode({..._guia('T500'), 'estado': 'entregado'}),
+            200,
+          );
+        }
+        if (request.url.path.endsWith('/sucursales')) {
+          return http.Response('[]', 200);
+        }
+        return http.Response(jsonEncode([_guia('T500'), _guia('T501')]), 200);
+      });
+      final appState = AppState(api: GuiasApi(client: client));
+      await appState.restaurarSesion();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      // Solo la suya, y una vez enviada ya no queda pendiente.
+      expect(enviados, [endsWith('/guias/T500/estado')]);
+      expect(appState.entregasEnviando, 0);
+      expect(appState.buscarPorNumero('T500')!.estado, EstadoGuia.entregado);
+    },
+  );
 }

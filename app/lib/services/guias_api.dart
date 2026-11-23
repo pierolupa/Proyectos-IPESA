@@ -608,8 +608,9 @@ class GuiasApi {
     return encontrada;
   }
 
-  /// Devuelve la guía actualizada y, si la foto no se pudo guardar, el
-  /// aviso del backend (el estado cambia igual).
+  /// Devuelve la guía actualizada y el aviso del backend sobre la foto, si
+  /// lo hay. Si la foto de una entrega no se pudo guardar, el backend no la
+  /// cierra (responde 503) y esto lanza [ApiException].
   Future<(Guia, String?)> actualizarEstado(
     String numeroGuia,
     EstadoGuia nuevoEstado, {
@@ -621,27 +622,62 @@ class GuiasApi {
     LecturaComprobante? comprobante,
     DocClienteEntrega? docCliente,
     String observacion = '',
-  }) async {
+  }) => enviarEstado(
+    numeroGuia,
+    cuerpoEstado(
+      nuevoEstado,
+      lat: lat,
+      lng: lng,
+      porAdmin: porAdmin,
+      foto: foto,
+      fechaCreacion: fechaCreacion,
+      comprobante: comprobante,
+      docCliente: docCliente,
+      observacion: observacion,
+    ),
+  );
+
+  /// Lo que se manda para cambiar el estado de una guía. Se arma una vez y
+  /// se puede guardar en el celular para reenviarlo tal cual.
+  static Map<String, dynamic> cuerpoEstado(
+    EstadoGuia nuevoEstado, {
+    double? lat,
+    double? lng,
+    bool porAdmin = false,
+    Uint8List? foto,
+    DateTime? fechaCreacion,
+    LecturaComprobante? comprobante,
+    DocClienteEntrega? docCliente,
+    String observacion = '',
+  }) {
     final fotoDoc = docCliente?.foto;
+    return {
+      'estado': nuevoEstado.valorApi,
+      'porAdmin': porAdmin,
+      if (fechaCreacion != null)
+        'fechaCreacion': fechaCreacion.toUtc().toIso8601String(),
+      if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
+      if (foto != null) 'foto': _fotoJson(foto),
+      // Ya leído por la app (aunque no haya): el backend no lo vuelve a
+      // pedir a la IA. Si no viene, lo lee él de la foto.
+      if (comprobante != null) 'comprobante': comprobante.$1?.toJson(),
+      if (docCliente?.porCorreo ?? false)
+        'docPorCorreo': true
+      else if (fotoDoc != null)
+        'docCliente': _fotoJson(fotoDoc),
+      if (observacion.trim().isNotEmpty) 'observacion': observacion.trim(),
+    };
+  }
+
+  /// Envía un cambio de estado ya armado con [cuerpoEstado].
+  Future<(Guia, String?)> enviarEstado(
+    String numeroGuia,
+    Map<String, dynamic> cuerpo,
+  ) async {
     final res = await _client.patch(
       Uri.parse('$apiBaseUrl/guias/$numeroGuia/estado'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'estado': nuevoEstado.valorApi,
-        'porAdmin': porAdmin,
-        if (fechaCreacion != null)
-          'fechaCreacion': fechaCreacion.toUtc().toIso8601String(),
-        if (lat != null && lng != null) 'geo': {'lat': lat, 'lng': lng},
-        if (foto != null) 'foto': _fotoJson(foto),
-        // Ya leído por la app (aunque no haya): el backend no lo vuelve a
-        // pedir a la IA. Si no viene, lo lee él de la foto.
-        if (comprobante != null) 'comprobante': comprobante.$1?.toJson(),
-        if (docCliente?.porCorreo ?? false)
-          'docPorCorreo': true
-        else if (fotoDoc != null)
-          'docCliente': _fotoJson(fotoDoc),
-        if (observacion.trim().isNotEmpty) 'observacion': observacion.trim(),
-      }),
+      body: jsonEncode(cuerpo),
     );
     if (res.statusCode != 200) _lanzarError(res);
     final json = _decodeBody(res);
@@ -665,11 +701,16 @@ class GuiasApi {
   }
 
   /// Busca en Drive las fotos que se guardaron tarde (la tarea se cerró
-  /// sin foto) y las anota en su guía. Devuelve cuántas recuperó.
-  Future<int> recuperarFotos() async {
+  /// sin foto) y las anota en su guía. Devuelve cuántas recuperó y, si
+  /// Google Drive no responde, por qué (sin Drive nadie puede entregar).
+  Future<({int recuperadas, String? errorDrive})> recuperarFotos() async {
     final res = await _client.post(Uri.parse('$apiBaseUrl/fotos/recuperar'));
     if (res.statusCode != 200) _lanzarError(res);
-    return (_decodeBody(res)['recuperadas'] as num?)?.toInt() ?? 0;
+    final json = _decodeBody(res);
+    return (
+      recuperadas: (json['recuperadas'] as num?)?.toInt() ?? 0,
+      errorDrive: json['errorDrive'] as String?,
+    );
   }
 
   /// Si el backend tiene conectado el almacenamiento de fotos.

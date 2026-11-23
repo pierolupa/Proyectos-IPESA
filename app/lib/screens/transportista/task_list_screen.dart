@@ -195,6 +195,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 derechaActiva: _verEntregadas,
                 onCambio: (v) => setState(() => _verEntregadas = v),
               ),
+              if (appState.entregasEnviando > 0)
+                _EntregasPorEnviar(
+                  cantidad: appState.entregasEnviando,
+                  onReintentar: appState.reenviarPendientes,
+                ),
               if (appState.recordatorioPorActivar && !_sinRecordatorio)
                 InvitacionRecordatorio(
                   onActivar: _activarRecordatorio,
@@ -1275,4 +1280,50 @@ enum _Opcion {
   rechazar,
   eliminar,
   retirar,
+}
+
+/// Aviso mientras hay entregas confirmadas que aún no llegan al servidor
+/// (sin señal o Google Drive no guardó la foto). No se pierden: quedan en
+/// el celular y se envían solas.
+class _EntregasPorEnviar extends StatelessWidget {
+  const _EntregasPorEnviar({
+    required this.cantidad,
+    required this.onReintentar,
+  });
+
+  final int cantidad;
+  final VoidCallback onReintentar;
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = cantidad == 1
+        ? '1 entrega se está enviando'
+        : '$cantidad entregas se están enviando';
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF2C46D)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '$texto. Quedan guardadas en el celular y se envían solas.',
+              style: const TextStyle(fontSize: 13.5, height: 1.25),
+            ),
+          ),
+          TextButton(onPressed: onReintentar, child: const Text('Reintentar')),
+        ],
+      ),
+    );
+  }
 }

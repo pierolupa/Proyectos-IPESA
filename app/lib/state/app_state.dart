@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -345,6 +346,7 @@ class AppState extends ChangeNotifier {
     _renovarRecordatorio();
     _recuperarFotos();
     await cargarGuias();
+    await _cargarPendientes();
   }
 
   // ── Recordatorio de las 6 p. m. (aviso en el celular) ────────────────
@@ -376,17 +378,34 @@ class AppState extends ChangeNotifier {
   }
 
   /// Al entrar el administrador, el servidor busca en Drive las fotos que
-  /// se guardaron tarde y las anota; si recuperó alguna, se recarga.
+  /// se guardaron tarde y las anota; si recuperó alguna, se recarga. De
+  /// paso revisa que Drive responda: si no, avisa (sin Drive los
+  /// transportistas no pueden cerrar entregas).
   void _recuperarFotos() {
     if (_rolActual != RolUsuario.administrador) return;
     unawaited(() async {
       try {
-        if (await _api.recuperarFotos() > 0) await cargarGuias();
+        final r = await _api.recuperarFotos();
+        if (r.errorDrive != null) {
+          avisoDrive =
+              'Las fotos no se están guardando en Google Drive '
+              '(${r.errorDrive}). Mientras no se arregle, los '
+              'transportistas no pueden cerrar entregas.';
+          notifyListeners();
+          avisar?.call(avisoDrive!);
+        } else if (avisoDrive != null) {
+          avisoDrive = null;
+          notifyListeners();
+        }
+        if (r.recuperadas > 0) await cargarGuias();
       } catch (_) {
         // Si falla, lo intenta de nuevo el archivo de cada madrugada.
       }
     }());
   }
+
+  /// Si Google Drive no responde, el aviso para el administrador.
+  String? avisoDrive;
 
   Future<bool> _suscribirRecordatorio() async {
     try {
@@ -474,6 +493,7 @@ class AppState extends ChangeNotifier {
     _renovarRecordatorio();
     _recuperarFotos();
     await cargarGuias();
+    await _cargarPendientes();
   }
 
   /// [quitarAvisos]: este celular deja de recibir el recordatorio (no se
@@ -555,6 +575,7 @@ class AppState extends ChangeNotifier {
   /// abiertas (las del día, que se siguen) y las que cambiaron desde la
   /// última vez; cada [recargaCompletaCada], todo lo cargado.
   Future<List<CambioGuia>> actualizarEnSegundoPlano() async {
+    reenviarPendientes();
     if (cargando || cargandoHistorial) return const [];
     final soloCambios =
         !_pideRango &&
@@ -924,14 +945,29 @@ class AppState extends ChangeNotifier {
   /// servidor no las devuelve a "En ruta".
   final Map<String, Guia> _entregasEnviando = {};
 
-  /// Entregas que aún se están enviando.
-  int get entregasEnviando => _entregasEnviando.length;
+  /// Lo que falta enviar de cada entrega (clave → número y cuerpo del
+  /// pedido, con la foto). Se guarda en el celular: si se cierra la app, se
+  /// envía al volver a abrirla. Nunca se pierde una entrega confirmada.
+  final Map<String, ({String numero, Map<String, dynamic> cuerpo})>
+  _pendientes = {};
+
+  /// Las que se están enviando en este momento (para no mandarlas dos veces).
+  final Set<String> _enviandoAhora = {};
+
+  /// Las que ya avisaron que siguen sin enviarse (se avisa una sola vez).
+  final Set<String> _yaAvisadas = {};
+
+  static const _prefPendientes = 'entregas_pendientes';
+
+  /// Entregas confirmadas que aún no llegan al servidor.
+  int get entregasEnviando => _pendientes.length;
 
   /// Muestra un aviso en la pantalla que esté abierta (lo conecta la app).
   void Function(String mensaje)? avisar;
 
   /// Esperas entre reintentos cuando falla la señal o Google Drive no
-  /// guardó la foto (el servidor no cierra la entrega sin foto).
+  /// guardó la foto (el servidor no cierra la entrega sin foto). Si aun así
+  /// no se pudo, queda guardada y se reintenta en cada actualización.
   @visibleForTesting
   static List<Duration> esperasReintento = const [
     Duration(seconds: 2),
@@ -943,8 +979,9 @@ class AppState extends ChangeNotifier {
 
   /// Registra la entrega al instante en el celular y la envía al servidor
   /// por detrás (con reintentos), para que el transportista no espere a que
-  /// se guarde la foto. Si no se puede enviar, la tarea vuelve a "En ruta"
-  /// y se avisa.
+  /// se guarde la foto. Si el servidor la rechaza (falta algo), vuelve a
+  /// "En ruta" y se avisa; si es la señal o Drive, queda guardada en el
+  /// celular y se sigue intentando sola.
   void entregarEnSegundoPlano(
     Guia guia,
     EstadoGuia nuevoEstado, {
@@ -965,76 +1002,161 @@ class AppState extends ChangeNotifier {
           : observacion.trim(),
     );
     _entregasEnviando[guia.clave] = local;
+    _pendientes[guia.clave] = (
+      numero: guia.numeroGuia,
+      cuerpo: GuiasApi.cuerpoEstado(
+        nuevoEstado,
+        lat: lat,
+        lng: lng,
+        foto: foto,
+        fechaCreacion: guia.fechaCreacion,
+        comprobante: comprobante,
+        docCliente: docCliente,
+        observacion: observacion,
+      ),
+    );
     final i = _guias.indexWhere((g) => g.clave == guia.clave);
     if (i != -1) _guias[i] = local;
     notifyListeners();
-    _enviarEntrega(
-      guia,
-      local,
-      lat,
-      lng,
-      foto,
-      comprobante,
-      docCliente,
-      observacion,
-    );
+    unawaited(_guardarPendientes());
+    _enviarPendiente(guia.clave, original: guia);
   }
 
-  Future<void> _enviarEntrega(
-    Guia original,
-    Guia local,
-    double lat,
-    double lng,
-    Uint8List? foto,
-    LecturaComprobante? comprobante,
-    DocClienteEntrega? docCliente,
-    String observacion,
-  ) async {
-    Object? error;
-    for (var intento = 0; ; intento++) {
-      try {
-        final (actualizada, avisoFoto) = await _api.actualizarEstado(
-          original.numeroGuia,
-          local.estado,
-          lat: lat,
-          lng: lng,
-          foto: foto,
-          fechaCreacion: original.fechaCreacion,
-          comprobante: comprobante,
-          docCliente: docCliente,
-          observacion: observacion,
-        );
-        _entregasEnviando.remove(original.clave);
-        final i = _guias.indexWhere((g) => g.clave == original.clave);
-        if (i != -1) _guias[i] = actualizada;
-        notifyListeners();
-        if (avisoFoto != null) avisar?.call(avisoFoto);
-        return;
-      } on ApiException catch (e) {
-        error = e.mensaje;
-        // El servidor la rechazó (no es la señal): no sirve reintentar.
-        final codigo = e.codigo;
-        if (codigo != null && codigo >= 400 && codigo < 500) break;
-      } catch (e) {
-        error = e;
-      }
-      if (intento >= esperasReintento.length) break;
-      await Future<void>.delayed(esperasReintento[intento]);
+  /// Vuelve a intentar las entregas que quedaron sin enviar.
+  void reenviarPendientes() {
+    for (final clave in [..._pendientes.keys]) {
+      if (!_enviandoAhora.contains(clave)) _enviarPendiente(clave);
     }
-    _entregasEnviando.remove(original.clave);
-    final i = _guias.indexWhere((g) => g.clave == original.clave);
-    if (i != -1 && identical(_guias[i], local)) _guias[i] = original;
+  }
+
+  Future<void> _enviarPendiente(String clave, {Guia? original}) async {
+    final pendiente = _pendientes[clave];
+    if (pendiente == null || !_enviandoAhora.add(clave)) return;
+    Object? error;
+    try {
+      for (var intento = 0; ; intento++) {
+        try {
+          final (actualizada, avisoFoto) = await _api.enviarEstado(
+            pendiente.numero,
+            pendiente.cuerpo,
+          );
+          _quitarPendiente(clave);
+          final i = _guias.indexWhere((g) => g.clave == clave);
+          if (i != -1) _guias[i] = actualizada;
+          notifyListeners();
+          if (avisoFoto != null) avisar?.call(avisoFoto);
+          return;
+        } on ApiException catch (e) {
+          error = e.mensaje;
+          // El servidor la rechazó (falta algo, no es la señal): no sirve
+          // reintentar; la tarea vuelve a "En ruta" para entregarla bien.
+          final codigo = e.codigo;
+          if (codigo != null && codigo >= 400 && codigo < 500) {
+            _quitarPendiente(clave);
+            final i = _guias.indexWhere((g) => g.clave == clave);
+            if (i != -1 && original != null) _guias[i] = original;
+            notifyListeners();
+            avisar?.call(
+              'No se pudo registrar la entrega de ${pendiente.numero} '
+              '($error). Vuelve a entregarla.',
+            );
+            return;
+          }
+        } catch (e) {
+          error = e;
+        }
+        if (intento >= esperasReintento.length) break;
+        await Future<void>.delayed(esperasReintento[intento]);
+      }
+    } finally {
+      _enviandoAhora.remove(clave);
+    }
+    // Sigue guardada en el celular: se reintenta sola en cada
+    // actualización y al volver a abrir la app.
+    if (_yaAvisadas.add(clave)) {
+      avisar?.call(
+        'La entrega de ${pendiente.numero} aún no se pudo enviar ($error). '
+        'Quedó guardada en el celular y se enviará sola: no hace falta '
+        'volver a entregarla.',
+      );
+    }
     notifyListeners();
-    avisar?.call(
-      'No se pudo registrar la entrega de ${original.numeroGuia} '
-      '($error). Vuelve a entregarla.',
-    );
+  }
+
+  void _quitarPendiente(String clave) {
+    _pendientes.remove(clave);
+    _entregasEnviando.remove(clave);
+    _yaAvisadas.remove(clave);
+    unawaited(_guardarPendientes());
+  }
+
+  Future<void> _guardarPendientes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_pendientes.isEmpty) {
+        await prefs.remove(_prefPendientes);
+        return;
+      }
+      await prefs.setString(
+        _prefPendientes,
+        jsonEncode([
+          for (final MapEntry(key: clave, value: p) in _pendientes.entries)
+            {
+              'usuario': _nombreUsuario,
+              'clave': clave,
+              'numero': p.numero,
+              'cuerpo': p.cuerpo,
+            },
+        ]),
+      );
+    } catch (_) {
+      // Sin espacio en el celular: sigue en memoria mientras la app esté
+      // abierta.
+    }
+  }
+
+  /// Recupera las entregas que quedaron sin enviar en este celular (del
+  /// mismo transportista) y las envía.
+  Future<void> _cargarPendientes() async {
+    if (_rolActual != RolUsuario.transportista) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final texto = prefs.getString(_prefPendientes);
+      if (texto == null) return;
+      for (final item in jsonDecode(texto) as List) {
+        if (item is! Map || item['usuario'] != _nombreUsuario) continue;
+        final clave = item['clave'] as String;
+        _pendientes.putIfAbsent(
+          clave,
+          () => (
+            numero: item['numero'] as String,
+            cuerpo: Map<String, dynamic>.from(item['cuerpo'] as Map),
+          ),
+        );
+      }
+    } catch (_) {
+      return;
+    }
+    if (_pendientes.isNotEmpty) {
+      notifyListeners();
+      reenviarPendientes();
+    }
   }
 
   /// Lo que llegó del servidor, sin deshacer las entregas que aún se envían.
-  List<Guia> _conEntregasEnviando(List<Guia> guias) => _entregasEnviando.isEmpty
-      ? guias
-      : [for (final g in guias) _entregasEnviando[g.clave] ?? g];
+  List<Guia> _conEntregasEnviando(List<Guia> guias) =>
+      _pendientes.isEmpty ? guias : [for (final g in guias) _comoQuedo(g)];
+
+  /// Cómo se ve una guía con su entrega pendiente de enviar: entregada.
+  Guia _comoQuedo(Guia g) {
+    final local = _entregasEnviando[g.clave];
+    if (local != null) return local;
+    final pendiente = _pendientes[g.clave];
+    if (pendiente == null) return g;
+    return g.copyWith(
+      estado: estadoGuiaDesdeApi(pendiente.cuerpo['estado'] as String),
+    );
+  }
 
   /// Fotos ya pedidas, por URL (la URL cambia si la foto cambia). Así la
   /// que se adelantó al buscar en Rastrear se abre al instante.

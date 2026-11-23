@@ -244,15 +244,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ],
                     ),
               body: SafeArea(
-                child: ancha
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: contenido),
-                          const BandaMarcas(),
-                        ],
-                      )
-                    : contenido,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (context.watch<AppState>().avisoDrive case final aviso?)
+                      _AvisoDrive(texto: aviso),
+                    Expanded(child: contenido),
+                    if (ancha) const BandaMarcas(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1636,6 +1636,34 @@ class _LineasComprobante extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Google Drive no responde: sin fotos, los transportistas no pueden
+/// cerrar entregas. Se queda arriba hasta que Drive vuelva a responder.
+class _AvisoDrive extends StatelessWidget {
+  const _AvisoDrive({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFFDECEC),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: Color(0xFFB42318)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              texto,
+              style: const TextStyle(color: Color(0xFF7A1C14), height: 1.3),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
