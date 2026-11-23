@@ -1193,6 +1193,13 @@ class MapaGuias extends StatelessWidget {
           p,
         ),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
+    // Varias guías recogidas o entregadas en el mismo sitio van en un solo
+    // marcador con su número (si no, quedan una encima de otra y no se ven).
+    final lugares = _agrupar([
+      for (final (g, p) in recojos) (g, p, _Que.recogida),
+      for (final (g, p) in conPunto)
+        (g, p, g.tieneUbicacionCierre ? _Que.entrega : _Que.abierta),
+    ]);
     final camino = <LatLng>[];
     if (recorrido) {
       for (final (_, p) in eventos) {
@@ -1221,8 +1228,10 @@ class MapaGuias extends StatelessWidget {
               coordinates: puntos,
               // Arriba más aire: la etiqueta de la unidad (nombre y hora)
               // va sobre su punto y no debe cortarse en el borde.
+              // En el recorrido, cada sitio lleva su etiqueta arriba y la
+              // leyenda va abajo: más aire en ambos bordes.
               padding: recorrido
-                  ? const EdgeInsets.all(56)
+                  ? const EdgeInsets.fromLTRB(60, 90, 60, 110)
                   : const EdgeInsets.fromLTRB(56, 100, 56, 56),
               maxZoom: 15,
             ),
@@ -1259,38 +1268,8 @@ class MapaGuias extends StatelessWidget {
                 ),
               MarkerLayer(
                 markers: [
-                  for (final (g, p) in recojos)
-                    Marker(
-                      point: p,
-                      width: 24,
-                      height: 24,
-                      child: Tooltip(
-                        message:
-                            '${g.numeroGuia} · recogida '
-                            '${DateFormat('dd/MM HH:mm').format(g.fechaCreacion.toLocal())}'
-                            '${g.origen.trim().isEmpty ? '' : ' · ${g.origen}'}',
-                        child: GestureDetector(
-                          onTap: () => abrirGuiaAdmin(context, g),
-                          child: const _PuntoRecojo(),
-                        ),
-                      ),
-                    ),
-                  for (final (g, p) in conPunto)
-                    Marker(
-                      point: p,
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.topCenter,
-                      child: Tooltip(
-                        message:
-                            '${g.numeroGuia} · ${g.estado.etiqueta} · '
-                            '${g.transportista}',
-                        child: GestureDetector(
-                          onTap: () => abrirGuiaAdmin(context, g),
-                          child: pinMapa(g.estado.color),
-                        ),
-                      ),
-                    ),
+                  for (final lugar in lugares)
+                    _marcadorLugar(context, lugar, conEtiqueta: recorrido),
                   for (final MapEntry(key: nombre, value: (g, p))
                       in unidades.entries)
                     Marker(
@@ -1381,6 +1360,223 @@ class MapaGuias extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Qué pasó con una guía en un punto del mapa.
+enum _Que { recogida, abierta, entrega }
+
+/// Un sitio del mapa (unos 40 m) con lo que pasó ahí: guías recogidas,
+/// guías aún abiertas en ese punto y guías entregadas.
+class _Lugar {
+  _Lugar(this.punto);
+
+  final LatLng punto;
+  final recogidas = <Guia>[];
+  final abiertas = <Guia>[];
+  final entregadas = <Guia>[];
+
+  /// Las que salieron de aquí (recogidas, entregadas después o no).
+  List<Guia> get salieron => [...recogidas, ...abiertas];
+
+  List<Guia> get todas => [...salieron, ...entregadas];
+
+  /// Cuántas guías distintas hay en el sitio.
+  int get cantidad => {for (final g in todas) g.clave}.length;
+}
+
+const _cerca = 0.0004; // ~40 m
+
+List<_Lugar> _agrupar(List<(Guia, LatLng, _Que)> eventos) {
+  final lugares = <_Lugar>[];
+  for (final (g, p, que) in eventos) {
+    var lugar = lugares.cast<_Lugar?>().firstWhere(
+      (l) =>
+          (l!.punto.latitude - p.latitude).abs() < _cerca &&
+          (l.punto.longitude - p.longitude).abs() < _cerca,
+      orElse: () => null,
+    );
+    if (lugar == null) {
+      lugar = _Lugar(p);
+      lugares.add(lugar);
+    }
+    switch (que) {
+      case _Que.recogida:
+        lugar.recogidas.add(g);
+      case _Que.abierta:
+        lugar.abiertas.add(g);
+      case _Que.entrega:
+        lugar.entregadas.add(g);
+    }
+  }
+  return lugares;
+}
+
+String _hora(DateTime f) => DateFormat('HH:mm').format(f.toLocal());
+
+/// "08:37" o "08:37–08:39": de la primera a la última.
+String _horas(Iterable<DateTime> fechas) {
+  final lista = fechas.toList()..sort();
+  if (lista.isEmpty) return '';
+  final desde = _hora(lista.first), hasta = _hora(lista.last);
+  return desde == hasta ? desde : '$desde–$hasta';
+}
+
+DateTime _cuandoEntrego(Guia g) => g.fechaCierre ?? g.fechaActualizacion;
+
+/// Lo que dice la etiqueta del sitio: "Recogió 6 · 08:37–08:39",
+/// "Entregó 2 · 10:37".
+List<String> _resumenLugar(_Lugar l) => [
+  if (l.salieron.isNotEmpty)
+    'Recogió ${l.salieron.length} · '
+        '${_horas(l.salieron.map((g) => g.fechaCreacion))}',
+  if (l.entregadas.isNotEmpty)
+    'Entregó ${l.entregadas.length} · '
+        '${_horas(l.entregadas.map(_cuandoEntrego))}',
+];
+
+Marker _marcadorLugar(
+  BuildContext context,
+  _Lugar l, {
+  required bool conEtiqueta,
+}) {
+  final cantidad = l.cantidad;
+  final Widget icono = l.entregadas.isNotEmpty
+      ? pinMapa(const Color(0xFF1D6B41))
+      : l.abiertas.isNotEmpty
+      ? pinMapa(l.abiertas.first.estado.color)
+      : const SizedBox(width: 26, height: 26, child: _PuntoRecojo());
+  final resumen = _resumenLugar(l);
+  return Marker(
+    point: l.punto,
+    width: conEtiqueta ? 170 : 48,
+    height: conEtiqueta ? 44.0 + 18 * resumen.length : 44,
+    alignment: Alignment.topCenter,
+    child: Tooltip(
+      message: [
+        ...resumen,
+        for (final g in l.todas.take(8)) '${g.numeroGuia} · ${g.destinatario}',
+        if (l.todas.length > 8) '… y ${l.todas.length - 8} más',
+      ].join('\n'),
+      child: GestureDetector(
+        onTap: () => cantidad == 1
+            ? abrirGuiaAdmin(context, l.todas.first)
+            : _verLugar(context, l),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            if (conEtiqueta)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                margin: const EdgeInsets.only(bottom: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 3),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final linea in resumen)
+                      Text(
+                        linea,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: Ipesa.petroleo,
+                          height: 1.3,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            SizedBox(
+              width: 44,
+              height: 40,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.bottomCenter,
+                children: [
+                  icono,
+                  if (cantidad > 1)
+                    Positioned(
+                      top: -2,
+                      right: 0,
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 18),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        height: 18,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Ipesa.petroleo,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Text(
+                          '$cantidad',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Las guías de un sitio del mapa: qué pasó con cada una y a qué hora.
+/// Tocar una la abre.
+void _verLugar(BuildContext context, _Lugar l) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (hoja) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              _resumenLugar(l).join('   ·   '),
+              style: Theme.of(hoja).textTheme.titleSmall,
+            ),
+          ),
+          for (final (g, que, cuando) in [
+            for (final g in l.salieron) (g, 'Recogida', g.fechaCreacion),
+            for (final g in l.entregadas) (g, 'Entregada', _cuandoEntrego(g)),
+          ])
+            ListTile(
+              dense: true,
+              leading: Icon(
+                que == 'Entregada'
+                    ? Icons.check_circle_rounded
+                    : Icons.inventory_2_rounded,
+                color: que == 'Entregada'
+                    ? const Color(0xFF1D6B41)
+                    : _colorRecojo,
+              ),
+              title: Text('${g.numeroGuia} · ${g.destinatario}'),
+              subtitle: Text('$que ${_hora(cuando)} · ${g.estado.etiqueta}'),
+              onTap: () {
+                Navigator.of(hoja).pop();
+                abrirGuiaAdmin(context, g);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 // Se ve sobre el mapa oscuro.

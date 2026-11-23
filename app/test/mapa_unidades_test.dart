@@ -103,30 +103,33 @@ void main() {
     expect(find.text('Oscar Aspur'), findsNothing);
   });
 
-  Guia entregada({required double geoLat, String origen = 'Almacén Callao'}) =>
-      Guia.fromJson({
-        'numero_guia': 'T9',
-        'estado': 'entregado',
-        'tipo_entrega': 'cliente_final',
-        'origen': origen,
-        'destino': 'Lima',
-        'transportista': 'Oscar Aspur',
-        'destinatario': 'Cliente T9',
-        'fecha_creacion': _hoy.toUtc().toIso8601String(),
-        'fecha_actualizacion': _hoy
-            .add(const Duration(hours: 2))
-            .toUtc()
-            .toIso8601String(),
-        'fecha_cierre': _hoy
-            .add(const Duration(hours: 2))
-            .toUtc()
-            .toIso8601String(),
-        'corregido_por_admin': false,
-        'geo_lat': geoLat,
-        'geo_lng': -77.04,
-        'cierre_lat': -12.20,
-        'cierre_lng': -77.04,
-      });
+  Guia entregada({
+    required double geoLat,
+    String origen = 'Almacén Callao',
+    String numero = 'T9',
+  }) => Guia.fromJson({
+    'numero_guia': numero,
+    'estado': 'entregado',
+    'tipo_entrega': 'cliente_final',
+    'origen': origen,
+    'destino': 'Lima',
+    'transportista': 'Oscar Aspur',
+    'destinatario': 'Cliente T9',
+    'fecha_creacion': _hoy.toUtc().toIso8601String(),
+    'fecha_actualizacion': _hoy
+        .add(const Duration(hours: 2))
+        .toUtc()
+        .toIso8601String(),
+    'fecha_cierre': _hoy
+        .add(const Duration(hours: 2))
+        .toUtc()
+        .toIso8601String(),
+    'corregido_por_admin': false,
+    'geo_lat': geoLat,
+    'geo_lng': -77.04,
+    'cierre_lat': -12.20,
+    'cierre_lng': -77.04,
+  });
 
   testWidgets(
     'Una guía entregada muestra dónde se recogió y dónde se entregó',
@@ -136,7 +139,8 @@ void main() {
           .widgetList<Tooltip>(find.byType(Tooltip))
           .map((t) => t.message ?? '')
           .toList();
-      expect(mensajes.where((m) => m.contains('recogida')), hasLength(1));
+      expect(mensajes.where((m) => m.contains('Recogió 1')), hasLength(1));
+      expect(mensajes.where((m) => m.contains('Entregó 1')), hasLength(1));
       expect(find.text('Recogida'), findsOneWidget);
       // El recorrido va del punto de recojo al de entrega.
       final linea = tester
@@ -156,4 +160,21 @@ void main() {
     expect(find.text('Recogida'), findsNothing);
     expect(find.byType(PolylineLayer), findsNothing);
   });
+
+  testWidgets(
+    'Varias guías en el mismo sitio van juntas, con su número y hora',
+    (tester) async {
+      // Recogió 3 en el almacén (una sigue en ruta) y entregó 2 en el mismo
+      // cliente: antes quedaban una encima de otra y no se veían.
+      await _mapa(tester, [
+        entregada(geoLat: -12.00, numero: 'T1'),
+        entregada(geoLat: -12.00, numero: 'T2'),
+        _guia('T3', 'Oscar Aspur', 0, -12.00),
+      ], recorrido: true);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.textContaining('Recogió 3'), findsOneWidget);
+      expect(find.textContaining('Entregó 2'), findsOneWidget);
+    },
+  );
 }
