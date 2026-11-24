@@ -24,7 +24,15 @@ const INSTRUCCIONES_COMPROBANTE = `A veces sobre la guía hay pegado (o al \
 lado) un comprobante pequeño de una AGENCIA de transporte o encomiendas \
 (boleta, factura, "vale de encomienda", "orden de traslado"; ej. Palomino, \
 Señor de Luren, ITTSA, GH Bus, Shalom, Marvisur). Si lo hay, lee de ESE \
-comprobante, aunque la guía no diga que es una entrega en agencia:
+comprobante, aunque la guía no diga que es una entrega en agencia.
+
+OJO: la empresa de transporte que figura DENTRO de la guía (en "Datos del \
+Transporte" o "Información del Transportista", ej. "TRANSPORTE NATALE \
+S.A.C." con su RUC y N° MTC) NO es un comprobante de agencia: es quien \
+lleva la carga. Solo cuenta un comprobante aparte (otro papel, pegado o \
+al lado) emitido por la agencia. Tampoco es comprobante el sello de IPESA \
+"CARGO DISTRIBUCIÓN" (con P = peso y B = bultos) ni otros sellos de \
+recibido o entregado. Si no ves ese papel aparte, todo null.
 
 - agencia_razon_social: la razón social de la empresa que EMITE el \
   comprobante (la agencia, la del logo/encabezado), copiada tal cual está \
@@ -146,11 +154,28 @@ function comprobanteDe(datos) {
   const esGuia = /^T\d{3}-/.test(numero)
     || /^GRR/.test(numero)
     || (referida !== '' && numero === referida);
+  // Un número de comprobante real tiene serie y correlativo, o un número de
+  // orden largo (F017-0034441, 98678356): con menos de 6 dígitos es otra
+  // cosa (los bultos o el peso de un sello, por ejemplo "2").
+  const digitos = numero.replace(/\D/g, '').length;
+  const comprobante = numero && !esGuia && digitos >= 6 ? numero : null;
+  // Sin número de comprobante ni RUC de la agencia no es un comprobante de
+  // verdad: suele ser el transportista que figura en la propia guía o un
+  // sello de IPESA (con un monto inventado). Así no se marca como agencia
+  // un pedido normal.
+  if (!comprobante && !rucValido) {
+    return {
+      agencia_razon_social: null,
+      agencia_ruc: null,
+      agencia_monto: null,
+      agencia_comprobante: null,
+    };
+  }
   return {
     agencia_razon_social: razon && !esIpesa ? razon : null,
     agencia_ruc: rucValido,
     agencia_monto: monto,
-    agencia_comprobante: numero && !esGuia ? numero : null,
+    agencia_comprobante: comprobante,
   };
 }
 

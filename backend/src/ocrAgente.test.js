@@ -4,7 +4,9 @@ jest.mock('@google/genai', () => ({
 }));
 
 process.env.GEMINI_API_KEY = 'prueba';
-const { leerNumeroGuia, leerComprobante, claveGuia, comprobanteDe } = require('./ocrAgente');
+const {
+  leerNumeroGuia, leerComprobante, claveGuia, comprobanteDe, hayComprobante,
+} = require('./ocrAgente');
 
 const responde = (json) => mockGenerateContent.mockResolvedValueOnce({ text: JSON.stringify(json) });
 
@@ -73,9 +75,26 @@ describe('comprobante de agencia', () => {
     expect(comprobanteDe({ agencia_comprobante: '001-0095448', agencia_guia_referida: 'GRR: 001-0095448' }).agencia_comprobante).toBeNull();
     expect(comprobanteDe({ agencia_comprobante: 'GRR: 001-0095448' }).agencia_comprobante).toBeNull();
     expect(comprobanteDe({ agencia_comprobante: '98678356', agencia_guia_referida: '001-0095448' }).agencia_comprobante).toBe('98678356');
-    expect(comprobanteDe({ agencia_monto: '1.234,50' }).agencia_monto).toBe(1234.5);
-    expect(comprobanteDe({ agencia_monto: '13,00' }).agencia_monto).toBe(13);
+    const ruc = '20601857457';
+    expect(comprobanteDe({ agencia_ruc: ruc, agencia_monto: '1.234,50' }).agencia_monto).toBe(1234.5);
+    expect(comprobanteDe({ agencia_ruc: ruc, agencia_monto: '13,00' }).agencia_monto).toBe(13);
     expect(comprobanteDe({ agencia_ruc: '2060185745' }).agencia_ruc).toBeNull();
+  });
+
+  it('no inventa una agencia: sin número de comprobante ni RUC, no hay comprobante', () => {
+    const nada = {
+      agencia_razon_social: null,
+      agencia_ruc: null,
+      agencia_monto: null,
+      agencia_comprobante: null,
+    };
+    // T001-98855: el transportista de la propia guía, con un monto inventado.
+    expect(comprobanteDe({ agencia_razon_social: 'Transportes Natale', agencia_monto: 180 })).toEqual(nada);
+    // T001-98931: el sello "CARGO DISTRIBUCIÓN" de IPESA (P = 1.0, B = 1).
+    expect(comprobanteDe({ agencia_comprobante: '2', agencia_monto: 1 })).toEqual(nada);
+    expect(hayComprobante(comprobanteDe({ agencia_comprobante: '2', agencia_monto: 1 }))).toBe(false);
+    // Uno de verdad sigue valiendo, aunque no se lea el RUC.
+    expect(comprobanteDe({ agencia_comprobante: 'F017-0034441', agencia_monto: 70 }).agencia_monto).toBe(70);
   });
 
   it('lee el comprobante de la foto de entrega', async () => {

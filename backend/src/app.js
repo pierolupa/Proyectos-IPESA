@@ -1714,6 +1714,15 @@ app.patch('/guias/:numeroGuia/tipo', async (req, res, next) => {
 
     const destinoPedido = String(destino ?? '').trim();
     if (destinoPedido) guia.destino = destinoPedido;
+    // Deja de ser agencia (la IA la marcó por error): fuera los datos del
+    // comprobante y, si estaba cerrada, queda "entregado" (no "finalizado").
+    if (guia.tipo_entrega === TIPOS_ENTREGA.AGENCIA && tipoEntrega !== TIPOS_ENTREGA.AGENCIA) {
+      guia.agencia_razon_social = '';
+      guia.agencia_ruc = '';
+      guia.agencia_monto = '';
+      guia.agencia_comprobante = '';
+      if (guia.estado === ESTADOS.FINALIZADO) guia.estado = ESTADOS.ENTREGADO;
+    }
     guia.tipo_entrega = tipoEntrega;
     guia.fecha_actualizacion = new Date().toISOString();
     if (porAdmin) guia.corregido_por_admin = true;

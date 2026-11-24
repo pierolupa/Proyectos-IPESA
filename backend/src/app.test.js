@@ -1230,6 +1230,24 @@ describe('Tipo de entrega editable', () => {
     expect(repo.actualizarGuia).toHaveBeenCalledTimes(1);
   });
 
+  it('el admin corrige una agencia mal leída: queda cliente final, entregada y sin comprobante', async () => {
+    repo.buscarPorNumero.mockResolvedValue(guia({
+      estado: ESTADOS.FINALIZADO,
+      tipo_entrega: TIPOS_ENTREGA.AGENCIA,
+      agencia_razon_social: 'Transportes Natale',
+      agencia_monto: 180,
+      agencia_comprobante: '',
+    }));
+    const res = await request(app)
+      .patch('/guias/IPE-2026-000123/tipo')
+      .send({ tipoEntrega: TIPOS_ENTREGA.CLIENTE_FINAL, porAdmin: true });
+    expect(res.status).toBe(200);
+    expect(res.body.tipo_entrega).toBe(TIPOS_ENTREGA.CLIENTE_FINAL);
+    expect(res.body.estado).toBe(ESTADOS.ENTREGADO);
+    expect(res.body.agencia_razon_social).toBe('');
+    expect(res.body.agencia_monto).toBe('');
+  });
+
   it('no deja cambiarlo si ya no está en ruta', async () => {
     repo.buscarPorNumero.mockResolvedValue(guia({ estado: ESTADOS.ENTREGADO }));
     const res = await request(app)
