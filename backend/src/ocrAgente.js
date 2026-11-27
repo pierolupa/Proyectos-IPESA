@@ -58,15 +58,27 @@ recibido o entregado. Si no ves ese papel aparte, todo null.
   cual; null si no se ve.
 - transportista_guia_ruc: el RUC de esa empresa de transporte de la guía \
   (11 dígitos); null si no se ve.
+- rucs_de_la_guia: TODOS los RUC impresos en la guía de IPESA misma \
+  (remitente, destinatario, transportista), como lista de textos; [] si \
+  no se ven. No incluyas el RUC del comprobante pegado.
+- hay_comprobante_agencia: true SOLO si ves un papel aparte (ticket, \
+  boleta o factura) emitido por una agencia, pegado o al lado de la guía; \
+  false en cualquier otro caso (solo la guía, firmas, sellos). Ante la \
+  duda, false.
 
 Si no hay comprobante de agencia en la foto, usa null en los 5 campos de \
-la agencia (los dos del transportista de la guía igual léelos).`;
+la agencia (los del transportista y los RUC de la guía igual léelos).`;
 
 const CAMPOS_COMPROBANTE =
   '"agencia_razon_social": string|null, "agencia_ruc": string|null, '
   + '"agencia_monto": number|null, "agencia_comprobante": string|null, '
   + '"agencia_guia_referida": string|null, "transportista_guia": string|null, '
-  + '"transportista_guia_ruc": string|null';
+  + '"transportista_guia_ruc": string|null, "rucs_de_la_guia": string[], '
+  + '"hay_comprobante_agencia": boolean';
+
+// Empresas que nunca son una agencia: el transportista con el que IPESA
+// mueve su carga (figura dentro de las guías).
+const NUNCA_AGENCIA = { rucs: ['20613317997'], nucleos: ['NATALE'] };
 
 /** "TRANSPORTES NATALE S.A.C." y "Transporte Natale SAC" → "NATALE". */
 function nucleoEmpresa(nombre) {
@@ -139,7 +151,7 @@ async function leerGuiaConIA(imagenBase64, mediaType) {
     origen: datos.origen || null,
     numero_pedido: datos.numero_pedido || null,
     numero_entrega: datos.numero_entrega || null,
-    ...comprobanteDe(datos),
+    ...comprobanteDeLaIA(datos),
   };
 }
 
@@ -153,6 +165,24 @@ function montoDe(valor) {
   const entero = (decimal ? texto.slice(0, -decimal[0].length) : texto).replace(/[.,]/g, '');
   const numero = Number(decimal ? `${entero}.${decimal[1]}` : entero);
   return Number.isFinite(numero) && numero > 0 ? numero : null;
+}
+
+const SIN_COMPROBANTE = {
+  agencia_razon_social: null,
+  agencia_ruc: null,
+  agencia_monto: null,
+  agencia_comprobante: null,
+};
+
+/**
+ * Lo que respondió la IA: solo hay comprobante si ella misma confirma que
+ * ve un papel aparte de una agencia (hay_comprobante_agencia). Así una
+ * guía con solo firmas y sellos nunca se marca como agencia.
+ */
+function comprobanteDeLaIA(datos) {
+  const confirma = datos?.hay_comprobante_agencia === true
+    || String(datos?.hay_comprobante_agencia).toLowerCase() === 'true';
+  return confirma ? comprobanteDe(datos) : { ...SIN_COMPROBANTE };
 }
 
 /**
@@ -182,28 +212,22 @@ function comprobanteDe(datos) {
   // carga, ej. Transporte Natale con su RUC) no es una agencia.
   const rucTransportista = String(datos?.transportista_guia_ruc ?? '').replace(/\D/g, '');
   const nucleoTransportista = nucleoEmpresa(datos?.transportista_guia);
+  const nucleoRazon = nucleoEmpresa(razon);
   const esElTransportista = (rucValido && rucValido === rucTransportista)
-    || (nucleoTransportista !== '' && nucleoEmpresa(razon) === nucleoTransportista);
-  if (esElTransportista) {
-    return {
-      agencia_razon_social: null,
-      agencia_ruc: null,
-      agencia_monto: null,
-      agencia_comprobante: null,
-    };
-  }
+    || (nucleoTransportista !== '' && nucleoRazon === nucleoTransportista);
+  // Ni un RUC que está impreso en la propia guía (remitente, destinatario,
+  // transportista), ni las empresas que nunca son agencia.
+  const rucsGuia = (Array.isArray(datos?.rucs_de_la_guia) ? datos.rucs_de_la_guia : [])
+    .map((r) => String(r ?? '').replace(/\D/g, ''));
+  const esDeLaGuia = Boolean(rucValido) && rucsGuia.includes(rucValido);
+  const nuncaAgencia = (rucValido && NUNCA_AGENCIA.rucs.includes(rucValido))
+    || NUNCA_AGENCIA.nucleos.some((n) => nucleoRazon.includes(n));
+  if (esElTransportista || esDeLaGuia || nuncaAgencia) return { ...SIN_COMPROBANTE };
   // Sin número de comprobante ni RUC de la agencia no es un comprobante de
   // verdad: suele ser el transportista que figura en la propia guía o un
   // sello de IPESA (con un monto inventado). Así no se marca como agencia
   // un pedido normal.
-  if (!comprobante && !rucValido) {
-    return {
-      agencia_razon_social: null,
-      agencia_ruc: null,
-      agencia_monto: null,
-      agencia_comprobante: null,
-    };
-  }
+  if (!comprobante && !rucValido) return { ...SIN_COMPROBANTE };
   return {
     agencia_razon_social: razon && !esIpesa ? razon : null,
     agencia_ruc: rucValido,
@@ -267,7 +291,7 @@ Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, con \
 esta forma: {${CAMPOS_COMPROBANTE}}. No inventes valores.`,
     },
   ]);
-  return comprobanteDe(jsonDeLaIA(respuesta));
+  return comprobanteDeLaIA(jsonDeLaIA(respuesta));
 }
 
 const PROMPT_NUMERO = `Esta es una foto tomada al entregar una guía de \
@@ -323,7 +347,7 @@ ve el número de guía con confianza, usa null en vez de inventarlo.`,
   ]);
 
   const datos = jsonDeLaIA(respuesta);
-  const comprobante = comprobanteDe(datos);
+  const comprobante = comprobanteDeLaIA(datos);
   const leido = typeof datos.numero_guia === 'string' ? datos.numero_guia.trim() : '';
   if (!leido) return { numero_guia: null, ...comprobante };
   const clave = claveGuia(leido);

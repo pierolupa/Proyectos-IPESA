@@ -119,12 +119,40 @@ describe('comprobante de agencia', () => {
     expect(comprobanteDe({ agencia_comprobante: 'F017-0034441', agencia_monto: 70 }).agencia_monto).toBe(70);
   });
 
+  it('solo hay agencia si la IA confirma un papel aparte, y nunca con un RUC de la propia guía', async () => {
+    const nada = {
+      agencia_razon_social: null,
+      agencia_ruc: null,
+      agencia_monto: null,
+      agencia_comprobante: null,
+    };
+    const shalom = {
+      agencia_razon_social: 'SHALOM EMPRESARIAL S.A.C.',
+      agencia_ruc: '20512528458',
+      agencia_comprobante: '98678356',
+      agencia_monto: 25,
+    };
+    // Sin confirmar el papel aparte (o diciendo que no), no hay agencia.
+    responde(shalom);
+    expect(await leerComprobante('ZmFrZQ==', 'image/jpeg')).toEqual(nada);
+    responde({ ...shalom, hay_comprobante_agencia: false });
+    expect(await leerComprobante('ZmFrZQ==', 'image/jpeg')).toEqual(nada);
+    responde({ ...shalom, hay_comprobante_agencia: true });
+    expect((await leerComprobante('ZmFrZQ==', 'image/jpeg')).agencia_ruc).toBe('20512528458');
+    // El RUC del destinatario (impreso en la guía) no es una agencia.
+    expect(comprobanteDe({ ...shalom, rucs_de_la_guia: ['20101639275', '20512528458'] })).toEqual(nada);
+    // Transporte Natale nunca es agencia, aunque no se lea el transportista.
+    expect(comprobanteDe({ agencia_razon_social: 'TRANSPORTES NATALE S.A.C.', agencia_comprobante: 'F001-123456' })).toEqual(nada);
+    expect(comprobanteDe({ agencia_ruc: '20613317997', agencia_comprobante: 'F001-123456' })).toEqual(nada);
+  });
+
   it('lee el comprobante de la foto de entrega', async () => {
     responde({
       agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
       agencia_ruc: '20601857457',
       agencia_monto: 13,
       agencia_comprobante: 'G003-0072373',
+      hay_comprobante_agencia: true,
     });
     expect(await leerComprobante('ZmFrZQ==', 'image/jpeg')).toEqual({
       agencia_razon_social: 'SEÑOR DE LUREN EXPRESS E.I.R.L.',
@@ -135,7 +163,7 @@ describe('comprobante de agencia', () => {
   });
 
   it('el número de guía también trae el comprobante si lo hay', async () => {
-    responde({ numero_guia: 'T028-132601', agencia_razon_social: 'ITTSA', agencia_ruc: '20132272418', agencia_monto: 24 });
+    responde({ numero_guia: 'T028-132601', agencia_razon_social: 'ITTSA', agencia_ruc: '20132272418', agencia_monto: 24, hay_comprobante_agencia: true });
     const r = await leerNumeroGuia('ZmFrZQ==', 'image/jpeg', ['T028-132601']);
     expect(r).toEqual({
       numero_guia: 'T028-132601',
