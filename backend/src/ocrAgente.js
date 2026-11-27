@@ -53,12 +53,31 @@ recibido o entregado. Si no ves ese papel aparte, todo null.
   (GRR o similar), tal cual; null si no menciona ninguna. Sirve para no \
   confundirla con el número del comprobante.
 
-Si no hay comprobante de agencia en la foto, usa null en esos 5 campos.`;
+- transportista_guia: la razón social de la empresa de transporte que \
+  figura DENTRO de la guía de IPESA ("Información del Transportista"), tal \
+  cual; null si no se ve.
+- transportista_guia_ruc: el RUC de esa empresa de transporte de la guía \
+  (11 dígitos); null si no se ve.
+
+Si no hay comprobante de agencia en la foto, usa null en los 5 campos de \
+la agencia (los dos del transportista de la guía igual léelos).`;
 
 const CAMPOS_COMPROBANTE =
   '"agencia_razon_social": string|null, "agencia_ruc": string|null, '
   + '"agencia_monto": number|null, "agencia_comprobante": string|null, '
-  + '"agencia_guia_referida": string|null';
+  + '"agencia_guia_referida": string|null, "transportista_guia": string|null, '
+  + '"transportista_guia_ruc": string|null';
+
+/** "TRANSPORTES NATALE S.A.C." y "Transporte Natale SAC" → "NATALE". */
+function nucleoEmpresa(nombre) {
+  return String(nombre ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\b(S\.?\s?A\.?\s?C|S\.?\s?A|E\.?\s?I\.?\s?R\.?\s?L|S\.?\s?R\.?\s?L)\b\.?/g, ' ')
+    .replace(/\b(EMPRESA|EMPRESAS|TRANSPORTES?|DE|DEL|LA|LOS|Y)\b/g, ' ')
+    .replace(/[^A-Z0-9]/g, '');
+}
 
 const PROMPT = `Esta es una foto de una guía de remisión electrónica peruana \
 (formato SUNAT), emitida por la empresa IPESA. Lee la foto con cuidado y \
@@ -159,6 +178,20 @@ function comprobanteDe(datos) {
   // cosa (los bultos o el peso de un sello, por ejemplo "2").
   const digitos = numero.replace(/\D/g, '').length;
   const comprobante = numero && !esGuia && digitos >= 6 ? numero : null;
+  // La empresa de transporte que figura en la propia guía (el que lleva la
+  // carga, ej. Transporte Natale con su RUC) no es una agencia.
+  const rucTransportista = String(datos?.transportista_guia_ruc ?? '').replace(/\D/g, '');
+  const nucleoTransportista = nucleoEmpresa(datos?.transportista_guia);
+  const esElTransportista = (rucValido && rucValido === rucTransportista)
+    || (nucleoTransportista !== '' && nucleoEmpresa(razon) === nucleoTransportista);
+  if (esElTransportista) {
+    return {
+      agencia_razon_social: null,
+      agencia_ruc: null,
+      agencia_monto: null,
+      agencia_comprobante: null,
+    };
+  }
   // Sin número de comprobante ni RUC de la agencia no es un comprobante de
   // verdad: suele ser el transportista que figura en la propia guía o un
   // sello de IPESA (con un monto inventado). Así no se marca como agencia

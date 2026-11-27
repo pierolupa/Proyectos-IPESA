@@ -93,6 +93,28 @@ describe('comprobante de agencia', () => {
     // T001-98931: el sello "CARGO DISTRIBUCIÓN" de IPESA (P = 1.0, B = 1).
     expect(comprobanteDe({ agencia_comprobante: '2', agencia_monto: 1 })).toEqual(nada);
     expect(hayComprobante(comprobanteDe({ agencia_comprobante: '2', agencia_monto: 1 }))).toBe(false);
+    // T001-97753: el transportista de la guía, con su RUC real y un "3".
+    expect(comprobanteDe({
+      agencia_razon_social: 'TRANSPORTES NATALE S.A.C.',
+      agencia_ruc: '20613317997',
+      agencia_comprobante: '3',
+      agencia_monto: 60,
+      transportista_guia: 'TRANSPORTE NATALE S.A.C',
+      transportista_guia_ruc: '20613317997',
+    })).toEqual(nada);
+    // Aunque la IA no copie el RUC, el nombre del transportista basta.
+    expect(comprobanteDe({
+      agencia_razon_social: 'Transportes Natale',
+      agencia_ruc: '20613317997',
+      transportista_guia: 'TRANSPORTE NATALE S.A.C',
+    })).toEqual(nada);
+    // Una agencia distinta del transportista de la guía sí vale.
+    expect(comprobanteDe({
+      agencia_razon_social: 'SHALOM EMPRESARIAL S.A.C.',
+      agencia_ruc: '20512528458',
+      transportista_guia: 'TRANSPORTE NATALE S.A.C',
+      transportista_guia_ruc: '20613317997',
+    }).agencia_ruc).toBe('20512528458');
     // Uno de verdad sigue valiendo, aunque no se lea el RUC.
     expect(comprobanteDe({ agencia_comprobante: 'F017-0034441', agencia_monto: 70 }).agencia_monto).toBe(70);
   });
